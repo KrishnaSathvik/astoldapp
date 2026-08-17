@@ -4,9 +4,6 @@ import SwiftData
 /// Home is the complete chronological notes timeline. See docs/01-product-requirements.md §8.
 struct HomeView: View {
     @Environment(\.modelContext) private var context
-    @Query(filter: #Predicate<Note> { $0.deletedAt == nil },
-           sort: \Note.createdAt, order: .reverse)
-    private var notes: [Note]
 
     @State private var editingNote: Note?
     @State private var recentlyDeleted: Note?
@@ -15,6 +12,7 @@ struct HomeView: View {
     @State private var showingCalendar = false
     @State private var showingProfile = false
     @State private var selectedDay: Date?
+    @State private var pageLimit = 40
     @AppStorage("profileName") private var profileName = ""
     @Environment(AppLockModel.self) private var lock
 
@@ -24,18 +22,12 @@ struct HomeView: View {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Notes shown in the timeline — all, or filtered to the selected calendar day.
-    private var visibleNotes: [Note] {
-        guard let selectedDay else { return notes }
-        return notes.filter { calendar.isDate($0.createdAt, inSameDayAs: selectedDay) }
-    }
-
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
                 Color.ds.canvas.ignoresSafeArea()
                 if isSearching {
-                    SearchResultsView(notes: notes, query: searchQuery) { editingNote = $0 }
+                    SearchResultsView(query: searchQuery) { editingNote = $0 }
                 } else {
                     content
                     if recentlyDeleted != nil {
@@ -124,35 +116,15 @@ struct HomeView: View {
                 .padding(.horizontal, DSSpacing.screenH)
                 .padding(.top, DSSpacing.s6)
 
-                if visibleNotes.isEmpty {
-                    Spacer()
-                    Text("No notes on this day.")
-                        .font(.ds.preview)
-                        .foregroundStyle(Color.ds.textSecondary)
-                    Spacer()
-                } else {
-                    HomeTimeline(notes: visibleNotes, onSelect: { editingNote = $0 }, onDelete: deleteNote)
-                }
+                DayNotesList(day: selectedDay, onSelect: { editingNote = $0 }, onDelete: deleteNote)
             }
-        } else if notes.isEmpty {
-            VStack(alignment: .leading, spacing: DSSpacing.s2) {
-                Text(HomeDate.top)
-                    .font(.ds.dateLabel)
-                    .foregroundStyle(Color.ds.textTertiary)
-                Text("Today")
-                    .font(.ds.homeTitle)
-                    .foregroundStyle(Color.ds.textPrimary)
-                Spacer().frame(height: DSSpacing.s10)
-                Text("Your thoughts will appear here.")
-                    .font(.ds.preview)
-                    .foregroundStyle(Color.ds.textSecondary)
-                Spacer()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, DSSpacing.screenH)
-            .padding(.top, DSSpacing.s6)
         } else {
-            HomeTimeline(notes: notes, onSelect: { editingNote = $0 }, onDelete: deleteNote)
+            PagedNotesList(
+                limit: pageLimit,
+                onSelect: { editingNote = $0 },
+                onDelete: deleteNote,
+                onLoadMore: { pageLimit += 40 }
+            )
         }
     }
 

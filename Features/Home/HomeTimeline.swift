@@ -6,6 +6,8 @@ struct HomeTimeline: View {
     let notes: [Note]
     var onSelect: (Note) -> Void
     var onDelete: (Note) -> Void
+    /// Fired when the bottom of the list scrolls into view — used to load the next batch.
+    var onReachEnd: (() -> Void)? = nil
 
     private var groups: [NoteDayGroup] { groupedByDay(notes) }
 
@@ -40,7 +42,9 @@ struct HomeTimeline: View {
                 }
             }
 
-            Color.clear.frame(height: 72).plainRow()   // clear the floating +
+            Color.clear.frame(height: 72)
+                .plainRow()
+                .onAppear { onReachEnd?() }   // near the bottom → load the next batch
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)

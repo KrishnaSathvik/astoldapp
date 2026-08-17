@@ -1,12 +1,16 @@
 import SwiftUI
+import SwiftData
 
-/// Flat search results shown while searching. Lexical filter over title + body.
+/// Flat search results shown while searching. Lexical filter over title + body. Queries ALL live
+/// notes itself (independent of the Home timeline's pagination) so search covers everything.
 struct SearchResultsView: View {
-    let notes: [Note]
+    @Query(filter: #Predicate<Note> { $0.deletedAt == nil },
+           sort: \Note.createdAt, order: .reverse)
+    private var allNotes: [Note]
     let query: String
     var onSelect: (Note) -> Void
 
-    private var results: [Note] { searchNotes(notes, query: query) }
+    private var results: [Note] { searchNotes(allNotes, query: query) }
 
     var body: some View {
         Group {
