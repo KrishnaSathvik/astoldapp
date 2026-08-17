@@ -11,11 +11,13 @@ struct AppRootView: View {
         enabled: UserDefaults.standard.bool(forKey: "appLockEnabled"),
         authenticator: DeviceAuthenticator()
     )
+    @State private var themeStore = ThemeStore()
 
     var body: some View {
         ZStack {
             main
                 .environment(lock)
+                .environment(themeStore)
 
             switch lock.phase {
             case .covered:
@@ -26,6 +28,8 @@ struct AppRootView: View {
                 EmptyView()
             }
         }
+        .preferredColorScheme(themeStore.colorScheme)
+        .id(themeStore.increaseContrast)   // re-resolve contrast-aware colors on toggle
         .animation(DSMotion.fast, value: lock.phase)
         .onChange(of: lock.enabled) { _, isOn in
             UserDefaults.standard.set(isOn, forKey: "appLockEnabled")
@@ -50,6 +54,8 @@ struct AppRootView: View {
             NavigationStack { AboutView() }
         } else if DebugLaunch.openPrivacy {
             NavigationStack { PrivacyView() }
+        } else if DebugLaunch.openTheme {
+            NavigationStack { ThemeView() }
         } else {
             routed
         }

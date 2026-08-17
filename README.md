@@ -39,8 +39,7 @@ These decisions should be treated as product constraints unless intentionally ch
 - No audio is retained after successful transcription in V1.
 - Face ID / device authentication lock is optional.
 - App content is obscured in the app switcher when privacy lock is enabled.
-- Light/Dark appearance follows the iPhone system setting automatically.
-- No manual theme picker in V1.
+- Appearance is user-selectable in Profile → Settings → Theme: Light, Dark, or Use device settings (default), plus an Increase Contrast option. (The original spec locked system-only; the picker was added intentionally.)
 - SF Symbols for system icons; no emoji-as-interface.
 - No folders, tags, streaks, prompts, AI summaries, chat-with-notes, reminders, collaboration, or export in V1.
 - SwiftUI native-first implementation.

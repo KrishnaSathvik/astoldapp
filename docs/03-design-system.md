@@ -697,19 +697,25 @@ Never use only a dot color/state without another accessible label/trait when sta
 
 # 15. Theme behavior
 
-## V1
+## User-selectable (Profile → Settings → Theme)
 
-System controlled only.
+Appearance is chosen by the user: **Light / Dark / Use device settings** (default). The choice is
+persisted (`ThemeStore`) and applied at the app root via `preferredColorScheme(theme.colorScheme)`
+(`nil` for "Use device settings", so iOS still decides in that mode).
 
 ```swift
-// Do not force:
-.preferredColorScheme(.light)
-.preferredColorScheme(.dark)
+// Applied once, at the app root, driven by the user's Theme choice:
+.preferredColorScheme(themeStore.colorScheme)   // .light / .dark / nil
 ```
 
-Let iOS determine appearance.
+Do not scatter `.preferredColorScheme` inside feature views — the root owns it.
 
-Custom colors are adaptive assets.
+### Increase Contrast
+
+An opt-in toggle that steps low-contrast text up one level (secondary→primary, tertiary→secondary)
+via the `Color.ds` accessors, for readers who need stronger contrast.
+
+Custom colors are adaptive assets (Light + Dark values).
 
 ### Testing matrix
 

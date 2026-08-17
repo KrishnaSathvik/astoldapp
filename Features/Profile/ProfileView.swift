@@ -5,6 +5,7 @@ import StoreKit
 /// rows, no iOS cards). Holds an optional name and Settings / About / Rating.
 struct ProfileView: View {
     @Bindable var lock: AppLockModel
+    @Environment(ThemeStore.self) private var themeStore
     @AppStorage("profileName") private var name = ""
     @Environment(\.requestReview) private var requestReview
 
@@ -14,6 +15,18 @@ struct ProfileView: View {
                 header
 
                 section("Settings") {
+                    NavigationLink { ThemeView() } label: {
+                        ProfileRow(title: "Theme") {
+                            HStack(spacing: DSSpacing.s2) {
+                                Text(themeStore.theme.title)
+                                    .font(.ds.preview)
+                                    .foregroundStyle(Color.ds.textSecondary)
+                                Chevron()
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    Separator()
                     ProfileRow(title: "Lock with Face ID") {
                         Toggle("", isOn: Binding(
                             get: { lock.enabled },
@@ -23,7 +36,6 @@ struct ProfileView: View {
                         ))
                         .labelsHidden()
                     }
-                    footnote("Appearance follows your system Light and Dark setting.")
                 }
 
                 section("About") {

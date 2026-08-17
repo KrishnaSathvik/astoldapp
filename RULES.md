@@ -49,7 +49,10 @@ These are treated as fixed product constraints unless intentionally changed.
 - V1 voice target languages: English, Telugu, Hindi, Telugu+English, Hindi+English.
 - Face ID / device authentication lock is **optional** and opt-in.
 - App content MUST be obscured in the app switcher when privacy lock is enabled.
-- Light/Dark MUST follow the iOS system setting automatically. No manual theme picker _(V1 only)_.
+- Appearance is user-selectable in Profile → Settings → **Theme**: Light / Dark / Use device settings
+  (default = system). An **Increase Contrast** option steps up low-contrast text. Persisted across
+  launches; applied via `preferredColorScheme` at the app root. (Added intentionally — the original V1
+  spec locked system-only. When the theme is "Use device settings", the app still follows iOS.)
 - MUST use SF Symbols for system icons. No emoji-as-interface.
 - SwiftUI native-first implementation; local storage via SwiftData.
 - The transcription API key MUST NEVER ship inside the iOS application.
@@ -380,8 +383,9 @@ Source: `docs/01-product-requirements.md` §6, `docs/02-features.md` (Later sect
 accounts · Sign in with Apple · folders · tags · pinning · favorites · rich text · Markdown UI · images ·
 attachments · scanning · handwriting · checklists · collaboration · share extension · widgets · watchOS
 app · reminders · notifications · journaling prompts · mood tracking · streaks · AI summaries · AI
-rewriting · AI chat · semantic search · cloud note storage · iCloud sync · export · audio archive ·
-manual theme selector.
+rewriting · AI chat · semantic search · cloud note storage · iCloud sync · export · audio archive.
+
+> _(The manual theme selector was previously excluded but has been added — see §1.)_
 
 ### Architecture non-goals (do not build)
 

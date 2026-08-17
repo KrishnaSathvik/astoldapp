@@ -14,6 +14,7 @@ enum DebugLaunch {
     static var autoStartVoice: Bool { args.contains("-autoStartVoice") }
     static var openAbout: Bool { args.contains("-openAbout") }
     static var openPrivacy: Bool { args.contains("-openPrivacy") }
+    static var openTheme: Bool { args.contains("-openTheme") }
     /// Value after `-searchQuery` — presets the Home search field for screenshots.
     static var presetSearch: String? {
         guard let i = args.firstIndex(of: "-searchQuery"), i + 1 < args.count else { return nil }

@@ -1,7 +1,8 @@
 import XCTest
 
 /// Verifies the tap-driven navigation that screenshots can't: compose → editor → back → Home,
-/// and that Calendar and Profile push and pop.
+/// Calendar / Profile / Theme push and pop. Each interaction waits for its target to be hittable
+/// first, so the flow is resilient to launch/animation timing.
 final class NavigationUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
@@ -9,51 +10,73 @@ final class NavigationUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-hasCompletedWelcome", "YES", "-seedSampleNotes"]
         app.launch()
+        // Home is ready when the New note button exists.
+        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 15), "Home did not appear")
         return app
+    }
+
+    @discardableResult
+    private func tap(_ element: XCUIElement, _ message: String, timeout: TimeInterval = 8) -> Bool {
+        guard element.waitForExistence(timeout: timeout) else {
+            XCTFail("missing element: \(message)")
+            return false
+        }
+        element.tap()
+        return true
+    }
+
+    private func back(_ app: XCUIApplication) {
+        app.navigationBars.buttons.element(boundBy: 0).tap()
     }
 
     func testComposeThenBackReturnsHome() {
         let app = launchedApp()
-        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 5), "Home should show New note")
-
-        app.buttons["New note"].tap()
-        let back = app.buttons["Back to notes"]
-        XCTAssertTrue(back.waitForExistence(timeout: 5), "Editor should show a back button")
-
-        back.tap()
-        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 5), "Should return to Home")
+        tap(app.buttons["New note"], "New note")
+        tap(app.buttons["Back to notes"], "editor back button")
+        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 8), "Should return to Home")
         XCTAssertFalse(app.buttons["Back to notes"].exists, "Editor should be gone")
     }
 
     func testCalendarPagePushesAndPops() {
         let app = launchedApp()
-        app.buttons["Open calendar"].tap()
-        XCTAssertTrue(app.navigationBars["Calendar"].waitForExistence(timeout: 5), "Calendar page should push")
-
-        app.navigationBars.buttons.element(boundBy: 0).tap() // system back
-        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 5), "Should return to Home")
+        tap(app.buttons["Open calendar"], "calendar button")
+        XCTAssertTrue(app.navigationBars["Calendar"].waitForExistence(timeout: 8), "Calendar should push")
+        back(app)
+        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 8), "Should return to Home")
     }
 
     func testProfilePagePushesAndPops() {
         let app = launchedApp()
-        app.buttons["Profile"].tap()
-        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 5), "Profile page should push")
-
-        app.navigationBars.buttons.element(boundBy: 0).tap() // system back
-        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 5), "Should return to Home")
+        tap(app.buttons["Profile"], "profile button")
+        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 8), "Profile should push")
+        back(app)
+        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 8), "Should return to Home")
     }
 
     func testProfileAboutAndPrivacyPushAndPop() {
         let app = launchedApp()
-        app.buttons["Profile"].tap()
-        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 5))
+        tap(app.buttons["Profile"], "profile button")
+        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 8))
 
-        app.buttons["What is Yourly"].tap()
-        XCTAssertTrue(app.navigationBars["What is Yourly"].waitForExistence(timeout: 5), "About should push")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 5), "Back to Profile")
+        tap(app.buttons["What is Yourly"], "What is Yourly row")
+        XCTAssertTrue(app.navigationBars["What is Yourly"].waitForExistence(timeout: 8), "About should push")
+        back(app)
+        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 8), "Back to Profile")
 
-        app.buttons["Privacy"].tap()
-        XCTAssertTrue(app.navigationBars["Privacy"].waitForExistence(timeout: 5), "Privacy should push")
+        tap(app.buttons["Privacy"], "Privacy row")
+        XCTAssertTrue(app.navigationBars["Privacy"].waitForExistence(timeout: 8), "Privacy should push")
+    }
+
+    func testThemePickerOpensAndSelectsDark() {
+        let app = launchedApp()
+        tap(app.buttons["Profile"], "profile button")
+        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 8))
+
+        tap(app.staticTexts["Theme"], "Theme row")
+        XCTAssertTrue(app.navigationBars["Theme"].waitForExistence(timeout: 8), "Theme screen should push")
+
+        tap(app.staticTexts["Dark"], "Dark option")
+        back(app)
+        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 8), "Back to Profile")
     }
 }

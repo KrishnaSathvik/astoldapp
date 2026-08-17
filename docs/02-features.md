@@ -372,13 +372,13 @@ Keep temporary audio only as long as required for explicit Retry.
 
 ---
 
-## P0 — System Light/Dark appearance
+## P0 — Appearance (Theme)
 
 ### Rule
 
-The app follows iOS appearance.
-
-No in-app theme selector in V1.
+Appearance is user-selectable in Profile → Settings → **Theme**: Light / Dark / Use device settings
+(default). When "Use device settings" is chosen, the app follows iOS appearance. An **Increase Contrast**
+option strengthens low-contrast text. The choice persists and is applied app-wide.
 
 ### Acceptance
 
@@ -449,12 +449,6 @@ Fast entry to a new note or voice capture.
 ## Apple Watch capture
 
 Speak a thought from Watch and store it.
-
-## Manual appearance override
-
-System / Light / Dark.
-
-Only add if users ask.
 
 ## Pin note
 

@@ -7,8 +7,15 @@ extension Color {
         static let canvas = Color("Canvas")
         static let surface = Color("SurfaceElevated")
         static let textPrimary = Color("TextPrimary")
-        static let textSecondary = Color("TextSecondary")
-        static let textTertiary = Color("TextTertiary")
         static let accent = Color("Accent")
+
+        /// Secondary/tertiary text step up one contrast level when "Increase contrast" is on
+        /// (this is where the app's low contrast lives — grey previews/labels). See ThemeStore.
+        static var textSecondary: Color {
+            ContrastState.increased ? Color("TextPrimary") : Color("TextSecondary")
+        }
+        static var textTertiary: Color {
+            ContrastState.increased ? Color("TextSecondary") : Color("TextTertiary")
+        }
     }
 }
