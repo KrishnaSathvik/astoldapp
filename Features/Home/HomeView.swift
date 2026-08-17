@@ -67,21 +67,15 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { showingProfile = true } label: {
-                        if let profileInitial {
-                            Text(profileInitial)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Color.ds.accent)
-                        } else {
-                            Image(systemName: "person")
-                                .foregroundStyle(Color.ds.textSecondary)
-                        }
+                        ProfileAvatar(name: profileName, size: 28)
                     }
                     .accessibilityLabel("Profile")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingCalendar = true } label: {
                         Image(systemName: "calendar")
-                            .foregroundStyle(selectedDay == nil ? Color.ds.textSecondary : Color.ds.accent)
+                            .foregroundStyle(Color.ds.accent)
+                            .symbolVariant(selectedDay == nil ? .none : .fill)
                     }
                     .accessibilityLabel("Open calendar")
                 }

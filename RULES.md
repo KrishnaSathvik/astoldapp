@@ -50,9 +50,9 @@ These are treated as fixed product constraints unless intentionally changed.
 - Face ID / device authentication lock is **optional** and opt-in.
 - App content MUST be obscured in the app switcher when privacy lock is enabled.
 - Appearance is user-selectable in Profile → Settings → **Theme**: Light / Dark / Use device settings
-  (default = system). An **Increase Contrast** option steps up low-contrast text. Persisted across
-  launches; applied via `preferredColorScheme` at the app root. (Added intentionally — the original V1
-  spec locked system-only. When the theme is "Use device settings", the app still follows iOS.)
+  (default = system). Persisted across launches; applied via `preferredColorScheme` at the app root.
+  (Added intentionally — the original V1 spec locked system-only. When the theme is "Use device
+  settings", the app still follows iOS.)
 - MUST use SF Symbols for system icons. No emoji-as-interface.
 - SwiftUI native-first implementation; local storage via SwiftData.
 - The transcription API key MUST NEVER ship inside the iOS application.

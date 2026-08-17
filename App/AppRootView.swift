@@ -25,11 +25,12 @@ struct AppRootView: View {
             case .locked:
                 LockView { Task { await lock.attemptUnlock() } }.transition(.opacity)
             case .unlocked:
-                EmptyView()
+                #if DEBUG
+                if DebugLaunch.forceLocked { LockView(onUnlock: {}) }
+                #endif
             }
         }
         .preferredColorScheme(themeStore.colorScheme)
-        .id(themeStore.increaseContrast)   // re-resolve contrast-aware colors on toggle
         .animation(DSMotion.fast, value: lock.phase)
         .onChange(of: lock.enabled) { _, isOn in
             UserDefaults.standard.set(isOn, forKey: "appLockEnabled")

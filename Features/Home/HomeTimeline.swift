@@ -20,15 +20,25 @@ struct HomeTimeline: View {
                 DateGroupHeader(day: group.day)
                     .plainRow(topInset: DSSpacing.s5)
 
-                ForEach(group.notes) { note in
-                    Button { onSelect(note) } label: { NoteRow(note: note) }
-                        .buttonStyle(.plain)
-                        .plainRow(topInset: DSSpacing.s4)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) { onDelete(note) } label: {
-                                Label("Delete", systemImage: "trash")
+                ForEach(Array(group.notes.enumerated()), id: \.element.id) { idx, note in
+                    Button { onSelect(note) } label: {
+                        VStack(alignment: .leading, spacing: 0) {
+                            NoteRow(note: note)
+                            if idx < group.notes.count - 1 {
+                                Rectangle()
+                                    .fill(Color.ds.textTertiary.opacity(0.16))
+                                    .frame(height: 0.5)
+                                    .padding(.top, DSSpacing.s4)
                             }
                         }
+                    }
+                    .buttonStyle(.plain)
+                    .plainRow(topInset: DSSpacing.s4)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) { onDelete(note) } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
             }
 

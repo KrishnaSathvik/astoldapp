@@ -15,6 +15,7 @@ enum DebugLaunch {
     static var openAbout: Bool { args.contains("-openAbout") }
     static var openPrivacy: Bool { args.contains("-openPrivacy") }
     static var openTheme: Bool { args.contains("-openTheme") }
+    static var forceLocked: Bool { args.contains("-forceLocked") }
     /// Value after `-searchQuery` — presets the Home search field for screenshots.
     static var presetSearch: String? {
         guard let i = args.firstIndex(of: "-searchQuery"), i + 1 < args.count else { return nil }

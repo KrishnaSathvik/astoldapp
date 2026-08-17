@@ -6,8 +6,6 @@ struct ThemeView: View {
     @Environment(ThemeStore.self) private var themeStore
 
     var body: some View {
-        @Bindable var themeStore = themeStore
-
         ScrollView {
             VStack(alignment: .leading, spacing: DSSpacing.s8) {
                 VStack(spacing: 0) {
@@ -18,17 +16,6 @@ struct ThemeView: View {
                         .buttonStyle(.plain)
                         if index < AppTheme.allCases.count - 1 { Separator() }
                     }
-                }
-
-                VStack(alignment: .leading, spacing: DSSpacing.s2) {
-                    Toggle(isOn: $themeStore.increaseContrast) {
-                        Text("Increase contrast")
-                            .font(.ds.editorBody)
-                            .foregroundStyle(Color.ds.textPrimary)
-                    }
-                    Text("Increase colour contrast between foreground and background.")
-                        .font(.ds.caption)
-                        .foregroundStyle(Color.ds.textTertiary)
                 }
 
                 Spacer(minLength: DSSpacing.s10)

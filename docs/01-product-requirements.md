@@ -211,7 +211,7 @@ Use native iOS conventions wherever they improve familiarity, accessibility, mot
 - export
 - audio archive
 
-> Note: a manual theme selector (Light / Dark / Use device settings + Increase Contrast) was
+> Note: a manual theme selector (Light / Dark / Use device settings) was
 > originally excluded but has since been added — see §12.
 
 ---
@@ -476,7 +476,7 @@ If custom analytics are added later:
 ## 12. Appearance requirements
 
 - Appearance is user-selectable (Profile → Settings → Theme): Light / Dark / Use device settings
-  (default = follow system). Plus an Increase Contrast option. Persisted and applied app-wide.
+  (default = follow system). Persisted and applied app-wide.
 - All semantic colors have Light and Dark values.
 - Support Dynamic Type.
 - Support VoiceOver.

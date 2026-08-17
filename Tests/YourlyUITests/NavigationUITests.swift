@@ -37,6 +37,13 @@ final class NavigationUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Back to notes"].exists, "Editor should be gone")
     }
 
+    func testComposeThenDoneReturnsHome() {
+        let app = launchedApp()
+        tap(app.buttons["New note"], "New note")
+        tap(app.buttons["Done"], "editor Done button")
+        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 8), "Done should return to Home")
+    }
+
     func testCalendarPagePushesAndPops() {
         let app = launchedApp()
         tap(app.buttons["Open calendar"], "calendar button")

@@ -25,11 +25,6 @@ struct PrivacyView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DSSpacing.s6) {
-                Text("Privacy")
-                    .font(.ds.homeTitle)
-                    .foregroundStyle(Color.ds.textPrimary)
-                    .padding(.top, DSSpacing.s4)
-
                 ForEach(points) { point in
                     VStack(alignment: .leading, spacing: DSSpacing.s2) {
                         Text(point.title)

@@ -16,8 +16,13 @@ struct EditorView: View {
     private var isCapturing: Bool { voice != nil }
 
     private var dateText: String {
-        let df = DateFormatter(); df.dateFormat = "MMMM d, yyyy"
+        let df = DateFormatter(); df.dateFormat = "MMMM d, yyyy · h:mm a"
         return df.string(from: note.createdAt).uppercased()
+    }
+
+    private func close() {
+        // onDisappear runs finish() (flush or discard empty draft).
+        if let onClose { onClose() } else { dismiss() }
     }
 
     var body: some View {
@@ -47,10 +52,7 @@ struct EditorView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    // onDisappear runs finish() (flush or discard empty draft).
-                    if let onClose { onClose() } else { dismiss() }
-                } label: {
+                Button { close() } label: {
                     HStack(spacing: 2) {
                         Image(systemName: "chevron.left").fontWeight(.semibold)
                         Text("Notes")
@@ -59,12 +61,10 @@ struct EditorView: View {
                 }
                 .accessibilityLabel("Back to notes")
             }
-            if bodyFocused {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { bodyFocused = false }
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.ds.accent)
-                }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") { bodyFocused = false; close() }   // finish → back to Home
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.ds.accent)
             }
         }
     }

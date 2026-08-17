@@ -710,11 +710,6 @@ persisted (`ThemeStore`) and applied at the app root via `preferredColorScheme(t
 
 Do not scatter `.preferredColorScheme` inside feature views — the root owns it.
 
-### Increase Contrast
-
-An opt-in toggle that steps low-contrast text up one level (secondary→primary, tertiary→secondary)
-via the `Color.ds` accessors, for readers who need stronger contrast.
-
 Custom colors are adaptive assets (Light + Dark values).
 
 ### Testing matrix

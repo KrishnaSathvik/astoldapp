@@ -377,8 +377,8 @@ Keep temporary audio only as long as required for explicit Retry.
 ### Rule
 
 Appearance is user-selectable in Profile → Settings → **Theme**: Light / Dark / Use device settings
-(default). When "Use device settings" is chosen, the app follows iOS appearance. An **Increase Contrast**
-option strengthens low-contrast text. The choice persists and is applied app-wide.
+(default). When "Use device settings" is chosen, the app follows iOS appearance. The choice persists
+and is applied app-wide.
 
 ### Acceptance
 
