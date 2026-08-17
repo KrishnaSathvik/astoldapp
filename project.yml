@@ -1,0 +1,50 @@
+name: Yourly
+options:
+  bundleIdPrefix: com.yourly
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+targets:
+  Yourly:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - App
+      - Features
+      - Core
+      - Models
+      - Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourly.app
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
+  YourlyTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - Tests/YourlyTests
+    dependencies:
+      - target: Yourly
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourly.tests
+schemes:
+  Yourly:
+    build:
+      targets:
+        Yourly: all
+    test:
+      targets:
+        - YourlyTests
