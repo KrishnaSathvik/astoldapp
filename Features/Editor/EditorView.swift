@@ -7,6 +7,8 @@ struct EditorView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
     let note: Note
+    /// Set by Home to nil the navigationDestination item — the reliable way to pop an item-based push.
+    var onClose: (() -> Void)? = nil
     @State private var model: EditorModel?
     @State private var voice: VoiceCaptureModel?
     @FocusState private var bodyFocused: Bool
@@ -46,7 +48,8 @@ struct EditorView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
-                    dismiss()   // onDisappear runs finish() (flush or discard empty draft)
+                    // onDisappear runs finish() (flush or discard empty draft).
+                    if let onClose { onClose() } else { dismiss() }
                 } label: {
                     HStack(spacing: 2) {
                         Image(systemName: "chevron.left").fontWeight(.semibold)

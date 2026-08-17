@@ -42,6 +42,17 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yourly.tests
+  YourlyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - Tests/YourlyUITests
+    dependencies:
+      - target: Yourly
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourly.uitests
 schemes:
   Yourly:
     build:
@@ -50,3 +61,4 @@ schemes:
     test:
       targets:
         - YourlyTests
+        - YourlyUITests

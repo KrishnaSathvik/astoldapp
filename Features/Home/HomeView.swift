@@ -13,7 +13,7 @@ struct HomeView: View {
     @State private var undoDismiss: Task<Void, Never>?
     @State private var searchQuery = ""
     @State private var showingCalendar = false
-    @State private var showingSettings = false
+    @State private var showingProfile = false
     @State private var selectedDay: Date?
     @Environment(AppLockModel.self) private var lock
 
@@ -44,33 +44,32 @@ struct HomeView: View {
                 }
             }
             .searchable(text: $searchQuery, prompt: "Search notes")
-            .sheet(isPresented: $showingCalendar) {
-                CalendarSheet(initialSelection: selectedDay) { day in
-                    selectedDay = calendar.isDateInToday(day) ? nil : day
-                }
-                .presentationDetents([.medium, .large])
-            }
-            .sheet(isPresented: $showingSettings) {
-                SettingsView(lock: lock)
-            }
             #if DEBUG
             .task {
                 if let q = DebugLaunch.presetSearch { searchQuery = q }
                 if DebugLaunch.openCalendar { showingCalendar = true }
-                if DebugLaunch.openSettings { showingSettings = true }
+                if DebugLaunch.openSettings { showingProfile = true }
             }
             #endif
             .animation(DSMotion.standard, value: recentlyDeleted != nil)
             .navigationDestination(item: $editingNote) { note in
-                EditorView(note: note)
+                EditorView(note: note, onClose: { editingNote = nil })
+            }
+            .navigationDestination(isPresented: $showingCalendar) {
+                CalendarPage(initialSelection: selectedDay) { day in
+                    selectedDay = calendar.isDateInToday(day) ? nil : day
+                }
+            }
+            .navigationDestination(isPresented: $showingProfile) {
+                ProfileView(lock: lock)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { showingSettings = true } label: {
-                        Image(systemName: "gearshape")
+                    Button { showingProfile = true } label: {
+                        Image(systemName: "person.crop.circle")
                             .foregroundStyle(Color.ds.textSecondary)
                     }
-                    .accessibilityLabel("Settings")
+                    .accessibilityLabel("Profile")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingCalendar = true } label: {
