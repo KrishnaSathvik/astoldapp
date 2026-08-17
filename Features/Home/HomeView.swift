@@ -67,7 +67,14 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { showingProfile = true } label: {
-                        ProfileAvatar(name: profileName, size: 28)
+                        if let profileInitial {
+                            Text(profileInitial)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color.ds.accent)
+                        } else {
+                            Image(systemName: "person.crop.circle")
+                                .foregroundStyle(Color.ds.accent)
+                        }
                     }
                     .accessibilityLabel("Profile")
                 }

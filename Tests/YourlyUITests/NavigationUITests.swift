@@ -44,6 +44,15 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 8), "Done should return to Home")
     }
 
+    func testSwipeToDeleteRemovesNote() {
+        let app = launchedApp()
+        let note = app.staticTexts["Alaska trip idea"]
+        XCTAssertTrue(note.waitForExistence(timeout: 8), "seeded note should exist")
+        note.swipeLeft()
+        tap(app.buttons["Delete"], "revealed Delete button")
+        XCTAssertTrue(note.waitForNonExistence(timeout: 8), "note should be removed after delete")
+    }
+
     func testCalendarPagePushesAndPops() {
         let app = launchedApp()
         tap(app.buttons["Open calendar"], "calendar button")

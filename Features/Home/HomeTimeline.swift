@@ -21,23 +21,21 @@ struct HomeTimeline: View {
                     .plainRow(topInset: DSSpacing.s5)
 
                 ForEach(Array(group.notes.enumerated()), id: \.element.id) { idx, note in
-                    Button { onSelect(note) } label: {
-                        VStack(alignment: .leading, spacing: 0) {
-                            NoteRow(note: note)
-                            if idx < group.notes.count - 1 {
-                                Rectangle()
-                                    .fill(Color.ds.textTertiary.opacity(0.16))
-                                    .frame(height: 0.5)
-                                    .padding(.top, DSSpacing.s4)
+                    Button { onSelect(note) } label: { NoteRow(note: note) }
+                        .buttonStyle(.plain)
+                        .plainRow(topInset: DSSpacing.s4)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) { onDelete(note) } label: {
+                                Label("Delete", systemImage: "trash")
                             }
                         }
-                    }
-                    .buttonStyle(.plain)
-                    .plainRow(topInset: DSSpacing.s4)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) { onDelete(note) } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
+
+                    // Separator is its own non-swipeable row, so the swipe only moves the note.
+                    if idx < group.notes.count - 1 {
+                        Rectangle()
+                            .fill(Color.ds.textTertiary.opacity(0.16))
+                            .frame(height: 0.5)
+                            .plainRow(topInset: DSSpacing.s4)
                     }
                 }
             }
