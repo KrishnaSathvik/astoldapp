@@ -30,6 +30,12 @@ struct EditorView: View {
                 model = EditorModel(note: note, context: context)
                 bodyFocused = true
             }
+            #if DEBUG
+            if DebugLaunch.autoStartVoice, let model {
+                startVoice(model)
+                Task { try? await Task.sleep(for: .seconds(1.5)); voice?.done() }
+            }
+            #endif
         }
         .onDisappear { model?.finish() }
         .onChange(of: scenePhase) { _, phase in
