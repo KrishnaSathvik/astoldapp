@@ -13,7 +13,9 @@ struct HomeView: View {
     @State private var undoDismiss: Task<Void, Never>?
     @State private var searchQuery = ""
     @State private var showingCalendar = false
+    @State private var showingSettings = false
     @State private var selectedDay: Date?
+    @Environment(AppLockModel.self) private var lock
 
     private let calendar = Calendar.current
 
@@ -51,10 +53,14 @@ struct HomeView: View {
                 }
                 .presentationDetents([.medium, .large])
             }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView(lock: lock)
+            }
             #if DEBUG
             .task {
                 if let q = DebugLaunch.presetSearch { searchQuery = q }
                 if DebugLaunch.openCalendar { showingCalendar = true }
+                if DebugLaunch.openSettings { showingSettings = true }
             }
             #endif
             .animation(DSMotion.standard, value: recentlyDeleted != nil)
@@ -62,6 +68,13 @@ struct HomeView: View {
                 EditorView(note: note)
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showingSettings = true } label: {
+                        Image(systemName: "gearshape")
+                            .foregroundStyle(Color.ds.textSecondary)
+                    }
+                    .accessibilityLabel("Settings")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingCalendar = true } label: {
                         Image(systemName: "calendar")

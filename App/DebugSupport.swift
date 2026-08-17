@@ -10,6 +10,7 @@ enum DebugLaunch {
     static var seedSampleNotes: Bool { args.contains("-seedSampleNotes") }
     static var openSampleEditor: Bool { args.contains("-openSampleEditor") }
     static var openCalendar: Bool { args.contains("-openCalendar") }
+    static var openSettings: Bool { args.contains("-openSettings") }
     /// Value after `-searchQuery` — presets the Home search field for screenshots.
     static var presetSearch: String? {
         guard let i = args.firstIndex(of: "-searchQuery"), i + 1 < args.count else { return nil }
