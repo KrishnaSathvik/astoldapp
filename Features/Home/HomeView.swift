@@ -12,9 +12,19 @@ struct HomeView: View {
     @State private var recentlyDeleted: Note?
     @State private var undoDismiss: Task<Void, Never>?
     @State private var searchQuery = ""
+    @State private var showingCalendar = false
+    @State private var selectedDay: Date?
+
+    private let calendar = Calendar.current
 
     private var isSearching: Bool {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Notes shown in the timeline — all, or filtered to the selected calendar day.
+    private var visibleNotes: [Note] {
+        guard let selectedDay else { return notes }
+        return notes.filter { calendar.isDate($0.createdAt, inSameDayAs: selectedDay) }
     }
 
     var body: some View {
@@ -35,8 +45,17 @@ struct HomeView: View {
                 }
             }
             .searchable(text: $searchQuery, prompt: "Search notes")
+            .sheet(isPresented: $showingCalendar) {
+                CalendarSheet(initialSelection: selectedDay) { day in
+                    selectedDay = calendar.isDateInToday(day) ? nil : day
+                }
+                .presentationDetents([.medium, .large])
+            }
             #if DEBUG
-            .task { if let q = DebugLaunch.presetSearch { searchQuery = q } }
+            .task {
+                if let q = DebugLaunch.presetSearch { searchQuery = q }
+                if DebugLaunch.openCalendar { showingCalendar = true }
+            }
             #endif
             .animation(DSMotion.standard, value: recentlyDeleted != nil)
             .navigationDestination(item: $editingNote) { note in
@@ -44,17 +63,47 @@ struct HomeView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    // Calendar navigation — wired in the Calendar slice (Phase 6).
-                    Image(systemName: "calendar")
-                        .foregroundStyle(Color.ds.textSecondary)
-                        .accessibilityLabel("Open calendar")
+                    Button { showingCalendar = true } label: {
+                        Image(systemName: "calendar")
+                            .foregroundStyle(selectedDay == nil ? Color.ds.textSecondary : Color.ds.accent)
+                    }
+                    .accessibilityLabel("Open calendar")
                 }
             }
         }
     }
 
+    private var filterDateText: String {
+        let df = DateFormatter(); df.dateFormat = "MMMM d, yyyy"
+        return df.string(from: selectedDay ?? .now)
+    }
+
     @ViewBuilder private var content: some View {
-        if notes.isEmpty {
+        if let selectedDay {
+            VStack(spacing: 0) {
+                HStack {
+                    Text(filterDateText)
+                        .font(.ds.groupTitle)
+                        .foregroundStyle(Color.ds.textPrimary)
+                    Spacer()
+                    Button("Return to Today") { self.selectedDay = nil }
+                        .font(.ds.preview)
+                        .foregroundStyle(Color.ds.accent)
+                }
+                .padding(.horizontal, DSSpacing.screenH)
+                .padding(.top, DSSpacing.s6)
+
+                if visibleNotes.isEmpty {
+                    Spacer()
+                    Text("No notes on this day.")
+                        .font(.ds.preview)
+                        .foregroundStyle(Color.ds.textSecondary)
+                    Spacer()
+                } else {
+                    HomeTimeline(notes: visibleNotes, onSelect: { editingNote = $0 }, onDelete: deleteNote)
+                }
+            }
+        } else if notes.isEmpty {
             VStack(alignment: .leading, spacing: DSSpacing.s2) {
                 Text(HomeDate.top)
                     .font(.ds.dateLabel)

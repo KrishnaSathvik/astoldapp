@@ -1,0 +1,60 @@
+import SwiftUI
+
+/// Month grid: weekday header + day cells. Days with notes show a dot; selected/today are marked.
+struct MonthGrid: View {
+    let month: Date
+    let noteDays: Set<Date>
+    let selectedDay: Date?
+    var onSelect: (Date) -> Void
+
+    private let calendar = Calendar.current
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: DSSpacing.s2), count: 7)
+
+    var body: some View {
+        VStack(spacing: DSSpacing.s3) {
+            LazyVGrid(columns: columns, spacing: DSSpacing.s2) {
+                ForEach(Array(MonthMath.weekdayInitials(calendar: calendar).enumerated()), id: \.offset) { _, s in
+                    Text(s)
+                        .font(.ds.caption)
+                        .foregroundStyle(Color.ds.textTertiary)
+                }
+            }
+            LazyVGrid(columns: columns, spacing: DSSpacing.s2) {
+                ForEach(MonthMath.gridCells(for: month, calendar: calendar)) { cell in
+                    if let date = cell.date {
+                        dayCell(date)
+                    } else {
+                        Color.clear.frame(height: 44)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func dayCell(_ date: Date) -> some View {
+        let isSelected = selectedDay.map { calendar.isDate($0, inSameDayAs: date) } ?? false
+        let isToday = calendar.isDateInToday(date)
+        let hasNotes = noteDays.contains(calendar.startOfDay(for: date))
+
+        Button { onSelect(date) } label: {
+            VStack(spacing: 3) {
+                Text("\(calendar.component(.day, from: date))")
+                    .font(.body)
+                    .foregroundStyle(isSelected ? Color.white
+                                     : (isToday ? Color.ds.accent : Color.ds.textPrimary))
+                    .frame(width: 36, height: 36)
+                    .background {
+                        if isSelected { Circle().fill(Color.ds.accent) }
+                    }
+                Circle()
+                    .fill(hasNotes ? Color.ds.accent : .clear)
+                    .frame(width: 5, height: 5)
+                    .opacity(isSelected ? 0 : 1)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(date, style: .date))
+        .accessibilityValue(hasNotes ? "Has notes" : "No notes")
+    }
+}

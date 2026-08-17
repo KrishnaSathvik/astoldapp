@@ -11,4 +11,6 @@ protocol NoteStore {
     func purgeDeleted() throws
     func discardIfEmpty(_ note: Note) throws
     func recent(limit: Int, before: Date?) throws -> [Note]
+    func notes(on day: Date) throws -> [Note]
+    func noteDays(in month: Date) throws -> Set<Date>
 }
