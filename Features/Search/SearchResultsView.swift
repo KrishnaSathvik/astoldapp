@@ -31,6 +31,7 @@ struct SearchResultsView: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                .scrollIndicators(.hidden)
                 .background(Color.ds.canvas)
                 .padding(.horizontal, DSSpacing.screenH)
             }

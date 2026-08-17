@@ -46,6 +46,7 @@ struct PrivacyView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DSSpacing.screenH)
         }
+        .scrollIndicators(.hidden)
         .background(Color.ds.canvas.ignoresSafeArea())
         .navigationTitle("Privacy")
         .navigationBarTitleDisplayMode(.inline)

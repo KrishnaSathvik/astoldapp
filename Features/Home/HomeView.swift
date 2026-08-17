@@ -67,7 +67,14 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { showingProfile = true } label: {
-                        ProfileAvatar(name: profileName)
+                        if let profileInitial {
+                            Text(profileInitial)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color.ds.accent)
+                        } else {
+                            Image(systemName: "person")
+                                .foregroundStyle(Color.ds.textSecondary)
+                        }
                     }
                     .accessibilityLabel("Profile")
                 }
@@ -78,6 +85,7 @@ struct HomeView: View {
                     }
                     .accessibilityLabel("Open calendar")
                 }
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: newNote) {
                         Image(systemName: "square.and.pencil")
@@ -92,6 +100,12 @@ struct HomeView: View {
     private var filterDateText: String {
         let df = DateFormatter(); df.dateFormat = "MMMM d, yyyy"
         return df.string(from: selectedDay ?? .now)
+    }
+
+    private var profileInitial: String? {
+        let t = profileName.trimmingCharacters(in: .whitespaces)
+        guard let f = t.first else { return nil }
+        return String(f).uppercased()
     }
 
     @ViewBuilder private var content: some View {

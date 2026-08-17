@@ -36,6 +36,7 @@ struct HomeTimeline: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .scrollIndicators(.hidden)                    // quiet editorial: no visible scrollbar
         .environment(\.defaultMinListRowHeight, 8)   // let rows hug their content
         .background(Color.ds.canvas)
         .padding(.horizontal, DSSpacing.screenH)

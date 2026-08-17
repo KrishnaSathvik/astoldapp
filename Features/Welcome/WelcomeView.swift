@@ -30,7 +30,7 @@ struct WelcomeView: View {
         .padding(.horizontal, DSSpacing.s6)
         .padding(.bottom, DSSpacing.s8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.ds.canvas)
+        .background(Color.ds.canvas.ignoresSafeArea())
     }
 }
 

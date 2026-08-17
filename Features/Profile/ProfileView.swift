@@ -28,7 +28,7 @@ struct ProfileView: View {
 
                 section("About") {
                     NavigationLink { AboutView() } label: {
-                        ProfileRow(title: "About Yourly") { Chevron() }
+                        ProfileRow(title: "What is Yourly") { Chevron() }
                     }
                     .buttonStyle(.plain)
                     Separator()
@@ -37,21 +37,22 @@ struct ProfileView: View {
                     }
                     .buttonStyle(.plain)
                     Separator()
+                    Button { requestReview() } label: {
+                        ProfileRow(title: "Rate Yourly") { Chevron() }
+                    }
+                    .buttonStyle(.plain)
+                    Separator()
                     ProfileRow(title: "Version") {
                         Text(appVersion).font(.ds.preview).foregroundStyle(Color.ds.textSecondary)
                     }
                 }
-
-                Button { requestReview() } label: {
-                    ProfileRow(title: "Rate Yourly", systemImage: "star") { Chevron() }
-                }
-                .buttonStyle(.plain)
 
                 Spacer(minLength: DSSpacing.s10)
             }
             .padding(.horizontal, DSSpacing.screenH)
             .padding(.top, DSSpacing.s4)
         }
+        .scrollIndicators(.hidden)
         .background(Color.ds.canvas.ignoresSafeArea())
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)

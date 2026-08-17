@@ -48,8 +48,8 @@ final class NavigationUITests: XCTestCase {
         app.buttons["Profile"].tap()
         XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 5))
 
-        app.buttons["About Yourly"].tap()
-        XCTAssertTrue(app.navigationBars["About"].waitForExistence(timeout: 5), "About should push")
+        app.buttons["What is Yourly"].tap()
+        XCTAssertTrue(app.navigationBars["What is Yourly"].waitForExistence(timeout: 5), "About should push")
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 5), "Back to Profile")
 
