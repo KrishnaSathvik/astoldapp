@@ -5,6 +5,7 @@ import SwiftData
 struct EditorView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dismiss) private var dismiss
     let note: Note
     @State private var model: EditorModel?
     @State private var voice: VoiceCaptureModel?
@@ -25,6 +26,7 @@ struct EditorView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .onAppear {
             if model == nil {
                 model = EditorModel(note: note, context: context)
@@ -42,10 +44,24 @@ struct EditorView: View {
             if phase != .active { model?.flush() }
         }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Image(systemName: "ellipsis")
-                    .foregroundStyle(Color.ds.textSecondary)
-                    .accessibilityLabel("More")
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    dismiss()   // onDisappear runs finish() (flush or discard empty draft)
+                } label: {
+                    HStack(spacing: 2) {
+                        Image(systemName: "chevron.left").fontWeight(.semibold)
+                        Text("Notes")
+                    }
+                    .foregroundStyle(Color.ds.accent)
+                }
+                .accessibilityLabel("Back to notes")
+            }
+            if bodyFocused {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { bodyFocused = false }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.ds.accent)
+                }
             }
         }
     }

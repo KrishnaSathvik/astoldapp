@@ -37,9 +37,6 @@ struct HomeView: View {
                     SearchResultsView(notes: notes, query: searchQuery) { editingNote = $0 }
                 } else {
                     content
-                    FloatingNewNoteButton(action: newNote)
-                        .padding(DSSpacing.s6)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     if recentlyDeleted != nil {
                         UndoBanner(onUndo: undoDelete)
                             .padding(.bottom, DSSpacing.s4)
@@ -81,6 +78,13 @@ struct HomeView: View {
                             .foregroundStyle(selectedDay == nil ? Color.ds.textSecondary : Color.ds.accent)
                     }
                     .accessibilityLabel("Open calendar")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: newNote) {
+                        Image(systemName: "square.and.pencil")
+                            .foregroundStyle(Color.ds.accent)
+                    }
+                    .accessibilityLabel("New note")
                 }
             }
         }

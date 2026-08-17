@@ -14,11 +14,11 @@ struct HomeTimeline: View {
             Text(HomeDate.top)
                 .font(.ds.dateLabel)
                 .foregroundStyle(Color.ds.textTertiary)
-                .plainRow(topInset: DSSpacing.s6)
+                .plainRow(topInset: DSSpacing.s2)
 
             ForEach(groups) { group in
                 DateGroupHeader(day: group.day)
-                    .plainRow(topInset: DSSpacing.s8)
+                    .plainRow(topInset: DSSpacing.s5)
 
                 ForEach(group.notes) { note in
                     Button { onSelect(note) } label: { NoteRow(note: note) }
@@ -36,6 +36,7 @@ struct HomeTimeline: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .environment(\.defaultMinListRowHeight, 8)   // let rows hug their content
         .background(Color.ds.canvas)
         .padding(.horizontal, DSSpacing.screenH)
     }
