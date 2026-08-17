@@ -7,6 +7,8 @@ protocol NoteStore {
     @discardableResult func createDraft() throws -> Note
     func save(_ note: Note) throws
     func delete(_ note: Note) throws
+    func undoDelete(_ note: Note) throws
+    func purgeDeleted() throws
     func discardIfEmpty(_ note: Note) throws
     func recent(limit: Int, before: Date?) throws -> [Note]
 }

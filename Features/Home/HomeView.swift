@@ -9,15 +9,23 @@ struct HomeView: View {
     private var notes: [Note]
 
     @State private var editingNote: Note?
+    @State private var recentlyDeleted: Note?
+    @State private var undoDismiss: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
+            ZStack(alignment: .bottom) {
                 Color.ds.canvas.ignoresSafeArea()
                 content
                 FloatingNewNoteButton(action: newNote)
                     .padding(DSSpacing.s6)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                if recentlyDeleted != nil {
+                    UndoBanner(onUndo: undoDelete)
+                        .padding(.bottom, DSSpacing.s4)
+                }
             }
+            .animation(DSMotion.standard, value: recentlyDeleted != nil)
             .navigationDestination(item: $editingNote) { note in
                 EditorView(note: note)
             }
@@ -51,7 +59,7 @@ struct HomeView: View {
             .padding(.horizontal, DSSpacing.screenH)
             .padding(.top, DSSpacing.s6)
         } else {
-            HomeTimeline(notes: notes) { editingNote = $0 }
+            HomeTimeline(notes: notes, onSelect: { editingNote = $0 }, onDelete: deleteNote)
         }
     }
 
@@ -59,5 +67,24 @@ struct HomeView: View {
         let note = Note()
         context.insert(note)
         editingNote = note
+    }
+
+    private func deleteNote(_ note: Note) {
+        note.deletedAt = .now
+        try? context.save()
+        recentlyDeleted = note
+        undoDismiss?.cancel()
+        undoDismiss = Task {
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            recentlyDeleted = nil
+        }
+    }
+
+    private func undoDelete() {
+        undoDismiss?.cancel()
+        recentlyDeleted?.deletedAt = nil
+        try? context.save()
+        recentlyDeleted = nil
     }
 }

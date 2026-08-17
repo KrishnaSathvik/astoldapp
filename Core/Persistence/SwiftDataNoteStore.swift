@@ -24,6 +24,20 @@ final class SwiftDataNoteStore: NoteStore {
         if context.hasChanges { try context.save() }
     }
 
+    func undoDelete(_ note: Note) throws {
+        note.deletedAt = nil
+        if context.hasChanges { try context.save() }
+    }
+
+    /// Hard-delete any soft-deleted notes left from a prior session/undo window. See RULES.md §5.
+    func purgeDeleted() throws {
+        let deleted = try context.fetch(
+            FetchDescriptor<Note>(predicate: #Predicate { $0.deletedAt != nil })
+        )
+        for note in deleted { context.delete(note) }
+        if context.hasChanges { try context.save() }
+    }
+
     func discardIfEmpty(_ note: Note) throws {
         guard note.isEmptyDraft else { return }
         context.delete(note)

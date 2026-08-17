@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Routes first-run Welcome → Home. No tab bar (docs/03-design-system.md §3).
 struct AppRootView: View {
+    @Environment(\.modelContext) private var context
     @AppStorage("hasCompletedWelcome") private var hasCompletedWelcome = false
 
     var body: some View {
@@ -21,6 +22,7 @@ struct AppRootView: View {
     @ViewBuilder private var routed: some View {
         if hasCompletedWelcome {
             HomeView()
+                .task { try? SwiftDataNoteStore(context: context).purgeDeleted() }
         } else {
             WelcomeView(onContinue: { hasCompletedWelcome = true })
         }
