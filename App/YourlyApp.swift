@@ -3,6 +3,16 @@ import SwiftData
 
 @main
 struct YourlyApp: App {
+    private let container: ModelContainer
+
+    init() {
+        do {
+            container = try NoteStoreContainer.make()
+        } catch {
+            fatalError("Failed to create the note store: \(error)")
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             AppRootView()
@@ -10,7 +20,7 @@ struct YourlyApp: App {
                 .modelContainerSeeding()
             #endif
         }
-        .modelContainer(for: Note.self)
+        .modelContainer(container)
     }
 }
 
