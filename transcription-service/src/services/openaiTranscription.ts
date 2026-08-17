@@ -8,7 +8,7 @@ import {
 } from './transcription.js';
 
 /**
- * Real relay to OpenAI's transcription API using `gpt-transcribe` (docs/06-tech-stack.md §8).
+ * Real relay to OpenAI's transcription API using `gpt-4o-transcribe` (docs/06-tech-stack.md §8).
  *
  * Contract enforcement:
  *  - Sends ONLY the audio, the static verbatim prompt, and (optionally) language hints — never the note.
@@ -20,7 +20,7 @@ export class OpenAITranscriptionProvider implements TranscriptionProvider {
 
   constructor(
     apiKey: string,
-    readonly model: string = 'gpt-transcribe',
+    readonly model: string = 'gpt-4o-transcribe',
   ) {
     this.client = new OpenAI({ apiKey });
   }
@@ -40,7 +40,7 @@ export class OpenAITranscriptionProvider implements TranscriptionProvider {
     const text = (response.text ?? '').trim();
     if (text.length === 0) throw new EmptyTranscriptError();
 
-    // `gpt-transcribe` json does not return per-language detection; kept empty rather than guessed.
+    // `gpt-4o-transcribe` json does not return per-language detection; kept empty rather than guessed.
     return { text, languages: [] };
   }
 }

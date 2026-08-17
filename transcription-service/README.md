@@ -28,7 +28,7 @@ npm run build && npm start
 
 With **no `OPENAI_API_KEY`**, it uses a built-in **fake** provider (deterministic Telugu+English
 sample, no network) — ideal for local dev, CI, and wiring the app. Set the key to relay to real
-`gpt-transcribe`.
+`gpt-4o-transcribe`.
 
 ```bash
 curl -s localhost:8787/health
@@ -58,7 +58,7 @@ Transcribe headers: `x-request-id` (echoed), and when attestation is required
 | `NODE_ENV` | development | `production` warns if attestation is off. |
 | `PORT` | 8787 | |
 | `OPENAI_API_KEY` | _(unset)_ | Unset → fake provider. **Never commit.** |
-| `TRANSCRIBE_MODEL` | gpt-transcribe | |
+| `TRANSCRIBE_MODEL` | gpt-4o-transcribe | |
 | `MAX_AUDIO_BYTES` | 26214400 | 25 MB → 413 when exceeded. |
 | `MAX_DURATION_SECONDS` | 600 | 10 min product limit. |
 | `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_SECONDS` | 20 / 60 | Per attested-install + IP. |

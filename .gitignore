@@ -14,6 +14,11 @@ build/
 Package.resolved
 .swiftpm/
 
+# Secrets — never commit real keys
+.env
+.env.*
+!.env.example
+
 # Misc
 *.moved-aside
 *.hmap

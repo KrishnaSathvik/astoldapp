@@ -4,7 +4,7 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(8787),
   OPENAI_API_KEY: z.string().optional(),
-  TRANSCRIBE_MODEL: z.string().default('gpt-transcribe'),
+  TRANSCRIBE_MODEL: z.string().default('gpt-4o-transcribe'),
   MAX_AUDIO_BYTES: z.coerce.number().int().positive().default(26_214_400),
   MAX_DURATION_SECONDS: z.coerce.number().int().positive().default(600),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
