@@ -87,12 +87,27 @@ docker run -p 8787:8787 \
 Runs as non-root. Provide the key and secrets via your platform's secret manager. Use a Redis-backed
 rate limiter for multi-instance deploys (see `src/security/rateLimit.ts`).
 
+## App Attest (implemented)
+
+`src/security/appAttestCrypto.ts` implements real verification against Apple's App Attest Root CA
+(embedded), using `cbor-x` + `@peculiar/x509`:
+
+- **register**: verify the attestation's cert chain (leaf → intermediate → Apple root), the nonce
+  `SHA256(authData ‖ SHA256(challenge))` in the leaf cert's `1.2.840.113635.100.8.2` extension, the
+  `rpIdHash == SHA256(appId)`, the AAGUID (`appattestdevelop` in dev / `appattest` in prod), and
+  `keyId == credentialId`; then store the public key + signCount.
+- **verifyRequest**: consume a one-time challenge, verify the assertion's ECDSA signature over
+  `SHA256(authData ‖ SHA256(challenge))` with the stored key, and require a strictly increasing signCount.
+
+Enable it with `APP_ATTEST_REQUIRED=true` + `APP_ATTEST_APP_ID=TEAMID.bundleId`
+(+ `APP_ATTEST_PRODUCTION=true` for release builds). The deterministic paths + a real P-256 assertion
+round-trip are unit-tested; end-to-end attestation needs a real device (Apple-signed cert chain).
+
 ## What still needs completing (your infra)
 
 - **OpenAI key + a deploy target.** The `OpenAITranscriptionProvider` is ready; it just needs the key.
-- **Full App Attest crypto.** `AppAttestVerifier` (`src/security/attestation.ts`) has the structure
-  (challenge store, register/verify seams) with the Apple attestation/assertion verification left as a
-  documented TODO. Until completed, run with `APP_ATTEST_REQUIRED=false` **only** outside production.
+- **Persist attested keys + signCount** — currently in-memory; move to Redis/DB for multi-instance
+  and restarts.
 - **Redis** for rate limiting across instances.
 - **Language-quality benchmark** (Phase 11): a corpus of consented recordings to measure WER, script
   preservation, and unwanted-translation rate before enabling in production.

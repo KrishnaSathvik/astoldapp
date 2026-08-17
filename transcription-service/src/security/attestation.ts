@@ -1,4 +1,10 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { Buffer } from 'node:buffer';
+import {
+  AppAttestError,
+  verifyAssertion,
+  verifyAttestation,
+} from './appAttestCrypto.js';
 
 /**
  * App Attest boundary. Verifies that a request originates from a legitimate app instance so third
@@ -72,21 +78,19 @@ export class DevBypassVerifier implements AttestationVerifier {
   }
 }
 
-/**
- * Production App Attest verifier — STUB. The structure (challenge issue/consume, key registration,
- * per-request assertion) is here; the cryptographic verification against Apple's App Attest root is
- * intentionally left as a documented integration point.
- *
- * To complete (docs/06-tech-stack.md §11, Apple DeviceCheck docs):
- *  1. register(): decode the CBOR attestation, verify the x5c cert chain to Apple's App Attest root,
- *     confirm the nonce = SHA256(authenticatorData || SHA256(challenge)), the appId/rpId hash, the
- *     AAGUID, then persist the public key + a signCount keyed by keyId.
- *  2. verifyRequest(): verify the assertion signature over SHA256(authenticatorData || clientDataHash)
- *     with the stored public key, and that signCount strictly increases.
- */
+/** Production App Attest verifier — real attestation + assertion verification (appAttestCrypto).
+ *  register(): verify the CBOR attestation, the x5c chain to Apple's root, the nonce, appId/rpId hash,
+ *  AAGUID, and keyId==credentialId; store the public key + signCount.
+ *  verifyRequest(): consume a one-time challenge, verify the assertion signature over
+ *  SHA256(authenticatorData || SHA256(challenge)), and that signCount strictly increases. */
 export class AppAttestVerifier implements AttestationVerifier {
   private readonly store = new ChallengeStore();
-  private readonly keys = new Map<string, { publicKey: string; signCount: number }>();
+  private readonly keys = new Map<string, { publicKeyPem: string; signCount: number }>();
+
+  constructor(
+    private readonly appId: string,
+    private readonly productionAAGUID: boolean = false,
+  ) {}
 
   issueChallenge() {
     return this.store.issue();
@@ -99,22 +103,54 @@ export class AppAttestVerifier implements AttestationVerifier {
     if (!input.keyId || !input.attestationBase64) {
       throw new AttestationError('missing attestation');
     }
-    // TODO(prod): verify CBOR attestation + Apple cert chain before trusting the key. See class docs.
-    throw new AttestationError('App Attest verification not configured');
+    try {
+      const result = await verifyAttestation({
+        attestation: Buffer.from(input.attestationBase64, 'base64'),
+        challenge: input.challenge,
+        keyId: input.keyId,
+        appId: this.appId,
+        requireProductionAAGUID: this.productionAAGUID,
+      });
+      this.keys.set(input.keyId, { publicKeyPem: result.publicKeyPem, signCount: result.signCount });
+      return { installId: input.keyId };
+    } catch (err) {
+      throw new AttestationError(err instanceof AppAttestError ? err.message : 'attestation failed');
+    }
   }
 
   async verifyRequest(headers: AttestationHeaders): Promise<{ identity: string }> {
-    if (!headers.keyId || !headers.assertionBase64) {
+    if (!headers.keyId || !headers.assertionBase64 || !headers.challenge) {
       throw new AttestationError('missing assertion');
+    }
+    if (!this.store.consume(headers.challenge)) {
+      throw new AttestationError('invalid or expired challenge');
     }
     const stored = this.keys.get(headers.keyId);
     if (!stored) throw new AttestationError('unknown key');
-    // TODO(prod): verify assertion signature + monotonic signCount. See class docs.
-    throw new AttestationError('App Attest verification not configured');
+    try {
+      const clientDataHash = createHash('sha256').update(headers.challenge).digest();
+      const { signCount } = verifyAssertion({
+        assertion: Buffer.from(headers.assertionBase64, 'base64'),
+        clientDataHash,
+        publicKeyPem: stored.publicKeyPem,
+        previousSignCount: stored.signCount,
+        appId: this.appId,
+      });
+      stored.signCount = signCount; // persist the monotonic counter
+      return { identity: headers.keyId };
+    } catch (err) {
+      throw new AttestationError(err instanceof AppAttestError ? err.message : 'assertion failed');
+    }
   }
 }
 
-/** Pick the verifier based on config. */
-export function makeVerifier(required: boolean): AttestationVerifier {
-  return required ? new AppAttestVerifier() : new DevBypassVerifier();
+/** Pick the verifier based on config. Production requires an App ID. */
+export function makeVerifier(
+  required: boolean,
+  appId?: string,
+  productionAAGUID = false,
+): AttestationVerifier {
+  if (!required) return new DevBypassVerifier();
+  if (!appId) throw new Error('APP_ATTEST_APP_ID is required when APP_ATTEST_REQUIRED=true');
+  return new AppAttestVerifier(appId, productionAAGUID);
 }

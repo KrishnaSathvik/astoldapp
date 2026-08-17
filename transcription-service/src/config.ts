@@ -13,6 +13,13 @@ const schema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  // "TEAMID.bundleId", e.g. "ABCDE12345.com.yourly.app" — required when App Attest is enabled.
+  APP_ATTEST_APP_ID: z.string().optional(),
+  // Require the production AAGUID ("appattest"); dev builds use "appattestdevelop".
+  APP_ATTEST_PRODUCTION: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 export type Config = z.infer<typeof schema>;

@@ -27,7 +27,7 @@ export function makeDefaultDeps(config: Config): Deps {
   return {
     config,
     provider,
-    verifier: makeVerifier(config.APP_ATTEST_REQUIRED),
+    verifier: makeVerifier(config.APP_ATTEST_REQUIRED, config.APP_ATTEST_APP_ID, config.APP_ATTEST_PRODUCTION),
     limiter: new InMemoryRateLimiter(
       config.RATE_LIMIT_MAX,
       config.RATE_LIMIT_WINDOW_SECONDS * 1000,
