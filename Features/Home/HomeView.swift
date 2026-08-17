@@ -11,20 +11,30 @@ struct HomeView: View {
     @State private var editingNote: Note?
     @State private var recentlyDeleted: Note?
     @State private var undoDismiss: Task<Void, Never>?
+    @State private var searchQuery = ""
+
+    private var isSearching: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
                 Color.ds.canvas.ignoresSafeArea()
-                content
-                FloatingNewNoteButton(action: newNote)
-                    .padding(DSSpacing.s6)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                if recentlyDeleted != nil {
-                    UndoBanner(onUndo: undoDelete)
-                        .padding(.bottom, DSSpacing.s4)
+                if isSearching {
+                    SearchResultsView(notes: notes, query: searchQuery) { editingNote = $0 }
+                } else {
+                    content
+                    FloatingNewNoteButton(action: newNote)
+                        .padding(DSSpacing.s6)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    if recentlyDeleted != nil {
+                        UndoBanner(onUndo: undoDelete)
+                            .padding(.bottom, DSSpacing.s4)
+                    }
                 }
             }
+            .searchable(text: $searchQuery, prompt: "Search notes")
             .animation(DSMotion.standard, value: recentlyDeleted != nil)
             .navigationDestination(item: $editingNote) { note in
                 EditorView(note: note)
