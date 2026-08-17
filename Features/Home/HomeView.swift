@@ -15,6 +15,7 @@ struct HomeView: View {
     @State private var showingCalendar = false
     @State private var showingProfile = false
     @State private var selectedDay: Date?
+    @AppStorage("profileName") private var profileName = ""
     @Environment(AppLockModel.self) private var lock
 
     private let calendar = Calendar.current
@@ -66,8 +67,7 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { showingProfile = true } label: {
-                        Image(systemName: "person.crop.circle")
-                            .foregroundStyle(Color.ds.textSecondary)
+                        ProfileAvatar(name: profileName)
                     }
                     .accessibilityLabel("Profile")
                 }

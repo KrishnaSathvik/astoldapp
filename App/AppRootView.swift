@@ -46,6 +46,10 @@ struct AppRootView: View {
         #if DEBUG
         if DebugLaunch.openSampleEditor {
             NavigationStack { EditorView(note: Note()) }
+        } else if DebugLaunch.openAbout {
+            NavigationStack { AboutView() }
+        } else if DebugLaunch.openPrivacy {
+            NavigationStack { PrivacyView() }
         } else {
             routed
         }

@@ -42,4 +42,18 @@ final class NavigationUITests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap() // system back
         XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 5), "Should return to Home")
     }
+
+    func testProfileAboutAndPrivacyPushAndPop() {
+        let app = launchedApp()
+        app.buttons["Profile"].tap()
+        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 5))
+
+        app.buttons["About Yourly"].tap()
+        XCTAssertTrue(app.navigationBars["About"].waitForExistence(timeout: 5), "About should push")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 5), "Back to Profile")
+
+        app.buttons["Privacy"].tap()
+        XCTAssertTrue(app.navigationBars["Privacy"].waitForExistence(timeout: 5), "Privacy should push")
+    }
 }
