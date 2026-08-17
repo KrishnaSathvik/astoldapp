@@ -16,6 +16,8 @@ enum DebugLaunch {
     static var openPrivacy: Bool { args.contains("-openPrivacy") }
     static var openTheme: Bool { args.contains("-openTheme") }
     static var forceLocked: Bool { args.contains("-forceLocked") }
+    /// Wipe all notes on launch — used by UI tests so each starts from a clean, seeded store.
+    static var resetStore: Bool { args.contains("-resetStore") }
     /// Value after `-searchQuery` — presets the Home search field for screenshots.
     static var presetSearch: String? {
         guard let i = args.firstIndex(of: "-searchQuery"), i + 1 < args.count else { return nil }
@@ -25,6 +27,10 @@ enum DebugLaunch {
 
     @MainActor
     static func seedIfRequested(_ context: ModelContext) {
+        if resetStore {
+            for note in (try? context.fetch(FetchDescriptor<Note>())) ?? [] { context.delete(note) }
+            try? context.save()
+        }
         guard seedSampleNotes else { return }
         let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
         guard existing == 0 else { return }

@@ -50,4 +50,28 @@ struct TranscriptInsertionTests {
         let (text, _) = insertTranscript("world", into: "hello\n", at: 6)
         #expect(text == "hello\nworld")   // newline is whitespace → no boundary space
     }
+
+    // UTF-16 → Character offset conversion (used by the UITextView cursor).
+    @Test func characterOffsetForAsciiMatchesUTF16() {
+        #expect("hello".characterOffset(fromUTF16: 3) == 3)
+    }
+
+    @Test func characterOffsetForTeluguRoundTrips() {
+        // Telugu combines base+vowel-sign into grapheme clusters, so UTF-16 count > Character count.
+        // A caret at the UTF-16 end must map to the Character count (not the UTF-16 count).
+        let s = "నాకు"
+        #expect(s.utf16.count > s.count)
+        #expect(s.characterOffset(fromUTF16: s.utf16.count) == s.count)
+    }
+
+    @Test func insertAtTeluguCursorIsVerbatim() {
+        let body = "నాకు idea"
+        let offset = body.characterOffset(fromUTF16: body.utf16.count)   // end
+        let (text, _) = insertTranscript("వచ్చింది", into: body, at: offset)
+        #expect(text == "నాకు idea వచ్చింది")
+    }
+
+    @Test func characterOffsetClampsBeyondEnd() {
+        #expect("ab".characterOffset(fromUTF16: 99) == 2)
+    }
 }

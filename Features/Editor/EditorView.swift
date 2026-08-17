@@ -11,7 +11,9 @@ struct EditorView: View {
     var onClose: (() -> Void)? = nil
     @State private var model: EditorModel?
     @State private var voice: VoiceCaptureModel?
-    @FocusState private var bodyFocused: Bool
+    @State private var bodySelection = NSRange(location: 0, length: 0)
+    @State private var focusToken = UUID()
+    @State private var capturedInsertOffset = 0
 
     private var isCapturing: Bool { voice != nil }
 
@@ -37,7 +39,7 @@ struct EditorView: View {
         .onAppear {
             if model == nil {
                 model = EditorModel(note: note, context: context)
-                bodyFocused = true
+                focusToken = UUID()   // focus the body on first appearance
             }
             #if DEBUG
             if DebugLaunch.autoStartVoice, let model {
@@ -62,7 +64,7 @@ struct EditorView: View {
                 .accessibilityLabel("Back to notes")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Done") { bodyFocused = false; close() }   // finish → back to Home
+                Button("Done") { close() }   // finish → back to Home
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.ds.accent)
             }
@@ -80,22 +82,21 @@ struct EditorView: View {
                 .foregroundStyle(Color.ds.textPrimary)
                 .disabled(isCapturing)
 
-            TextEditor(text: Binding(get: { model.body }, set: { model.body = $0 }))
-                .font(.ds.editorBody)
-                .foregroundStyle(Color.ds.textPrimary)
-                .scrollContentBackground(.hidden)
-                .focused($bodyFocused)
-                .disabled(isCapturing)   // recording/transcription owns the anchor
-                .overlay(alignment: .topLeading) {
-                    if model.body.isEmpty {
-                        Text("Start writing…")
-                            .font(.ds.editorBody)
-                            .foregroundStyle(Color.ds.textTertiary)
-                            .padding(.top, 8)
-                            .padding(.leading, 5)
-                            .allowsHitTesting(false)
-                    }
+            BodyTextView(
+                text: Binding(get: { model.body }, set: { model.body = $0 }),
+                selectedRange: $bodySelection,
+                isEditable: !isCapturing,   // recording/transcription owns the anchor
+                focusToken: focusToken
+            )
+            .overlay(alignment: .topLeading) {
+                if model.body.isEmpty {
+                    Text("Start writing…")
+                        .font(.ds.editorBody)
+                        .foregroundStyle(Color.ds.textTertiary)
+                        .padding(.top, 6)
+                        .allowsHitTesting(false)
                 }
+            }
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .overlay(alignment: .bottom) { voiceLayer(model) }
@@ -105,7 +106,7 @@ struct EditorView: View {
 
     @ViewBuilder private func voiceLayer(_ model: EditorModel) -> some View {
         if let voice {
-            RecordingPanel(model: voice) { self.voice = nil; bodyFocused = true }
+            RecordingPanel(model: voice) { self.voice = nil; focusToken = UUID() }
                 .padding(.bottom, DSSpacing.s4)
         } else {
             HStack {
@@ -117,12 +118,13 @@ struct EditorView: View {
     }
 
     private func startVoice(_ model: EditorModel) {
-        bodyFocused = false
+        // Capture the caret now — the recording/transcription owns this anchor (docs §8).
+        capturedInsertOffset = model.body.characterOffset(fromUTF16: bodySelection.location)
         let capture = VoiceCaptureModel(
             recorder: AVAudioRecorderService(),
             service: TranscriptionConfig.makeService()   // real relay if configured, else fake
         ) { text in
-            model.insertVoiceTranscript(text)
+            model.insertVoiceTranscript(text, at: capturedInsertOffset)
         }
         voice = capture
         Task { await capture.begin() }

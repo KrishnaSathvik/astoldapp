@@ -8,7 +8,7 @@ final class NavigationUITests: XCTestCase {
 
     private func launchedApp() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-hasCompletedWelcome", "YES", "-seedSampleNotes"]
+        app.launchArguments = ["-hasCompletedWelcome", "YES", "-resetStore", "-seedSampleNotes"]
         app.launch()
         // Home is ready when the New note button exists.
         XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 15), "Home did not appear")
@@ -46,7 +46,9 @@ final class NavigationUITests: XCTestCase {
 
     func testSwipeToDeleteRemovesNote() {
         let app = launchedApp()
-        let note = app.staticTexts["Alaska trip idea"]
+        let note = app.buttons
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Alaska trip idea"))
+            .firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 8), "seeded note should exist")
         note.swipeLeft()
         tap(app.buttons["Delete"], "revealed Delete button")
