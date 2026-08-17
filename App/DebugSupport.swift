@@ -9,6 +9,11 @@ import SwiftData
 enum DebugLaunch {
     static var seedSampleNotes: Bool { args.contains("-seedSampleNotes") }
     static var openSampleEditor: Bool { args.contains("-openSampleEditor") }
+    /// Value after `-searchQuery` — presets the Home search field for screenshots.
+    static var presetSearch: String? {
+        guard let i = args.firstIndex(of: "-searchQuery"), i + 1 < args.count else { return nil }
+        return args[i + 1]
+    }
     private static var args: [String] { ProcessInfo.processInfo.arguments }
 
     @MainActor

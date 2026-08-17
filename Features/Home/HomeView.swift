@@ -35,6 +35,9 @@ struct HomeView: View {
                 }
             }
             .searchable(text: $searchQuery, prompt: "Search notes")
+            #if DEBUG
+            .task { if let q = DebugLaunch.presetSearch { searchQuery = q } }
+            #endif
             .animation(DSMotion.standard, value: recentlyDeleted != nil)
             .navigationDestination(item: $editingNote) { note in
                 EditorView(note: note)
