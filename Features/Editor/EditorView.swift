@@ -120,7 +120,7 @@ struct EditorView: View {
         bodyFocused = false
         let capture = VoiceCaptureModel(
             recorder: AVAudioRecorderService(),
-            service: FakeTranscriptionService()
+            service: TranscriptionConfig.makeService()   // real relay if configured, else fake
         ) { text in
             model.insertVoiceTranscript(text)
         }
