@@ -32,7 +32,7 @@
 | Framework | Fastify |
 | Validation | Zod or JSON-schema/Fastify schema |
 | OpenAI | Official OpenAI Node SDK |
-| Model | `gpt-transcribe` |
+| Model | `gpt-4o-transcribe` |
 | Rate limit | Redis-backed in production if needed |
 | Integrity | App Attest verification |
 | Deployment | small container/service |
@@ -151,16 +151,21 @@ It is simpler for a bounded recording workflow.
 
 ## Recommended
 
-`gpt-transcribe`
+**`gpt-4o-transcribe`** — the flagship file-transcription model, verified end-to-end (spoken clip →
+relay → accurate verbatim transcript). The relay default is `gpt-4o-transcribe` (see
+`transcription-service/`).
 
-Current OpenAI file-transcription guidance recommends it for completed recorded speech in the original language.
+Other file-transcription models on the account (benchmark before switching, Phase 11):
+`gpt-transcribe` (sibling, similar quality), `gpt-4o-mini-transcribe` (faster/cheaper, slightly lower
+accuracy), `whisper-1` (returns detected language via `verbose_json`, but weaker on low-resource
+languages / code-switching), `gpt-4o-transcribe-diarize` (speaker labels — not needed here).
 
 Useful capabilities for this product include:
 
 - original-language transcription
 - expected-language context
-- transcription prompting/context
-- streaming a completed file if later desired
+- transcription prompting/context (our static verbatim prompt)
+- json/text response formats (no per-language detection field for the gpt-4o family)
 
 ### Why not Realtime first
 
@@ -175,7 +180,8 @@ Realtime adds:
 
 without creating V1 user value.
 
-Evaluate `gpt-live-transcribe` only if the design later wants live text while the user is still talking.
+Evaluate `gpt-live-transcribe` (available on the account, alongside the `gpt-realtime-*` family) only
+if the design later wants live text while the user is still talking.
 
 ---
 
