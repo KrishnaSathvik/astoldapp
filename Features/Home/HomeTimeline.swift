@@ -38,12 +38,14 @@ struct HomeTimeline: View {
                             .fill(Color.ds.textTertiary.opacity(0.16))
                             .frame(height: 0.5)
                             .plainRow(topInset: DSSpacing.s4)
+                            .accessibilityHidden(true)
                     }
                 }
             }
 
             Color.clear.frame(height: 72)
                 .plainRow()
+                .accessibilityHidden(true)
                 .onAppear { onReachEnd?() }   // near the bottom → load the next batch
         }
         .listStyle(.plain)

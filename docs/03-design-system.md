@@ -661,6 +661,15 @@ SwiftUI sensory feedback is preferred where deployment target supports it.
 
 Required from first implementation.
 
+### Automated audit (enforced)
+
+UI tests run Apple's `performAccessibilityAudit` on Home and Profile, scoped to **hit-region size**
+and **sufficient element descriptions** — both must pass. Note rows, search results, and date headers
+carry explicit VoiceOver labels/traits; decorative elements (separators, spacers, the avatar disc) are
+`accessibilityHidden`. Contrast and Dynamic-Type audits are logged but not gated: the muted
+secondary/tertiary greys are a deliberate "Quiet Editorial" choice (tuned darker for readability), and
+some contrast flags come from text scrolling under the translucent search bar.
+
 ### Dynamic Type
 
 - all text scales

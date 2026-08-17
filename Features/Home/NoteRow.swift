@@ -26,5 +26,12 @@ struct NoteRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        if let displayTitle { return "\(displayTitle). \(note.body)" }
+        return note.body
     }
 }

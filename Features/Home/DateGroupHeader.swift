@@ -8,5 +8,6 @@ struct DateGroupHeader: View {
             .font(.ds.groupTitle)
             .foregroundStyle(Color.ds.textPrimary)
             .padding(.top, DSSpacing.s6)
+            .accessibilityAddTraits(.isHeader)
     }
 }

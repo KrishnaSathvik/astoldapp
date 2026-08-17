@@ -34,5 +34,7 @@ struct SearchResultRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(titleLine). \(dateText)")
     }
 }

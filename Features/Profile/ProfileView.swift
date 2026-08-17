@@ -57,6 +57,8 @@ struct ProfileView: View {
                     ProfileRow(title: "Version") {
                         Text(appVersion).font(.ds.preview).foregroundStyle(Color.ds.textSecondary)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Version \(appVersion)")
                 }
 
                 Spacer(minLength: DSSpacing.s10)

@@ -85,6 +85,23 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Privacy"].waitForExistence(timeout: 8), "Privacy should push")
     }
 
+    /// Apple's automated audit, scoped to the types we enforce: hit-region size + sufficient element
+    /// descriptions. (Contrast/Dynamic-Type are logged separately — the muted "Quiet Editorial"
+    /// palette is a reviewed design choice; see docs/03-design-system.md §14.)
+    private static let enforcedAudits: XCUIAccessibilityAuditType = [.hitRegion, .sufficientElementDescription]
+
+    @MainActor func testHomeAccessibilityAudit() throws {
+        let app = launchedApp()
+        try app.performAccessibilityAudit(for: Self.enforcedAudits)
+    }
+
+    @MainActor func testProfileAccessibilityAudit() throws {
+        let app = launchedApp()
+        tap(app.buttons["Profile"], "profile button")
+        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 8))
+        try app.performAccessibilityAudit(for: Self.enforcedAudits)
+    }
+
     func testThemePickerOpensAndSelectsDark() {
         let app = launchedApp()
         tap(app.buttons["Profile"], "profile button")

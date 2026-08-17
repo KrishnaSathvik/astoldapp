@@ -26,5 +26,6 @@ struct ProfileAvatar: View {
             }
         }
         .frame(width: size, height: size)
+        .accessibilityHidden(true)   // decorative — the name label carries the identity
     }
 }
