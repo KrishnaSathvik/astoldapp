@@ -33,6 +33,15 @@ final class EditorModel {
         }
     }
 
+    /// Insert a voice transcript into the body as ordinary editable text, then autosave.
+    /// V1 anchors at the end of the body (deterministic); precise-cursor insertion is a later
+    /// refinement. Verbatim + minimal boundary whitespace only (RULES.md §2).
+    func insertVoiceTranscript(_ transcript: String) {
+        let (newBody, _) = insertTranscript(transcript, into: note.body, at: note.body.count)
+        note.body = newBody
+        flush()
+    }
+
     /// Persist current content (normalizing the title). Bumps updatedAt, never createdAt.
     func flush() {
         note.title = normalizedTitle(note.title)

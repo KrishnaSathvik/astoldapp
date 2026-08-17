@@ -7,7 +7,10 @@ struct EditorView: View {
     @Environment(\.scenePhase) private var scenePhase
     let note: Note
     @State private var model: EditorModel?
+    @State private var voice: VoiceCaptureModel?
     @FocusState private var bodyFocused: Bool
+
+    private var isCapturing: Bool { voice != nil }
 
     private var dateText: String {
         let df = DateFormatter(); df.dateFormat = "MMMM d, yyyy"
@@ -50,12 +53,14 @@ struct EditorView: View {
             TextField("Title", text: Binding(get: { model.title }, set: { model.title = $0 }))
                 .font(.ds.editorTitle)
                 .foregroundStyle(Color.ds.textPrimary)
+                .disabled(isCapturing)
 
             TextEditor(text: Binding(get: { model.body }, set: { model.body = $0 }))
                 .font(.ds.editorBody)
                 .foregroundStyle(Color.ds.textPrimary)
                 .scrollContentBackground(.hidden)
                 .focused($bodyFocused)
+                .disabled(isCapturing)   // recording/transcription owns the anchor
                 .overlay(alignment: .topLeading) {
                     if model.body.isEmpty {
                         Text("Start writing…")
@@ -67,7 +72,34 @@ struct EditorView: View {
                     }
                 }
         }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .overlay(alignment: .bottom) { voiceLayer(model) }
         .padding(.horizontal, DSSpacing.screenH)
         .padding(.top, DSSpacing.s4)
+    }
+
+    @ViewBuilder private func voiceLayer(_ model: EditorModel) -> some View {
+        if let voice {
+            RecordingPanel(model: voice) { self.voice = nil; bodyFocused = true }
+                .padding(.bottom, DSSpacing.s4)
+        } else {
+            HStack {
+                Spacer()
+                VoiceButton { startVoice(model) }
+            }
+            .padding(.bottom, DSSpacing.s4)
+        }
+    }
+
+    private func startVoice(_ model: EditorModel) {
+        bodyFocused = false
+        let capture = VoiceCaptureModel(
+            recorder: AVAudioRecorderService(),
+            service: FakeTranscriptionService()
+        ) { text in
+            model.insertVoiceTranscript(text)
+        }
+        voice = capture
+        Task { await capture.begin() }
     }
 }
