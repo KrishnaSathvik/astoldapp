@@ -70,10 +70,10 @@ struct HomeView: View {
                         if let profileInitial {
                             Text(profileInitial)
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Color.ds.accent)
+                                .foregroundStyle(Color.ds.iconProfile)
                         } else {
                             Image(systemName: "person.crop.circle")
-                                .foregroundStyle(Color.ds.accent)
+                                .foregroundStyle(Color.ds.iconProfile)
                         }
                     }
                     .accessibilityLabel("Profile")
@@ -81,7 +81,7 @@ struct HomeView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingCalendar = true } label: {
                         Image(systemName: "calendar")
-                            .foregroundStyle(Color.ds.accent)
+                            .foregroundStyle(Color.ds.iconCalendar)
                             .symbolVariant(selectedDay == nil ? .none : .fill)
                     }
                     .accessibilityLabel("Open calendar")
@@ -90,7 +90,7 @@ struct HomeView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: newNote) {
                         Image(systemName: "square.and.pencil")
-                            .foregroundStyle(Color.ds.accent)
+                            .foregroundStyle(Color.ds.iconCompose)
                     }
                     .accessibilityLabel("New note")
                 }

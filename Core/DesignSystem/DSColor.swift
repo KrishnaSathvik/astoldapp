@@ -10,5 +10,10 @@ extension Color {
         static let textSecondary = Color("TextSecondary")
         static let textTertiary = Color("TextTertiary")
         static let accent = Color("Accent")
+
+        /// Distinct, muted tints for the header action icons (adaptive Light/Dark).
+        static let iconProfile = Color("IconProfile")     // terracotta
+        static let iconCalendar = Color("IconCalendar")   // sage teal
+        static let iconCompose = Color("IconCompose")     // slate blue
     }
 }
