@@ -262,10 +262,14 @@ Served at `https://astold.app/og.png`, 1200×630, referenced from every page (`o
 - No App Store badge, no fake ratings, no emoji, no dashboard UI, no bottom tab bar, no per-note
   timestamps on Home, no note cards, no heavy shadows.
 
-> **Generation note (2026-08-18):** the prompt used for the first render still carried the retired
-> headline *"Your thoughts, in your own words."* and a plain-text Home mockup. Both are superseded by
-> this section — regenerate with the headline *"Anything you want to put into words."* and a
-> structured-writing device shot before publishing.
+**Shipped 2026-08-18** as `website/og.png` (1200×630, ~686 KB). Generated with `gpt-image-2` at
+1792×1024, then centre-cropped to 1.905:1 against the measured content bounds and resampled — no text
+or device edge is clipped. The device shot shows the structured-writing UI: a note preview, a real
+three-row checklist (two open, one ticked), and a draft, which is accurate now that structure ships.
+
+> An earlier prompt revision carried the retired headline *"Your thoughts, in your own words."* and a
+> plain-text Home mockup. Both were superseded before the asset was rendered; the shipped image uses
+> *"Anything you want to put into words."*
 
 ### Social bio
 
@@ -323,7 +327,7 @@ Done (2026-08-18):
 
 Outstanding:
 
-- [ ] **Ship `website/og.png`** — every page references it and it does not exist yet (see §5 Open Graph)
+- [x] **Ship `website/og.png`** — rendered and in place; every page references it (see §5 Open Graph)
 - [ ] Point the `astold.app` DNS at the Vercel project, then re-verify canonicals resolve
 - [ ] Audit alt text and use descriptive screenshot filenames as new shots land
 - [ ] JSON-LD only where the type genuinely applies (`SoftwareApplication` is the plausible one)
