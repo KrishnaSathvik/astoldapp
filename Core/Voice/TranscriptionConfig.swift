@@ -17,7 +17,23 @@ enum TranscriptionConfig {
 
     @MainActor
     static func makeService() -> TranscriptionService {
-        if let baseURL { return RelayTranscriptionService(baseURL: baseURL) }
+        if let baseURL { return makeRelayService(baseURL: baseURL) }
         return FakeTranscriptionService()
+    }
+
+    /// Relay client with App Attest attached. One `AppAttestClient` is shared by the service so the
+    /// install registers once and every request carries a fresh assertion (RULES.md §3). On the
+    /// Simulator and unsupported hardware the client yields no headers and the relay decides.
+    static func makeRelayService(
+        baseURL: URL,
+        session: URLSession = .shared,
+        keys: AppAttestKeyProviding = DeviceCheckAppAttestKeys(),
+        storage: AppAttestKeyIDStorage = UserDefaultsAppAttestKeyIDStorage()
+    ) -> RelayTranscriptionService {
+        let attest = AppAttestClient(baseURL: baseURL, session: session, keys: keys, storage: storage)
+        var service = RelayTranscriptionService(baseURL: baseURL, session: session)
+        service.attestationHeaders = { _ in await attest.headers() }
+        service.attestationRejected = { await attest.invalidateRegistration() }
+        return service
     }
 }

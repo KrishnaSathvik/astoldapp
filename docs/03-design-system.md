@@ -21,15 +21,15 @@ A per-screen walkthrough lives in `docs/design-reference/README.md`.
    (waveform, elapsed time, `Cancel` / stop / `Done`).
 7. Search — query field, results as title + preview + date, `Cancel`.
 8. Swipe to delete — native red `Delete` revealed.
-9. Settings — `PRIVACY` (Lock with Face ID) and `ABOUT` (Privacy Policy, About [AppName], Version 1.0.0).
+9. Settings — `PRIVACY` (Lock with Face ID) and `ABOUT` (Privacy Policy, About As Told, Version 1.0.0).
 10. Lock screen (Face ID) — mark, wordmark, Face ID glyph, `Unlock`.
 
 ### Brand mark & wordmark
 
 - **Mark:** a minimal **feather / quill** glyph, used on Splash, Welcome, and Lock. It appears in a
   soft rounded-square app-tile treatment on Splash, and as a bare glyph on Welcome/Lock.
-- **Wordmark:** the word rendered in an **elegant serif** logotype (the reference uses "Yourly" as the
-  placeholder brand — see `[AppName]` policy in `README.md`/`CLAUDE.md`).
+- **Wordmark:** the word **As Told** rendered in an **elegant serif** logotype (the reference PNG still
+  shows the older "Yourly" wordmark; the locked name is **As Told** — see `README.md` §2).
 - **Important — this does not change the "no custom font in V1" rule.** The serif is a **brand
   logotype asset** (mark + wordmark image), used only on Splash / Welcome / Lock. **All UI text**
   (titles, note content, controls, settings) still uses the system San Francisco font with Dynamic
@@ -45,7 +45,7 @@ A per-screen walkthrough lives in `docs/design-reference/README.md`.
   offers `Today` and the most recent note date.
 - The voice recording surface is the only place using a dark system-material panel; the writing surface
   stays solid (see §10).
-- Settings About row reads `About [AppName]` and `Version 1.0.0`.
+- Settings About row reads `About As Told` and `Version 1.0.0`.
 
 ---
 
@@ -150,9 +150,9 @@ Centered app mark and/or app name.
 
 **Write it. Say it. Keep it.**
 
-A private place for the thoughts you want to keep.
+A private place for anything you want to put into words.
 
-Type them or speak them. Keep them as they came.
+Type it or say it. As Told stays out of your way.
 
 ### Layout
 
@@ -219,6 +219,16 @@ Use:
 - optional subtle separator
 
 Prefer `VStack` rhythm over rounded rectangles.
+
+Hierarchy — restrained, editorial, never a settings list:
+
+| | Titled note | Untitled note |
+|---|---|---|
+| Primary | title, `body` semibold (~17 pt), 1 line | first meaningful body line, `body` regular (~17 pt), primary colour |
+| Secondary | body preview, `subheadline` (~15 pt), secondary colour, 2–3 lines | — |
+
+Both previews carry a little extra line spacing. Leading blank lines are skipped so the preview
+always starts on real words. The row never renders `Untitled`, and never shows a creation time.
 
 ### New note control
 
@@ -331,6 +341,21 @@ Start writing...
 - keyboard behaves natively
 - generous horizontal margins
 - date is visually secondary
+- body uses generous line spacing — the screen must be comfortable to *read*, not only to fill in
+
+### Reading vs editing
+
+The same screen serves both; only the arriving focus differs.
+
+| | New note | Existing note |
+|---|---|---|
+| On open | body focused, keyboard up | reading — nothing focused, no keyboard |
+| Trailing toolbar | `Done` (dismisses keyboard) | nothing |
+| Starting to edit | already editing | tap title or body; caret lands where tapped |
+
+No `Read Mode` / `Edit Mode` toggle, and no custom "Hide Keyboard" bar. The keyboard leaves by
+scrolling the body interactively, by `Done`, or by navigating Back. `Done` never navigates —
+autosave already saved, so a completion control would be a second Back.
 
 ### Title
 
@@ -350,12 +375,16 @@ Editor stays visible.
 
 Bottom recording surface expands from the mic control.
 
-Include:
+Include, and only these:
 
 - live audio level/waveform
 - elapsed time
-- Cancel
-- Done
+- Cancel (leading, quiet)
+- Done (centre, primary circular control, labelled)
+
+Two controls, not three. `Stop` and `Done` would trigger the identical transition — there is no
+review-before-transcribe step to separate them — so the panel offers one way to end the recording
+and one way to abandon it. Haptics mark start, stop, success, and failure.
 
 The recording control can use system material/Liquid Glass treatment.
 
@@ -403,7 +432,7 @@ Lock with Face ID                  [toggle]
 ABOUT
 
 Privacy                              >
-About [AppName]                      >
+About As Told                      >
 Version 1.0.0
 ```
 

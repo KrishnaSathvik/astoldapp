@@ -26,9 +26,10 @@ final class Note {
         self.deletedAt = deletedAt
     }
 
-    /// A draft with no meaningful title or body — discarded on abandon (RULES.md §1, §4).
+    /// A draft with no meaningful title or body — discarded on abandon (RULES.md §1, §4). Structure
+    /// markers alone (e.g. an abandoned empty "- ") are not content, so the *visible* text is what counts.
     var isEmptyDraft: Bool {
         normalizedTitle(title) == nil &&
-        body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        MarkupDocument(body).visibleText().trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }

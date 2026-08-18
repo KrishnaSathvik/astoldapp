@@ -9,7 +9,7 @@ import {
   verifyAssertion,
 } from '../src/security/appAttestCrypto.js';
 
-const APP_ID = 'ABCDE12345.com.yourly.app';
+const APP_ID = 'ABCDE12345.com.astold.app';
 
 function sha(...b: Buffer[]) {
   const h = createHash('sha256');

@@ -2,7 +2,7 @@
 
 ## 1. Product summary
 
-`[AppName]` is a premium, minimal iPhone notes application for capturing thoughts by typing or speaking.
+**As Told** is a premium, minimal iPhone app — a private place for anything you want to put into words: a thought, a note, a draft, a plan, a list, or whatever else is on your mind. You put it there by typing or speaking, and the app does not make you decide what kind of writing it is first.
 
 It is built around a deliberately narrow loop:
 
@@ -16,7 +16,7 @@ The app organizes notes automatically by date, stores them locally, and avoids a
 
 ### Product category
 
-Private thought capture / minimal notes.
+A private writing space / minimal notes.
 
 ### Positioning
 
@@ -28,9 +28,13 @@ Not "a journal that tells you what to write."
 
 Not "Apple Notes with more buttons."
 
+Not Notion, Todoist, Word, or an AI writing assistant.
+
 The intended feeling is:
 
-> A quiet personal place where a thought can be put down without having to organize, rewrite, categorize, or explain it.
+> A quiet personal place where anything you want to put into words can be put down — a thought, note, draft, plan, or list — without having to classify, organize, rewrite, or explain it first.
+
+Widening the *use cases* must never widen the *product* into a workspace. The long-term success test (§14) and the do-not-build list (`RULES.md` §7) are the fence: if expanding what people can write makes Home or the Editor feel like a productivity dashboard, the implementation has gone too far.
 
 ---
 
@@ -74,15 +78,17 @@ There is room for a product whose value is **restraint**:
 
 ### Primary user
 
-Someone who frequently has thoughts they want to preserve but does not want to maintain an organizational system.
+Someone who frequently has things they want to put into words and preserve, but does not want to maintain an organizational system.
 
 Examples:
 
 - a personal thought
-- an idea
+- a note or an idea
 - something to remember
 - a reflection
-- a rough plan
+- a rough plan or a trip plan
+- a longer draft (an article, a letter, a story)
+- a simple list or checklist
 - a line or phrase
 - something easier to say than type
 - mixed Telugu/English or Hindi/English speech
@@ -567,6 +573,18 @@ For benchmark recordings:
 - API key is server-side
 - temporary audio cleanup is verified
 - accessibility audit passes before release
+
+### Long-term product success test (post-V1 direction)
+
+As the product evolves toward "anything you want to put into words", it should pass this test: from **one
+blank page, without first selecting a mode or type**, a user can create a thought, a personal note, a
+long draft, a plan, a bullet list, or a checklist — and can create any of them by **typing or speaking** —
+while the app still feels almost as simple as it does today.
+
+If expanding the use cases makes Home or the Editor feel like a productivity dashboard, the implementation
+has gone too far. The differentiation is not "another notes app with voice transcription" but **a writing
+space where your hands and your voice can create the same page** — and the boundary that is never crossed:
+As Told can help *structure* your words; it must never *replace* them.
 
 ---
 

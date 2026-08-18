@@ -43,7 +43,9 @@ struct HomeTimeline: View {
                 }
             }
 
-            Color.clear.frame(height: 72)
+            // Tail inset clears the floating search field so the last note is never half-hidden
+            // behind it (§6 — search must be available without dominating Home).
+            Color.clear.frame(height: 112)
                 .plainRow()
                 .accessibilityHidden(true)
                 .onAppear { onReachEnd?() }   // near the bottom → load the next batch

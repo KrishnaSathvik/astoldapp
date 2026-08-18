@@ -106,6 +106,10 @@ Responsibilities:
 
 - note title/body binding
 - selection anchor
+- **focus state** — two-way with the `UITextView` body, so the editor always knows whether a caret
+  is active. Drives three things: whether the keyboard opens on arrival (new note yes, existing note
+  no), whether the keyboard-dismissing `Done` is offered, and whether a transcript inserts at the
+  caret or appends to the end.
 - autosave scheduling
 - empty draft cleanup
 - mic entry
@@ -426,13 +430,18 @@ This avoids relying solely on a transient UI UndoManager for persistence safety.
 Responsibilities:
 
 - permission
-- session setup
+- session setup (`.record` category — the app never plays audio back)
 - record
 - level meter
 - stop
 - cancel
 - temp URL
 - cleanup
+- **interruption callback** — a call or Siri stops the recorder; the capture model finishes with the
+  audio already on disk instead of discarding what was said. Route changes (AirPods) are not
+  interruptions; recording continues on the new input.
+- **launch sweep** — `purgeAbandonedRecordings()` deletes `rec-*.m4a` orphaned by a crash or
+  force-quit (RULES.md §3).
 
 ## TranscriptionService
 
@@ -462,11 +471,13 @@ Detected language metadata is useful for QA/debugging but does not need to be pe
 
 Editor owns:
 
-- insertion anchor
+- insertion anchor — the caret when the body had focus, otherwise the end of the body
 - operation state
 - returned text
+- the caret position after insertion
 
-The transcription service never mutates the note directly.
+The transcription service never mutates the note directly. Reading state survives a transcript: the
+keyboard only returns if the user was already editing when recording started.
 
 ---
 
@@ -548,9 +559,25 @@ Make it harder for third parties to copy the public endpoint and consume paid tr
 5. subsequent transcription requests carry assertions
 6. server verifies assertion/request hash
 
+### Registry durability
+
+The record in step 4 holds the key ID, its public key, and the assertion counter — no note content
+and no user identity. It MUST outlive the process whenever attestation is enforced: the counter is
+the replay defence, and comparing against a counter that resets on restart rejects nothing. It also
+spares every install a forced re-registration on each deploy.
+
+`transcription-service/src/security/attestedKeyStore.ts` holds both implementations behind one
+interface — SQLite on a mounted volume (`node:sqlite`, no added dependency) for enforced deploys,
+in-memory for dev and tests. `APP_ATTEST_DB_PATH` is required when `APP_ATTEST_REQUIRED=true`.
+
+Challenges stay in-process on purpose: they expire in 5 minutes and a lost one costs a single
+retried request, so they do not justify the durability cost. That, plus the in-memory rate limiter,
+is why the relay stays single-instance until there is a shared store.
+
 Development builds need a controlled bypass/development environment.
 
-Do not make a generic `X-Debug-Bypass` work in production.
+Do not make a generic `X-Debug-Bypass` work in production. A production relay with attestation off
+must fail to start rather than serve — see `APP_ATTEST_ALLOW_UNPROTECTED` in `config.ts`.
 
 ---
 
@@ -585,6 +612,9 @@ Recommended product behavior:
 - when scene is no longer active, show privacy cover
 - mark content as requiring authentication
 - on active, evaluate device-owner authentication
+- on cold launch with the lock on, start in the locked phase and prompt from `.task` — there is no
+  prior cover transition to escalate from, and `onChange(of: scenePhase)` does not fire for the
+  scene's initial active value
 - only reveal content after success
 
 Use device authentication with biometric-first system behavior and passcode fallback where appropriate.

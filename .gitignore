@@ -25,3 +25,6 @@ Package.resolved
 *.ipa
 *.dSYM.zip
 *.dSYM
+
+# Vercel local link (project/org ids)
+.vercel/

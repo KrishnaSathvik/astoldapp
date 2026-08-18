@@ -14,17 +14,43 @@ After transcription, the resulting words become ordinary editable note text. V1 
 
 This is a core product contract.
 
-The transcription path must **not intentionally**:
+> ### Preserve the words. Format the speech.
+>
+> _(Refined 2026-08-18. The forbidden list is unchanged; what changed is that punctuation was never
+> supposed to be on it — writing speech down includes writing down its sentence boundaries.)_
+
+**Allowed — readability formatting:**
+
+- capitalization
+- sentence boundaries and full stops
+- commas, question marks, exclamation marks where clearly supported by the speech
+- punctuation inferred naturally from delivery
+- paragraph breaks at meaningful pauses or topic changes, where reliably detected
+- minimal whitespace around the inserted transcript
+
+**Forbidden — the transcription path must not intentionally:**
 
 - translate speech
 - summarize speech
-- rewrite speech
+- rewrite or paraphrase speech
 - polish grammar
+- replace vocabulary with different words
 - change tone
 - make sentences "more professional"
 - remove slang because it sounds informal
 - convert Telugu/Hindi to English by default
 - replace the user's content with an AI-generated interpretation
+
+The boundary, in one example:
+
+| | |
+|---|---|
+| **Spoken** | `Actually I don't know maybe we can go Saturday but if Ravi is coming then Sunday is probably better what do you think` |
+| **Allowed** | `Actually, I don't know. Maybe we can go Saturday, but if Ravi is coming, then Sunday is probably better. What do you think?` |
+| **Forbidden** | `Ravi and I should probably go on Sunday instead of Saturday.` |
+
+The first keeps every word the speaker said and only adds the marks that written language uses to
+represent speech. The second is a different sentence.
 
 The goal is:
 
@@ -202,6 +228,15 @@ Do not hardcode business limits deep in the view layer.
 
 Capture the user's intended insertion selection/location.
 
+Two cases, decided at the moment the mic is tapped and owned by that recording:
+
+| State when recording starts | Where the transcript lands |
+|---|---|
+| Caret in the body (the user was editing) | at the captured caret |
+| No caret — existing note open for reading, keyboard hidden | appended to the end of the note |
+
+Voice never creates a separate object; it is another way of writing into the same note.
+
 ### During recording
 
 The note remains visible.
@@ -229,17 +264,21 @@ It must not otherwise rewrite transcript content.
 
 Use the provider's transcription-specific prompting/context capabilities rather than a second text-generation pass.
 
-Conceptual static instruction:
+Shipping static instruction (`transcription-service/src/prompt.ts`, variant `punctuated`):
 
 ```text
 Transcribe the recording faithfully in the original language(s).
-Preserve English, Telugu, and Hindi code-switching as spoken.
-Do not translate, summarize, rewrite, or improve grammar.
+Preserve English, Telugu, and Hindi code-switching exactly as spoken.
+Preserve the speaker's actual words, slang, repetitions, and names.
+Add natural capitalization, punctuation, sentence boundaries, and paragraph breaks where the
+speech supports them.
+Do not translate, summarize, rewrite, paraphrase, or correct grammar.
 Prefer the native writing system for Telugu and Hindi when spoken.
-Preserve natural repeated words, slang, names, and filler words where audible.
 ```
 
-The exact prompt must be tested empirically.
+The exact prompt must be tested empirically — it is not assumed optimal. `PROMPT_VARIANTS` holds the
+benchmark arms (`punctuated`, `strictVerbatim` as the pre-2026-08-18 control, `terse`), selected at
+runtime with `TRANSCRIBE_PROMPT_VARIANT` and compared with `compareArms` (§16).
 
 ### Critical privacy rule
 
@@ -283,7 +322,9 @@ Allowed deterministic cleanup is limited to transport/UI artifacts, for example:
 - trimming an accidental trailing transport newline
 - preventing double spaces created by insertion boundaries
 
-Even punctuation changes should preferably come from the transcription model, not a rewrite pass.
+Punctuation is allowed (§2) but **must come from the transcription model itself**. A second
+generative pass that adds punctuation is still a rewrite pass and is forbidden — the failure mode is
+that it also quietly "improves" wording.
 
 ---
 
@@ -421,7 +462,9 @@ Use consented/synthetic test material, not private production recordings.
 
 Track at least:
 
-- word/character error rate where meaningful
+- **content WER** (case- and punctuation-insensitive) — the wording contract
+- word/character error rate where meaningful — readability
+- punctuation error rate — readability
 - script preservation
 - named-entity accuracy
 - code-switch preservation
@@ -429,6 +472,22 @@ Track at least:
 - unwanted rewrite rate
 - empty/failure rate
 - latency P50/P95
+
+Because punctuation is now allowed (§2), raw WER alone can no longer tell "formatted" from
+"rewritten": adding commas raises raw WER exactly as swapping words does. `contentWordErrorRate`
+separates them — near-zero content WER with a higher raw WER is the *intended* outcome, and a rising
+content WER is the contract breaking.
+
+### Choosing the model and prompt
+
+The V1 model is chosen from **measured product performance**, never from a model being newer or
+generically recommended. Build one `BenchmarkArm` per (model × prompt variant) over the *same*
+corpus and run `compareArms`: arms that fail the gate are excluded with their reasons recorded, and
+the rest rank by content WER → punctuation error rate → median latency.
+
+The arms to compare at minimum are the currently shipping `gpt-4o-transcribe` and the current
+recommended alternative available to the project. `gpt-4o-transcribe` stays in production until a
+run on the real corpus says otherwise.
 
 ### Release-blocking behavior
 

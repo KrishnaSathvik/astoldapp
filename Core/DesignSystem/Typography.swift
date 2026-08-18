@@ -8,6 +8,7 @@ extension Font {
         static let screenTitle = Font.system(.title, weight: .bold)         // "Settings"
         static let groupTitle = Font.system(.title3, weight: .semibold)     // Yesterday / date group
         static let noteTitle = Font.system(.body, weight: .semibold)        // Home row title
+        static let noteBody = Font.system(.body)                            // untitled Home row
         static let editorTitle = Font.system(.title2, weight: .semibold)    // editor title field
         static let editorBody = Font.system(.body)                          // main writing
         static let preview = Font.system(.subheadline)                      // body preview

@@ -15,7 +15,7 @@ final class VoiceCaptureModel {
     private(set) var phase: Phase = .idle
     private(set) var level: Float = 0
 
-    private let recorder: AudioRecording
+    private var recorder: AudioRecording
     private let service: TranscriptionService
     private let onTranscript: (String) -> Void
 
@@ -34,6 +34,9 @@ final class VoiceCaptureModel {
     func begin() async {
         guard await recorder.requestPermission() else { phase = .permissionDenied; return }
         do {
+            // A call or Siri ends the recording for us — finish with what was captured rather than
+            // silently dropping the user's words (docs/04-voice-transcription.md §7).
+            recorder.onInterruption = { [weak self] in self?.done() }
             recordedURL = try recorder.start()
             phase = .recording
         } catch {

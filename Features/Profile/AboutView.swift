@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// "What is Yourly" screen — brand, tagline, and what the product is. Editorial, matching Welcome.
+/// "What is As Told" screen — brand, tagline, and what the product is. Editorial, matching Welcome.
 /// Version lives as a row in Profile, not here (avoids duplication).
 struct AboutView: View {
     var body: some View {
@@ -26,7 +26,7 @@ struct AboutView: View {
         }
         .scrollIndicators(.hidden)
         .background(Color.ds.canvas.ignoresSafeArea())
-        .navigationTitle("What is Yourly")
+        .navigationTitle("What is As Told")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

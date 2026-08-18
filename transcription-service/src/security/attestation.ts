@@ -5,6 +5,10 @@ import {
   verifyAssertion,
   verifyAttestation,
 } from './appAttestCrypto.js';
+import {
+  MemoryAttestedKeyStore,
+  type AttestedKeyStore,
+} from './attestedKeyStore.js';
 
 /**
  * App Attest boundary. Verifies that a request originates from a legitimate app instance so third
@@ -82,14 +86,18 @@ export class DevBypassVerifier implements AttestationVerifier {
  *  register(): verify the CBOR attestation, the x5c chain to Apple's root, the nonce, appId/rpId hash,
  *  AAGUID, and keyId==credentialId; store the public key + signCount.
  *  verifyRequest(): consume a one-time challenge, verify the assertion signature over
- *  SHA256(authenticatorData || SHA256(challenge)), and that signCount strictly increases. */
+ *  SHA256(authenticatorData || SHA256(challenge)), and that signCount strictly increases.
+ *
+ *  The key registry is injected so a deploy that enforces attestation can make it durable: the
+ *  counter defends against replay only if it outlives the process (RULES.md §3). Challenges stay
+ *  in-process on purpose — they live 5 minutes, and a restart costs at most one retried request. */
 export class AppAttestVerifier implements AttestationVerifier {
   private readonly store = new ChallengeStore();
-  private readonly keys = new Map<string, { publicKeyPem: string; signCount: number }>();
 
   constructor(
     private readonly appId: string,
     private readonly productionAAGUID: boolean = false,
+    private readonly keys: AttestedKeyStore = new MemoryAttestedKeyStore(),
   ) {}
 
   issueChallenge() {
@@ -111,7 +119,10 @@ export class AppAttestVerifier implements AttestationVerifier {
         appId: this.appId,
         requireProductionAAGUID: this.productionAAGUID,
       });
-      this.keys.set(input.keyId, { publicKeyPem: result.publicKeyPem, signCount: result.signCount });
+      this.keys.put(input.keyId, {
+        publicKeyPem: result.publicKeyPem,
+        signCount: result.signCount,
+      });
       return { installId: input.keyId };
     } catch (err) {
       throw new AttestationError(err instanceof AppAttestError ? err.message : 'attestation failed');
@@ -136,7 +147,7 @@ export class AppAttestVerifier implements AttestationVerifier {
         previousSignCount: stored.signCount,
         appId: this.appId,
       });
-      stored.signCount = signCount; // persist the monotonic counter
+      this.keys.updateSignCount(headers.keyId, signCount); // persist the monotonic counter
       return { identity: headers.keyId };
     } catch (err) {
       throw new AttestationError(err instanceof AppAttestError ? err.message : 'assertion failed');
@@ -144,13 +155,14 @@ export class AppAttestVerifier implements AttestationVerifier {
   }
 }
 
-/** Pick the verifier based on config. Production requires an App ID. */
+/** Pick the verifier based on config. Production requires an App ID and a durable key store. */
 export function makeVerifier(
   required: boolean,
   appId?: string,
   productionAAGUID = false,
+  keys?: AttestedKeyStore,
 ): AttestationVerifier {
   if (!required) return new DevBypassVerifier();
   if (!appId) throw new Error('APP_ATTEST_APP_ID is required when APP_ATTEST_REQUIRED=true');
-  return new AppAttestVerifier(appId, productionAAGUID);
+  return new AppAttestVerifier(appId, productionAAGUID, keys ?? new MemoryAttestedKeyStore());
 }

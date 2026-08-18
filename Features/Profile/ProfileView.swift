@@ -1,7 +1,7 @@
 import SwiftUI
 import StoreKit
 
-/// Profile — the top-level "you" screen in Yourly's Quiet Editorial style (warm canvas, chromeless
+/// Profile — the top-level "you" screen in As Told's Quiet Editorial style (warm canvas, chromeless
 /// rows, no iOS cards). Holds an optional name and Settings / About / Rating.
 struct ProfileView: View {
     @Bindable var lock: AppLockModel
@@ -40,7 +40,7 @@ struct ProfileView: View {
 
                 section("About") {
                     NavigationLink { AboutView() } label: {
-                        ProfileRow(title: "What is Yourly") { Chevron() }
+                        ProfileRow(title: "What is As Told") { Chevron() }
                     }
                     .buttonStyle(.plain)
                     Separator()
@@ -50,7 +50,7 @@ struct ProfileView: View {
                     .buttonStyle(.plain)
                     Separator()
                     Button { requestReview() } label: {
-                        ProfileRow(title: "Rate Yourly") { Chevron() }
+                        ProfileRow(title: "Rate As Told") { Chevron() }
                     }
                     .buttonStyle(.plain)
                     Separator()
@@ -79,11 +79,14 @@ struct ProfileView: View {
         VStack(spacing: DSSpacing.s4) {
             ProfileAvatar(name: name, size: 76)
 
-            TextField("Your name", text: $name)
+            // An invitation, not a form label — the name is optional, local, and never an account.
+            TextField("Add your name", text: $name)
                 .font(.ds.editorTitle)
                 .foregroundStyle(Color.ds.textPrimary)
                 .multilineTextAlignment(.center)
                 .textInputAutocapitalization(.words)
+                .submitLabel(.done)
+                .accessibilityLabel("Your name, optional")
 
             Text("Your notes stay on this device.")
                 .font(.ds.caption)
@@ -103,13 +106,6 @@ struct ProfileView: View {
                 .padding(.bottom, DSSpacing.s1)
             content()
         }
-    }
-
-    @ViewBuilder private func footnote(_ text: String) -> some View {
-        Text(text)
-            .font(.ds.caption)
-            .foregroundStyle(Color.ds.textTertiary)
-            .padding(.top, DSSpacing.s1)
     }
 
     private var appVersion: String {

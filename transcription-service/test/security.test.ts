@@ -7,6 +7,7 @@ import {
   DevBypassVerifier,
   makeVerifier,
 } from '../src/security/attestation.js';
+import { MemoryAttestedKeyStore } from '../src/security/attestedKeyStore.js';
 
 describe('InMemoryRateLimiter', () => {
   it('allows up to max then blocks within the window', () => {
@@ -36,7 +37,7 @@ describe('attestation', () => {
     expect(identity).toBe('k1');
   });
 
-  const APP_ID = 'ABCDE12345.com.yourly.app';
+  const APP_ID = 'ABCDE12345.com.astold.app';
 
   it('makeVerifier picks dev bypass when not required, app attest when required', () => {
     expect(makeVerifier(false)).toBeInstanceOf(DevBypassVerifier);
@@ -67,5 +68,53 @@ describe('attestation', () => {
     await expect(
       v.register({ keyId: Buffer.from('k').toString('base64'), attestationBase64: Buffer.from('nope').toString('base64'), challenge }),
     ).rejects.toBeInstanceOf(AttestationError);
+  });
+});
+
+describe('attested key persistence', () => {
+  const APP_ID = 'ABCDE12345.com.astold.app';
+
+  /** Attempt an assertion and return the error, so tests can tell "unknown key" from later checks. */
+  async function assertionError(v: AppAttestVerifier): Promise<Error> {
+    const { challenge } = v.issueChallenge();
+    return v
+      .verifyRequest({ keyId: 'k1', assertionBase64: Buffer.from('nope').toString('base64'), challenge })
+      .then(() => new Error('expected a rejection'), (err: Error) => err);
+  }
+
+  it('rejects an assertion for a key the store has never seen', async () => {
+    const v = new AppAttestVerifier(APP_ID, false, new MemoryAttestedKeyStore());
+    expect((await assertionError(v)).message).toBe('unknown key');
+  });
+
+  it('recognises a key held in a store that outlives the verifier', async () => {
+    const store = new MemoryAttestedKeyStore(); // stands in for the durable store across a restart
+    store.put('k1', { publicKeyPem: 'pem', signCount: 4 });
+
+    const restarted = new AppAttestVerifier(APP_ID, false, store);
+
+    // The key is known, so verification proceeds to the signature rather than stopping at lookup.
+    expect((await assertionError(restarted)).message).not.toBe('unknown key');
+  });
+
+  it('defaults to a non-durable store so tests and dev never need a database', () => {
+    expect(new AppAttestVerifier(APP_ID)).toBeInstanceOf(AppAttestVerifier);
+  });
+});
+
+describe('makeVerifier wiring', () => {
+  const APP_ID = 'ABCDE12345.com.astold.app';
+
+  it('hands the given key store to the production verifier', async () => {
+    const store = new MemoryAttestedKeyStore();
+    store.put('k1', { publicKeyPem: 'pem', signCount: 0 });
+    const v = makeVerifier(true, APP_ID, false, store);
+
+    const { challenge } = v.issueChallenge();
+    const err = await v
+      .verifyRequest({ keyId: 'k1', assertionBase64: Buffer.from('nope').toString('base64'), challenge })
+      .then(() => new Error('expected a rejection'), (e: Error) => e);
+
+    expect(err.message).not.toBe('unknown key');
   });
 });

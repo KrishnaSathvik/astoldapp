@@ -1,14 +1,14 @@
 # Design Reference
 
-Canonical visual reference for **[AppName]** V1.
+Canonical visual reference for **As Told** V1.
 
 ![Screens overview](./screens-overview.png)
 
 `screens-overview.png` is a single 10-screen mockup and the **canonical visual target** for look and
 feel. When pixels and prose disagree: match this reference for **visual intent**, and defer to the
 specs + `../../RULES.md` for **behavior**. Full design rules live in `../03-design-system.md`
-(see its §0). The reference uses **"Yourly"** with a feather/quill mark as the placeholder brand — the
-product name is still `[AppName]` (see `../../CLAUDE.md`).
+(see its §0). The reference PNG still shows the **"Yourly"** wordmark with a feather/quill mark; the
+locked product name is **As Told** — read the wordmark as such (see `../../CLAUDE.md`, `README.md` §2).
 
 ## Layout of the sheet
 
@@ -30,8 +30,8 @@ flash. → `../03-design-system.md` §4.1.
 
 ### 2. Welcome (first launch)
 Bare feather mark → serif **Yourly** wordmark → tagline **"Write it. Say it. Keep it."** → short
-explanation ("A private place for the thoughts you want to keep. Type them or speak them. Keep them as
-they came.") → single dark-navy **Continue** button low on the screen. No permission prompts, no
+explanation ("A private place for anything you want to put into words. Type it or say it. As Told stays
+out of your way.") → single dark-navy **Continue** button low on the screen. No permission prompts, no
 account. Shown once. → §4.2.
 
 ### 3. Home — Light & Dark
@@ -74,7 +74,8 @@ reversible via a brief Undo (soft delete under the hood). → §4.10, `../05-arc
 
 ### 9. Settings
 `Settings` title. **PRIVACY** section: `Lock with Face ID` toggle. **ABOUT** section: `Privacy Policy`,
-`About [AppName]`, `Version 1.0.0`. No appearance selector — theme follows the system. → §4.11.
+`About As Told`, `Version 1.0.0`. (The reference PNG shows no appearance selector; the shipped app adds
+a **Theme** picker — Light / Dark / Use device settings — see PRD §12 and `02-features.md`.) → §4.11.
 
 ### 10. Lock screen (Face ID)
 Minimal: feather mark, serif **Yourly** wordmark, Face ID glyph, and an **Unlock** affordance. No

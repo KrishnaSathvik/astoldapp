@@ -6,8 +6,14 @@ import AVFoundation
 /// cancel/cleanup (RULES.md §3, docs/04-voice-transcription.md §6–7).
 @MainActor
 final class AVAudioRecorderService: NSObject, AudioRecording {
+    /// Prefix for every temporary recording, so an abandoned file is identifiable at launch.
+    static let tempPrefix = "rec-"
+
     private var recorder: AVAudioRecorder?
     private var currentURL: URL?
+    private var interruptionObserver: NSObjectProtocol?
+
+    var onInterruption: (() -> Void)?
 
     func requestPermission() async -> Bool {
         switch AVAudioApplication.shared.recordPermission {
@@ -22,11 +28,13 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
 
     func start() throws -> URL {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default, options: [.duckOthers])
+        // `.record` (not `.playAndRecord`): the app never plays audio back, and the narrower
+        // category keeps AirPods out of the low-quality bidirectional call route.
+        try session.setCategory(.record, mode: .default, options: [])
         try session.setActive(true)
 
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("rec-\(UUID().uuidString)")
+            .appendingPathComponent("\(Self.tempPrefix)\(UUID().uuidString)")
             .appendingPathExtension("m4a")
 
         let settings: [String: Any] = [
@@ -47,10 +55,12 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
 
         self.recorder = recorder
         self.currentURL = url
+        observeInterruptions()
         return url
     }
 
     func stop() -> URL? {
+        endInterruptionObservation()
         recorder?.stop()
         let url = currentURL
         recorder = nil
@@ -59,6 +69,7 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
     }
 
     func cancel() {
+        endInterruptionObservation()
         recorder?.stop()
         if let url = currentURL { cleanup(url) }
         recorder = nil
@@ -78,5 +89,47 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
         let power = recorder.averagePower(forChannel: 0)
         let clamped = max(-60, min(0, power))
         return (clamped + 60) / 60
+    }
+
+    // MARK: - Interruptions
+
+    /// A phone call or Siri stops the recorder for us. Rather than losing what was already spoken,
+    /// hand control back to the capture model so it can finish with the audio captured so far.
+    /// A route change (AirPods connecting/disconnecting) is deliberately *not* an interruption —
+    /// AVAudioRecorder keeps recording on the new input.
+    private func observeInterruptions() {
+        endInterruptionObservation()
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] note in
+            guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: raw) == .began else { return }
+            MainActor.assumeIsolated {
+                guard let self, self.recorder != nil else { return }
+                self.onInterruption?()
+            }
+        }
+    }
+
+    private func endInterruptionObservation() {
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+        }
+        interruptionObserver = nil
+    }
+
+    // MARK: - Abandoned temp audio
+
+    /// Deletes recordings left behind by a crash or force-quit. Called once at launch so raw audio
+    /// never lingers on disk beyond the capture it belongs to (RULES.md §3).
+    static func purgeAbandonedRecordings(in directory: URL = FileManager.default.temporaryDirectory) {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        else { return }
+        for file in files where file.lastPathComponent.hasPrefix(tempPrefix) && file.pathExtension == "m4a" {
+            try? fm.removeItem(at: file)
+        }
     }
 }

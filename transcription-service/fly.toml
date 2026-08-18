@@ -1,0 +1,52 @@
+# Fly.io deployment for the As Told transcription relay.
+# The app name must be unique across Fly; change it if `fly launch` reports a collision.
+app = "as-told-relay"
+primary_region = "ord"   # Chicago. Use `fly platform regions` to pick one nearer your users.
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Non-secret configuration only. OPENAI_API_KEY and APP_ATTEST_APP_ID are set with
+# `fly secrets set` so they never land in this file or the image (RULES.md §3).
+[env]
+  NODE_ENV = "production"
+  PORT = "8787"
+  # Start deliberately low while testing; raise once real usage is understood.
+  RATE_LIMIT_MAX = "5"
+  RATE_LIMIT_WINDOW_SECONDS = "60"
+  # Step 1 runs without attestation. Flip to "true" (see DEPLOY.md) once a device registers.
+  APP_ATTEST_REQUIRED = "false"
+  APP_ATTEST_PRODUCTION = "false"
+  # RELEASE GATE: delete this line at stage 2. The relay refuses to boot in production without it
+  # while attestation is off, so an open transcription endpoint cannot ship by accident.
+  APP_ATTEST_ALLOW_UNPROTECTED = "true"
+  # Attested keys + assertion counters, on the mounted volume below. Apple's replay defence is the
+  # ever-increasing counter, which only works if it outlives the process.
+  APP_ATTEST_DB_PATH = "/data/app-attest.db"
+
+# Durable storage for the attested-key registry. One volume, one machine — see the scaling note in
+# DEPLOY.md before raising the machine count.
+[[mounts]]
+  source = "attest_data"
+  destination = "/data"
+  initial_size = "1gb"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # Keep one machine warm: transcription latency sits directly in the voice-capture path, and the
+  # rate limiter is still per-process.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "5s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

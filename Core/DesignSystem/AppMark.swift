@@ -10,7 +10,7 @@ struct AppMark: View {
         VStack(spacing: DSSpacing.s4) {
             FeatherMark(size: markSize)
             if showsWordmark {
-                Text("Yourly")
+                Text("As Told")
                     .font(.system(.largeTitle, design: .serif))
                     .foregroundStyle(Color.ds.textPrimary)
             }

@@ -78,7 +78,8 @@ struct HomeView: View {
                     }
                     .accessibilityLabel("Open calendar")
                 }
-                ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                // No ToolbarSpacer here: calendar and compose share one capsule, so the header
+                // reads as two grouped controls rather than three unrelated floating islands (§5).
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: newNote) {
                         Image(systemName: "square.and.pencil")

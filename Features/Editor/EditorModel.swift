@@ -33,12 +33,16 @@ final class EditorModel {
         }
     }
 
-    /// Insert a voice transcript into the body as ordinary editable text at the given character
-    /// offset (the captured cursor), then autosave. Verbatim + minimal boundary whitespace (RULES.md §2).
-    func insertVoiceTranscript(_ transcript: String, at offset: Int) {
-        let (newBody, _) = insertTranscript(transcript, into: note.body, at: offset)
+    /// Insert a voice transcript into the body at the given UTF-16 caret offset, then autosave. The
+    /// words are preserved verbatim (only boundary whitespace may be added); conservative structure
+    /// commands are applied where clearly spoken, otherwise the transcript is inserted as-is
+    /// (RULES.md §2). Returns the caret position after the insertion as a UTF-16 offset.
+    @discardableResult
+    func insertVoiceTranscript(_ transcript: String, atUTF16 offset: Int) -> Int {
+        let (newBody, cursor) = VoiceStructureParser.apply(transcript, into: note.body, atUTF16: offset)
         note.body = newBody
         flush()
+        return cursor
     }
 
     /// Persist current content (normalizing the title). Bumps updatedAt, never createdAt.

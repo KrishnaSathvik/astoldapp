@@ -1,4 +1,4 @@
-# RULES — [AppName]
+# RULES — As Told
 
 > The single source of truth for **what must and must not happen** in this product.
 > When any doc, ticket, or instinct conflicts with a rule here, this file wins unless
@@ -32,7 +32,11 @@ These are treated as fixed product constraints unless intentionally changed.
 
 - MUST NOT require an account or any sign-in (no Sign in with Apple).
 - MUST NOT show an onboarding carousel. Exactly **one** first-run welcome screen.
-- Tagline is **"Write it. Say it. Keep it."**
+- Tagline is **"Write it. Say it. Keep it."** and MUST NOT change.
+- Primary descriptor is **"A private place for anything you want to put into words."** (Repositioned
+  2026-08-18 from the thoughts-only framing — this widens the *invitation*, not the *product*. See
+  `README.md` §2 and `docs/08-positioning-marketing.md`.) The product still refuses to become Notion /
+  Todoist / Word / an AI writing assistant; the do-not-build fences in §7 hold.
 - Home MUST be the complete chronological notes timeline (no separate "All Notes" screen).
 - Notes MUST be grouped automatically by day.
 - MUST NOT expose user-facing pagination or a "Load more" control.
@@ -43,7 +47,10 @@ These are treated as fixed product constraints unless intentionally changed.
 - Home MUST NOT show note creation times on normal rows.
 - Editor shows the note **date**, not a prominent time.
 - Notes MUST autosave. MUST NOT show a Save button.
-- MUST NOT show a visible formatting toolbar.
+- MUST NOT show a visible formatting toolbar. (When light structure — headings / subheadings /
+  bullet / numbered / checklist — is later added per §7 and `docs/02-features.md`, it MUST arrive as
+  contextual or collapsible native affordances, never a persistent formatting ribbon; structure MUST
+  NOT visually dominate writing, and the app MUST still read as a page.)
 - Voice and typing are two input methods for the **same** note — not two note types.
 - A voice transcript MUST become ordinary, editable text.
 - V1 voice target languages: English, Telugu, Hindi, Telugu+English, Hindi+English.
@@ -65,12 +72,29 @@ Source: `docs/04-voice-transcription.md` (whole file), `docs/01-product-requirem
 
 **The core contract:** _Spoken thought → faithful text representation of that spoken thought._
 
+> ### Preserve the words. Format the speech.
+>
+> Punctuation and capitalization are how written language *represents* speech — supplying them is
+> transcription, not editing. Changing **which words the speaker used** is editing, and is never
+> allowed. (Changed 2026-08-18 from an over-literal "no changes whatsoever" reading; the forbidden
+> list below is unchanged.)
+
+**MUST be allowed** (readability formatting):
+
+- capitalization
+- sentence boundaries and full stops
+- commas, question marks, and exclamation marks where clearly supported by the speech
+- punctuation inferred naturally from delivery
+- paragraph breaks where a meaningful pause or topic change is reliably detected
+- minimal whitespace around an inserted transcript
+
 The transcription path MUST NOT intentionally:
 
 - translate speech
 - summarize speech
-- rewrite speech
+- rewrite or paraphrase speech
 - polish or "fix" grammar
+- replace vocabulary with different words
 - change tone or make sentences "more professional"
 - remove slang because it sounds informal
 - convert Telugu/Hindi to English by default
@@ -78,13 +102,24 @@ The transcription path MUST NOT intentionally:
 - invent/hallucinate content during silence
 - replace the user's content with an AI-generated interpretation
 
+Worked example (the boundary in one pair):
+
+| | |
+|---|---|
+| **Spoken** | `Actually I don't know maybe we can go Saturday but if Ravi is coming then Sunday is probably better what do you think` |
+| **Allowed** | `Actually, I don't know. Maybe we can go Saturday, but if Ravi is coming, then Sunday is probably better. What do you think?` |
+| **Forbidden** | `Ravi and I should probably go on Sunday instead of Saturday.` |
+
 Additional voice rules:
 
 - MUST NOT run the transcript through a general LLM cleanup pass (e.g. "fix mistakes",
-  "clean grammar", "make readable"). Punctuation/wording changes should come from the
-  transcription model, not a rewrite pass.
+  "clean grammar", "make readable"). Punctuation MUST come from the transcription model itself,
+  never from a second generative rewrite pass.
 - Allowed deterministic cleanup is limited to **transport/UI artifacts only** — e.g. trimming an
   accidental trailing transport newline, or preventing double spaces at an insertion boundary.
+- The **contract metric** is content WER (`contentWordErrorRate` — case- and punctuation-insensitive),
+  not raw WER. Raw WER and punctuation error rate measure readability and inform the model/prompt
+  choice; only content WER, script preservation, and unwanted translation gate a release.
 - Writing-system goal: Telugu → Telugu script; Hindi → Devanagari; preserve natural English terms
   inside mixed speech where the model can do so reliably.
 - Language hints are **benchmark-driven, not assumption-driven**. MUST NOT force a single language
@@ -94,17 +129,52 @@ Additional voice rules:
 - V1 requires network for transcription. When offline after recording: retain the protected temp
   audio for **explicit** retry only, tell the user a connection is required, and MUST NOT silently
   upload later without user intent.
-- Recommended path (V1): record completed audio → send file → `gpt-transcribe` → insert final
-  transcript. Do NOT build Realtime (`gpt-live-transcribe`) unless the product later needs live text.
+- Recommended path (V1): record completed audio → send file → transcription model → insert final
+  transcript. Do NOT build Realtime unless the product later needs live text.
+- The transcription **model MUST be chosen from measured performance** on the consented corpus
+  (`compareArms` in `Core/Voice/TranscriptionBenchmark.swift`), never because a model is newer or
+  generically recommended. V1 ships `gpt-4o-transcribe` until a benchmark run says otherwise.
+- A capture interrupted by a call or Siri MUST finish with the audio recorded so far rather than
+  discard the user's words. Leaving the editor mid-recording MUST cancel the capture and delete the
+  temporary audio.
+- Abandoned temporary recordings (crash / force-quit) MUST be swept at launch.
 
 ### Cursor insertion contract
 
 - Capture the intended insertion selection/location **before** recording starts.
+- When there is **no active cursor** (an existing note open for reading, keyboard hidden), the
+  transcript MUST be appended to the end of the note — never dropped, never given its own object.
 - Insert at the saved cursor anchor (replacing selected text only if that is explicitly intended);
   preserve surrounding content.
 - The `TranscriptionService` MUST NEVER mutate the note directly — the editor owns insertion.
 - May insert minimal boundary whitespace/newlines to avoid joining words; MUST NOT otherwise
   rewrite transcript content.
+
+### Structure the words (roadmap — NOT in shipped V1)
+
+The long-term goal is that anything creatable by typing is also creatable by speaking, on the **same
+document model** — never a separate voice-only document system. When structured voice ships, these
+contracts apply. They are roadmap: MUST NOT be marketed until shipped (see §7).
+
+- "Preserve the words. Format the speech." extends to **"Structure the words."** Voice may *structure*
+  the user's words when they explicitly ask; it MUST NEVER *replace* them. Everything in the forbidden
+  list above (translate / summarize / rewrite / paraphrase / grammar-fix / re-vocabulary) stays forbidden.
+- The command vocabulary is **small, fixed, and deterministic**: `new paragraph`, `new line`, `heading`,
+  `subheading`, `bullet list`, `numbered list`, `checklist`, `next item`, `end list`. MUST NOT grow into
+  dozens of commands, and MUST NOT use a generative model to *infer* what formatting the user "probably" wanted.
+- **Safety rule:** when it is uncertain whether a phrase is a command or literal content, **preserve the
+  spoken words** and take no action. Recognize a command only when it appears as a clearly isolated phrase,
+  at a sentence/utterance boundary, using exact supported wording, in a context where the action is valid.
+- **Punctuation belongs to the command.** A recognized command absorbs the whole punctuation run the
+  model transcribed after it (`new paragraph...`, `heading…`, `checklist!`). Stray leftover punctuation
+  MUST NOT land in the note. This never widens *recognition*: a phrase that was not a command stays words.
+- **Boundary:** *Touch chooses where. Voice chooses what.* No hands-free navigation, selection, cursor
+  movement, or deletion commands in this stage (e.g. "go to paragraph three", "delete last two paragraphs").
+- **Architecture:** faithful transcription first → a conservative command parser → document actions applied
+  by the editor. The transcription service MUST NOT mutate the document. Typing and voice MUST converge on
+  one shared document-action layer rather than two independent formatting systems.
+- Commands may launch in **English** first if that is the cleanest implementation; Telugu/Hindi command
+  equivalents are evaluated separately and MUST NOT compromise code-switch transcription quality.
 
 ---
 
@@ -145,6 +215,9 @@ Source: `docs/01-product-requirements.md` §11, §13, `docs/04-voice-transcripti
   timeout, and a server-side model allowlist. An anonymous public endpoint is NOT sufficient.
 - App Attest is anti-abuse protection, **not** user authentication. Development builds need a controlled
   bypass; a generic `X-Debug-Bypass` MUST NOT work in production.
+- A production relay MUST NOT boot with attestation off. The only way past that is
+  `APP_ATTEST_ALLOW_UNPROTECTED=true`, which exists for the pre-launch staging deploy and MUST NOT be
+  set on any build real users can reach.
 
 ### App lock & app switcher
 
@@ -198,14 +271,17 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
 10. No interface copy that judges, encourages, gamifies, or diagnoses the user.
 11. No time-of-day greeting.
 12. Do not show creation time on normal Home rows.
-13. Follow the system Light/Dark setting automatically.
+13. Follow the system Light/Dark setting by default. The Theme picker (Light / Dark / Use device
+    settings, defaulting to device settings) is an intentional, kept setting — see §1 and
+    `docs/03-design-system.md` §15. Do NOT add further colour themes.
 
 ### Home
 
 - Header shows: subtle current date, prominent `Today`, and a Calendar action.
 - MUST NOT show greeting, weather, current time, quote, writing prompt, streak, or statistics.
-- Row: if a title exists → title (one line where possible) + 2–3 line body preview; if not → body
-  preview becomes the primary content. Never generate `Untitled`.
+- Row: if a title exists → title (one line where possible, ~17 pt semibold) + 2–3 line body preview
+  (~15 pt regular, secondary, comfortable leading); if not → the first meaningful body line becomes
+  the primary content and reads at body weight. Never generate `Untitled`.
 - No card per note by default — use typography, whitespace, optional subtle separator. Prefer
   `VStack` rhythm over rounded rectangles.
 - Must remain navigable and premium with 0, 1, many-today, many-days, long/absent titles, long
@@ -218,6 +294,26 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
   word count, prominent timestamp, toolbar occupying writing width.
 - Title placeholder `Title`; body placeholder `Start writing…`. No visible box/border on either.
 - Editing an old note MUST NOT move it to Today — timeline sorts by creation date, not last edit.
+- Undo MUST cover structural editing exactly as it covers typing: **one user action is one undo step**
+  — ticking a checkbox, Return continuing a list, Backspace demoting a line, a voice transcript landing —
+  restoring precisely the text, structure styling, and caret that were there before, with redo available.
+  A document mutation MUST NOT be applied by assigning the text view's whole string: that bypasses undo
+  registration and leaves the stack describing text that no longer exists.
+- Structure markers (`# `, `- `, `- [ ] `, …) are an internal encoding and MUST NOT be visible anywhere:
+  not in the editor, not in Home/search previews, not to VoiceOver, and not in anything copied out of the
+  app. Copy/cut MUST give other apps the page as it reads (`• Eggs`, `☐ Call Ravi`); the raw source may
+  travel only in a **private** pasteboard representation, so an As Told → As Told paste keeps its structure.
+
+**Reading vs editing (one screen, no mode toggle):**
+
+- A **new** note opens ready to capture: the body takes focus and the keyboard appears.
+- An **existing** note opens for **reading**: nothing becomes first responder and the keyboard MUST
+  NOT appear. Tapping the title or body starts editing at the tapped location.
+- MUST NOT add an explicit `Read Mode` / `Edit Mode` toggle.
+- The keyboard MUST be dismissable natively — interactive dismissal while scrolling, and navigating
+  Back. MUST NOT add a large custom "Hide Keyboard" control.
+- Because autosave is the only save, a trailing `Done` MUST NOT duplicate Back. It may exist only as
+  the standard keyboard-dismissal affordance, shown only while a field holds the keyboard.
 
 ### Autosave
 
@@ -287,6 +383,9 @@ Source: `docs/05-architecture.md` (whole file), `docs/06-tech-stack.md`.
 - `Note`: `id: UUID` (unique), `title: String?`, `body: String`, `createdAt`, `updatedAt`,
   `deletedAt: Date?` (non-nil only during short undo/cleanup state).
 - `title` normalized: whitespace-only → nil. `body` stays raw user content.
+- Structure lives **inside `body`** as canonical line markers (`# `, `## `, `- `, `1. `, `- [ ] `,
+  `- [x] `). MUST NOT introduce a block database, a rich-text/attributed-string format, or a second field:
+  `body` stays a single plain `String`.
 - Timeline sorting & date grouping use `createdAt`, not `updatedAt`.
 - No `voiceNote` type, no transcript provenance, no audio URL after successful transcription.
 
@@ -380,12 +479,44 @@ Source: `docs/01-product-requirements.md` §6, `docs/02-features.md` (Later sect
 
 ### Excluded product features (V1)
 
-accounts · Sign in with Apple · folders · tags · pinning · favorites · rich text · Markdown UI · images ·
-attachments · scanning · handwriting · checklists · collaboration · share extension · widgets · watchOS
-app · reminders · notifications · journaling prompts · mood tracking · streaks · AI summaries · AI
-rewriting · AI chat · semantic search · cloud note storage · iCloud sync · export · audio archive.
+accounts · Sign in with Apple · folders · tags · pinning · favorites · full rich text (font pickers,
+text/background colors, arbitrary block types) · Markdown UI · images · attachments · scanning ·
+handwriting · databases · tables · kanban · nested workspaces · collaboration · comments · share
+extension · widgets · watchOS app · reminders · notifications · journaling prompts · mood tracking ·
+streaks · productivity analytics · AI summaries · AI rewriting · AI chat · semantic search · cloud note
+storage · iCloud sync · export · audio archive.
 
-> _(The manual theme selector was previously excluded but has been added — see §1.)_
+> _(The manual theme selector was previously excluded but has been added — see §1. "checklists" was
+> previously listed here as permanently excluded; as of 2026-08-18 it is reclassified — see "Adopted
+> direction" below — as a **guarded, post-V1 milestone**, still not a task-management system.)_
+
+### Adopted direction — post-V1, sequenced and guarded (not V1 scope, not marketed until shipped)
+
+Repositioning As Told to "anything you want to put into words" makes a **very small** amount of writing
+structure legitimate. This is adopted long-term direction, built incrementally after V1 ships, with hard
+guardrails. Full detail: `docs/02-features.md` (Adopted direction) and `docs/08-positioning-marketing.md`.
+
+- **Next editor milestone:** long-form editor performance, then **heading, subheading, bullet list,
+  numbered list, checklist** (optional **quote** later). Nothing else. Delivered per the formatting-toolbar
+  carve-out in §1 — contextual/collapsible affordances, never a persistent ribbon; structure never dominates writing.
+- **Next voice milestone:** the deterministic command vocabulary and conservative parser in §2
+  ("Structure the words"). Only after the editor structures above are stable.
+- **A checklist is content, not a task manager.** It means "write several things and tick them off." It
+  MUST NOT bring due dates, deadlines, overdue states, priorities, recurrence, calendar scheduling, task
+  inboxes, or notifications. A Todoist/Notion clone stays on the do-not-build list.
+- **Keep at Top** (surfacing an active draft/checklist above the chronological timeline) is evaluated
+  *only after* structured writing exists — and is not a folders/favorites/workspace system.
+
+### Marketing must lag implementation
+
+- Marketing (App Store name/subtitle/keywords/description/screenshots, website, OG, social) MUST describe
+  the **production app**, never the roadmap. MUST NOT claim headings / lists / checklists / voice-structure
+  commands, or any other unshipped capability, until it works reliably in the shipping build.
+- Concretely: the App Store subtitle stays the current narrower line until the broader editor ships; only
+  then does it move to **"Notes, drafts, lists & voice."** Same for any website/ASO copy about structure.
+- MUST NOT claim "offline transcription", "nothing ever leaves your phone", or any privacy/capability
+  statement the production architecture does not actually guarantee (voice transcription involves server
+  processing — see §3).
 
 ### Architecture non-goals (do not build)
 
@@ -415,9 +546,27 @@ Source: `docs/01-product-requirements.md` §15, `docs/07-build-plan.md` (Definit
 - Microphone permission denial/recovery is tested.
 - Transcription error and offline flows are tested (airplane mode, slow net, 500, rate limit, timeout,
   empty result, user cancel, app backgrounds mid-request).
-- Voice benchmarks pass agreed thresholds for: English, Telugu, Hindi, Telugu+English, Hindi+English.
+- Voice benchmarks pass agreed thresholds for: English, Telugu, Hindi, Telugu+English, Hindi+English —
+  on the consented corpus, with the model chosen by `compareArms`, not by assumption.
+- Recording survives interruption (call/Siri), route change (AirPods), and backgrounding; no temp
+  audio survives a force-quit.
 - No transcript/audio content appears in server logs; no embedded OpenAI secret; temp audio deletion verified.
-- Light / Dark / Dynamic Type / VoiceOver reviewed on every major screen.
+- Relay runs with `APP_ATTEST_REQUIRED=true` in production. (It ships `false` only for the staged
+  first-registration rollout in `transcription-service/DEPLOY.md`; shipping V1 with it false leaves
+  a paid endpoint open.)
+- The attested-key registry MUST be durable when `APP_ATTEST_REQUIRED=true`. Apple's replay defence
+  is an ever-increasing assertion counter, which only rejects a replayed assertion if the stored
+  counter survives restarts and deploys — a process-local registry silently disables it and
+  re-registers every install. `APP_ATTEST_DB_PATH` MUST point at a mounted volume; the relay refuses
+  to start if enforcement is on without it.
+- The challenge store and rate limiter are still in-memory, so the relay MUST stay single-instance
+  (`min_machines_running = 1`, `auto_stop_machines = "off"`). Scaling out requires a shared store
+  first — otherwise rate limits multiply by instance count and challenges fail across machines.
+- Light / Dark / Dynamic Type / VoiceOver reviewed on every major screen, over the full flow:
+  Welcome → Home → New Note → Type → Read Existing Note → Edit Existing Note → Voice → Search →
+  Calendar → Delete/Undo → Profile → Face ID.
+- No user-facing surface says `Yourly`: UI copy, accessibility labels, display name, App Store
+  listing, website, and support content all read **As Told**.
 
 ### Release-blocking voice behavior
 

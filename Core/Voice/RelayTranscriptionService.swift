@@ -10,6 +10,8 @@ struct RelayTranscriptionService: TranscriptionService {
     var session: URLSession = .shared
     /// Optional App Attest headers provider (production). Returns header fields to attach per request.
     var attestationHeaders: @Sendable (_ requestID: UUID) async -> [String: String] = { _ in [:] }
+    /// Called when the relay rejects the attestation, so the client can re-register before retrying.
+    var attestationRejected: @Sendable () async -> Void = {}
 
     private struct Response: Decodable {
         let requestId: String?
@@ -58,6 +60,7 @@ struct RelayTranscriptionService: TranscriptionService {
             }
             return TranscriptionResult(text: text, detectedLanguages: decoded.languages ?? [])
         case 401:
+            await attestationRejected()                   // stale registration — re-attest next time
             throw TranscriptionError.serviceUnavailable   // attestation failed — not user-facing detail
         case 413:
             throw TranscriptionError.requestTooLarge

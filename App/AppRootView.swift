@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Routes first-run Welcome → Home, and gates content behind the privacy lock when enabled.
 /// No tab bar (docs/03-design-system.md §3). See docs/05-architecture.md §18, RULES.md §3.
@@ -32,6 +33,13 @@ struct AppRootView: View {
         }
         .preferredColorScheme(themeStore.colorScheme)
         .animation(DSMotion.fast, value: lock.phase)
+        // `onChange(of: scenePhase)` never fires for the scene's *initial* active value, so a cold
+        // launch needs its own prompt — otherwise the lock screen would just sit there waiting.
+        .task {
+            // Sweep audio left behind by a crash/force-quit during a recording (RULES.md §3).
+            AVAudioRecorderService.purgeAbandonedRecordings()
+            await lock.didBecomeActive()
+        }
         .onChange(of: lock.enabled) { _, isOn in
             UserDefaults.standard.set(isOn, forKey: "appLockEnabled")
         }
@@ -51,6 +59,8 @@ struct AppRootView: View {
         #if DEBUG
         if DebugLaunch.openSampleEditor {
             NavigationStack { EditorView(note: Note()) }
+        } else if DebugLaunch.openSeededNote {
+            NavigationStack { SeededNoteEditor() }
         } else if DebugLaunch.openAbout {
             NavigationStack { AboutView() }
         } else if DebugLaunch.openPrivacy {
@@ -74,3 +84,16 @@ struct AppRootView: View {
         }
     }
 }
+
+#if DEBUG
+/// Debug-only: routes straight into the newest existing note, for verifying the reading state.
+private struct SeededNoteEditor: View {
+    @Query(filter: #Predicate<Note> { $0.deletedAt == nil },
+           sort: \Note.createdAt, order: .reverse)
+    private var notes: [Note]
+
+    var body: some View {
+        if let note = notes.first { EditorView(note: note) }
+    }
+}
+#endif

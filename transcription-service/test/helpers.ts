@@ -16,6 +16,10 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     RATE_LIMIT_MAX: 3,
     RATE_LIMIT_WINDOW_SECONDS: 60,
     APP_ATTEST_REQUIRED: false,
+    APP_ATTEST_APP_ID: undefined,
+    APP_ATTEST_PRODUCTION: false,
+    APP_ATTEST_DB_PATH: ':memory:',
+    APP_ATTEST_ALLOW_UNPROTECTED: false,
     ...overrides,
   };
 }

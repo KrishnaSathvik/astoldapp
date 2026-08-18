@@ -16,4 +16,7 @@ protocol AudioRecording: AnyObject {
     func cleanup(_ url: URL)
     /// Normalized input level 0...1 for the waveform.
     var level: Float { get }
+    /// Called when the system takes the microphone away mid-recording (incoming call, Siri).
+    /// The recording has already stopped by then; the captured audio is still on disk.
+    var onInterruption: (() -> Void)? { get set }
 }

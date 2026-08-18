@@ -55,37 +55,52 @@ Transcribe headers: `x-request-id` (echoed), and when attestation is required
 
 | Var | Default | Notes |
 |---|---|---|
-| `NODE_ENV` | development | `production` warns if attestation is off. |
+| `NODE_ENV` | development | `production` **refuses to boot** if attestation is off (see the opt-out below). |
 | `PORT` | 8787 | |
 | `OPENAI_API_KEY` | _(unset)_ | Unset → fake provider. **Never commit.** |
-| `TRANSCRIBE_MODEL` | gpt-4o-transcribe | |
+| `TRANSCRIBE_MODEL` | gpt-4o-transcribe | Chosen by benchmark, never by model recency. |
+| `TRANSCRIBE_PROMPT_VARIANT` | punctuated | `punctuated` \| `strictVerbatim` \| `terse` — see `src/prompt.ts`. |
 | `MAX_AUDIO_BYTES` | 26214400 | 25 MB → 413 when exceeded. |
 | `MAX_DURATION_SECONDS` | 600 | 10 min product limit. |
 | `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_SECONDS` | 20 / 60 | Per attested-install + IP. |
 | `APP_ATTEST_REQUIRED` | false | **Set `true` in production.** |
+| `APP_ATTEST_APP_ID` | _(unset)_ | `TEAMID.bundleId`. Required when attestation is on. |
+| `APP_ATTEST_PRODUCTION` | false | Must match the build's App Attest entitlement. |
+| `APP_ATTEST_DB_PATH` | _(unset)_ | Durable key/counter registry. **Required** when attestation is on; put it on a mounted volume. |
+| `APP_ATTEST_ALLOW_UNPROTECTED` | false | Deliberate opt-out for a knowingly-open production relay (staging only). |
 
 ## Test
 
 ```bash
-npm test          # vitest — 17 tests via fastify.inject (no network)
+npm test          # vitest — 55 tests via fastify.inject (no network)
 ```
 
 Covers: health, success (fake), request-id echo, 415 bad MIME, 413 oversized, 422 empty transcript,
-429 rate limit, 401 attestation, rate-limiter + attestation units, and the **metadata-only logger**
+429 rate limit, 401 attestation, rate-limiter + attestation units, the durable attested-key store
+(including survival across a restart), the boot-time config rails, and the **metadata-only logger**
 (serializers strip body/headers so transcripts/notes can never be logged).
+
+Node prints `ExperimentalWarning: SQLite is an experimental feature` — `node:sqlite` is a built-in
+still marked experimental in Node 24. It is expected output, not a failure.
 
 ## Deploy
 
 ```bash
 docker build -t yourly-transcription .
-docker run -p 8787:8787 \
+docker run -p 8787:8787 -v attest_data:/data \
   -e NODE_ENV=production -e APP_ATTEST_REQUIRED=true \
+  -e APP_ATTEST_APP_ID=TEAMID.com.astold.app \
+  -e APP_ATTEST_DB_PATH=/data/app-attest.db \
   -e OPENAI_API_KEY=sk-...   # provide as a runtime secret, never baked into the image
   yourly-transcription
 ```
 
-Runs as non-root. Provide the key and secrets via your platform's secret manager. Use a Redis-backed
-rate limiter for multi-instance deploys (see `src/security/rateLimit.ts`).
+The server runs as the unprivileged `node` user. The entrypoint is root only long enough to chown a
+freshly mounted volume, then drops privileges with `setpriv` before exec'ing Node.
+
+`/data` must be a real volume: it holds the attested-key registry, and Apple's replay defence is an
+assertion counter that has to survive restarts. Provide keys via your platform's secret manager. Use
+a Redis-backed rate limiter for multi-instance deploys (see `src/security/rateLimit.ts`).
 
 ## App Attest (implemented)
 
@@ -99,8 +114,22 @@ rate limiter for multi-instance deploys (see `src/security/rateLimit.ts`).
 - **verifyRequest**: consume a one-time challenge, verify the assertion's ECDSA signature over
   `SHA256(authData ‖ SHA256(challenge))` with the stored key, and require a strictly increasing signCount.
 
+Keys and counters live in `src/security/attestedKeyStore.ts`. Enforced deploys use the SQLite-backed
+store (Node's built-in `node:sqlite`, no added dependency) on a mounted volume; dev and tests use the
+in-memory one. Challenges stay in-process on purpose — they expire in 5 minutes, and losing them to a
+restart costs at most one retried request.
+
 Enable it with `APP_ATTEST_REQUIRED=true` + `APP_ATTEST_APP_ID=TEAMID.bundleId`
-(+ `APP_ATTEST_PRODUCTION=true` for release builds). The deterministic paths + a real P-256 assertion
+(+ `APP_ATTEST_PRODUCTION=true` for release builds — this must match the app's
+`com.apple.developer.devicecheck.appattest-environment` entitlement: `App/Yourly.Debug.entitlements`
+is `development`, `App/Yourly.Release.entitlements` is `production`).
+
+The **iOS client is implemented**: `../Core/Security/AppAttestClient.swift` registers a Secure Enclave
+key once per install (challenge → `attestKey` → `/v1/app-attest/register`), then signs a fresh
+challenge per transcription and sends `x-attest-key-id` / `x-attest-assertion` / `x-attest-challenge`.
+A 401 clears the stored key id so the next request re-registers — the recovery path for a key the
+relay no longer recognises (a wiped volume, or a re-signed build). With the durable store, an ordinary
+restart or deploy no longer triggers it. The deterministic paths + a real P-256 assertion
 round-trip are unit-tested; end-to-end attestation needs a real device (Apple-signed cert chain).
 
 ## What still needs completing (your infra)
@@ -118,27 +147,20 @@ round-trip are unit-tested; end-to-end attestation needs a real device (Apple-si
   do not ship in the production image (they are devDependencies). Bumping vitest to v4 clears them
   (a breaking test-runner change) and can be done later.
 
-## Wiring the iOS app (Phase 10)
+## Wiring the iOS app (done)
 
-The app already has the seam: `TranscriptionService` in
-`../Yourly` (`Core/Voice/TranscriptionService.swift`), currently backed by `FakeTranscriptionService`.
-Phase 10 adds a `RelayTranscriptionService` that POSTs the recording to `/v1/transcriptions` and maps
-the JSON to `TranscriptionResult`, e.g.:
+`Core/Voice/TranscriptionConfig.swift` picks the backend: set `TranscribeBaseURL` under
+`targets.Yourly.info.properties` in `project.yml` (a custom key cannot go through
+`INFOPLIST_KEY_*` — Xcode drops it), or the `transcribeBaseURL` UserDefaults key in DEBUG, and the app uses
+`RelayTranscriptionService` with App Attest attached; leave it empty and it uses the offline fake.
 
-```swift
-struct RelayTranscriptionService: TranscriptionService {
-    let baseURL: URL
-    func transcribe(audioURL: URL, requestID: UUID) async throws -> TranscriptionResult {
-        var req = URLRequest(url: baseURL.appending(path: "v1/transcriptions"))
-        req.httpMethod = "POST"
-        req.setValue(requestID.uuidString, forHTTPHeaderField: "x-request-id")
-        // multipart body with the audio file (+ App Attest headers in production)
-        // decode { requestId, text, languages } → TranscriptionResult
-        ...
-    }
-}
+```
+TranscriptionConfig.makeRelayService(baseURL:)
+  ├── RelayTranscriptionService   POST /v1/transcriptions (multipart audio)
+  └── AppAttestClient             challenge → attest → register, then assertion per request
 ```
 
-Swap `FakeTranscriptionService()` for `RelayTranscriptionService(baseURL:)` in
-`Features/Editor/EditorView.startVoice` — everything downstream (insertion, autosave, error/retry) is
-already in place.
+Covered by `Tests/YourlyTests/AppAttestClientTests.swift` (12 tests): registration, key reuse across
+requests, `SHA256(challenge)` as the `clientDataHash` for both attestation and assertion, a fresh
+challenge per request, headers reaching the transcription request, graceful no-headers on the
+Simulator, and re-registration after a 401.

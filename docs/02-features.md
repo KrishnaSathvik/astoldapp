@@ -133,11 +133,32 @@ Make the app feel like writing directly onto the screen.
 - selection/copy/paste work normally
 - text is editable after voice insertion
 
+### Opening intent: capture vs read
+
+One screen, no mode toggle. What differs is only whether anything takes the keyboard on arrival.
+
+| Opened from | State on arrival |
+|---|---|
+| New note (compose) | body focused, keyboard up — the user came to write |
+| Existing note (Home / search / calendar) | reading: nothing is first responder, no keyboard |
+
+From the reading state, tapping the title starts title editing and tapping the body places the caret
+where the user tapped. Both raise the keyboard at that moment, and nowhere else.
+
+### Keyboard dismissal
+
+Native paths only — interactive dismissal while scrolling the body, navigating Back, and a trailing
+`Done` that appears **only while a field holds the keyboard** and only dismisses it. There is no
+custom "Hide Keyboard" bar, and `Done` never navigates (autosave already saved).
+
 ### Acceptance
 
 - VoiceOver can focus title/body separately.
 - Dynamic Type does not clip controls.
 - Keyboard appearance respects system mode.
+- Opening an existing note shows no keyboard; opening a new note shows one.
+- Scrolling the body downward dismisses the keyboard interactively.
+- `Done` is absent while reading, present while editing, and leaves the editor on screen.
 
 ---
 
@@ -164,7 +185,8 @@ Tap any Home/search result.
 ### Behavior
 
 - opens same editor used for creation
-- existing title/body load
+- opens in the **reading** state: existing title/body load, keyboard hidden
+- editing begins on tap, at the tapped location
 - edits update `updatedAt`
 - note remains sorted by creation date in V1
 
@@ -288,8 +310,29 @@ Request microphone permission only when the user taps the mic.
 
 - stop recording
 - transition to `Transcribing…`
-- preserve intended insertion position
+- preserve the insertion anchor captured when recording started
 - send recording for transcription
+
+There is no third `Stop` control: this recorder has no review-before-transcribe step, so a separate
+Stop would be Done under another name (RULES.md §4). Cancel and Done are the whole state machine.
+
+### Where the transcript lands
+
+Decided when the mic is tapped, then owned by that recording:
+
+| State when recording started | Result |
+|---|---|
+| Caret in the body | inserted at the captured caret |
+| Reading, keyboard hidden | appended to the end of the note |
+
+Reading stays reading — the keyboard does not reappear after an appended transcript. Voice never
+creates a separate object; it is another way of writing into the same note.
+
+### Interruptions
+
+A call or Siri ends the recording; the capture finishes with the audio recorded so far rather than
+discarding what the user already said. Leaving the editor mid-recording cancels the capture and
+deletes the temporary audio. Recordings orphaned by a crash are swept at next launch.
 
 ---
 
@@ -402,7 +445,7 @@ Keep small.
 ### About
 
 - Privacy
-- About `[AppName]`
+- About `As Told`
 - Version
 
 No feature cemetery.
@@ -453,6 +496,120 @@ Speak a thought from Watch and store it.
 ## Pin note
 
 Could conflict with purely chronological philosophy; evaluate before building.
+
+---
+
+# Adopted direction — post-V1 (sequenced, guarded)
+
+Adopted 2026-08-18 with the "anything you want to put into words" repositioning (`README.md` §2,
+`docs/08-positioning-marketing.md`). These are **not V1 scope** and MUST NOT be marketed until shipped
+(`RULES.md` §7 — marketing lags implementation). Build in order; do not build everything at once. The
+overriding constraint: the app must still feel almost as simple as today (`docs/01` §14 success test).
+
+## Milestone A — Structured editor
+
+Give the plain-text editor a **very small** amount of structure so drafts, lists, plans, and checklists
+are possible on the same universal document. No document types; the page never asks what the writing is.
+
+Supported structures (and only these):
+
+- normal text (default)
+- heading
+- subheading
+- bullet list
+- numbered list
+- checklist (content — tick items off; **not** a task manager)
+- quote (optional, later)
+
+### Rules
+
+- Delivered as contextual / collapsible native affordances (contextual control, collapsible keyboard
+  accessory, selected-text menu, conservative typed-shortcut recognition). **No persistent formatting
+  ribbon.** Formatting MUST NEVER visually dominate writing; the app still reads as a page (`RULES.md` §1).
+- Typed shortcuts (e.g. `- item`, `1. item`) may become lists **only on a clear signal**; when uncertain,
+  preserve exactly what the user typed.
+- Long-form must feel *better* as a document grows, not more cluttered: comfortable typography, generous
+  leading, stable cursor, responsive scrolling, reliable autosave, good selection, long-document performance.
+- A checklist MUST NOT introduce due dates, deadlines, overdue states, priorities, recurrence, scheduling,
+  task inboxes, or notifications. That is a task manager, and stays on the do-not-build list.
+
+### Undo
+
+Structure is one of the most visible things the editor does, so it MUST be as undoable as typing
+(`RULES.md` §4). **One user action is one undo step:**
+
+| Action | Undo restores |
+|---|---|
+| Return continuing a list / checklist | the line as it was, with no stray line break left behind |
+| Backspace demoting a structured line | the marker, hidden and styled again |
+| Tapping a checkbox | the previous tick state, caret untouched |
+| A voice transcript landing at the caret | the note without the transcript |
+
+- Structural operations are applied through the text view's own edit primitive, never by assigning the
+  whole string — that bypasses undo registration entirely.
+- UIKit registers an *incomplete* undo for a replacement spanning a paragraph break (undoing `\n- ` leaves
+  the newline), so a structural edit suppresses UIKit's registration and registers its exact inverse.
+- Undo restores the styling and never leaves the caret inside a hidden marker; redo reapplies the edit.
+
+### Copy, cut & paste
+
+Structure is stored as hidden line markers inside `body`, so nothing that leaves the editor may carry
+them (`RULES.md` §4).
+
+| Direction | What travels |
+|---|---|
+| As Told → another app | the page as it reads: `Shopping`, `• Eggs`, `☐ Call Ravi`, `☑ Done`, `1. one` |
+| As Told → As Told | the raw source, via a private pasteboard type (`com.astold.structured-text`) |
+| another app → As Told | plain text, exactly as pasted |
+
+- Copying a visibly complete list item copies the item: the selection expands over that line's hidden
+  marker, and cutting takes the marker with it rather than leaving an orphan.
+- A selection that starts mid-line is a fragment, and carries no marker.
+- A pasted structure may take over the caret's line only when nothing of that line survives the paste;
+  otherwise the first pasted line joins as words, with its marker dropped. A marker MUST NEVER land
+  mid-line, where it would read as literal text.
+- Home and search previews render the same visible text, never the markers.
+
+### Acceptance
+
+- A user can write a 2,000+ word draft comfortably, and a bullet list / numbered list / checklist, in one
+  note, without a mode switch — and Home/Editor still feel minimal.
+- Copying a checklist into Messages pastes `☐ Call Ravi`; copying it back into As Told restores a real
+  checklist item.
+
+## Milestone B — Voice structure commands
+
+Extend voice from speech-to-string to **speech-to-document**, on the same document model — no separate
+voice-only note system. Only after Milestone A structures are stable.
+
+- Small, fixed, deterministic vocabulary: `new paragraph`, `new line`, `heading`, `subheading`,
+  `bullet list`, `numbered list`, `checklist`, `next item`, `end list`.
+- Conservative parser (`RULES.md` §2 "Structure the words"): recognize a command only as a clearly
+  isolated phrase at an utterance boundary using exact wording; **when uncertain, preserve the spoken words**.
+- No generative inference of formatting. *Touch chooses where; voice chooses what* — no hands-free
+  navigation/selection/deletion this stage.
+- English commands may ship first; Telugu/Hindi equivalents evaluated separately and MUST NOT degrade
+  code-switch transcription quality.
+
+- A recognized command absorbs the whole punctuation run after it — `new paragraph...`, `heading…`,
+  `checklist!` — so no stray punctuation is left in the note. This does not widen recognition: the phrase
+  still has to sit at a sentence boundary and be followed by punctuation or the end of the transcript.
+
+### Acceptance
+
+- Speaking "Checklist. Finish screenshots. Next item privacy page. Next item TestFlight." produces a
+  three-item checklist; speaking the literal words "new paragraph" mid-sentence, ambiguously, keeps the words.
+- "New paragraph... I visited in January." leaves no dots behind; "The heading was completely wrong." stays
+  words.
+
+## Milestone C — Keep at Top (evaluate later)
+
+Broader writing means an unfinished draft/checklist may need to stay visible for several days instead of
+scrolling into history. A future, opt-in **Keep at Top** surfaces such a note above the chronological
+timeline, with an explicit "Remove from Keeping" that returns it to its natural date position.
+
+- Evaluate **only after** structured writing exists and users actually keep active drafts around.
+- NOT folders, favorites, tags, or a workspace. The timeline stays the primary organization model.
 
 ---
 

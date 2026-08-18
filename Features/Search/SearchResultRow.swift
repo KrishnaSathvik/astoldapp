@@ -5,10 +5,13 @@ import SwiftUI
 struct SearchResultRow: View {
     let note: Note
 
+    /// The body as the reader sees it: hidden structure markers never surface in a result (RULES.md §4).
+    private var bodyText: String { StructuredTextExport.plainText(note.body) }
+
     private var titleLine: String {
         normalizedTitle(note.title)
-            ?? note.body.split(separator: "\n", omittingEmptySubsequences: true).first.map(String.init)
-            ?? note.body
+            ?? bodyText.split(separator: "\n", omittingEmptySubsequences: true).first.map(String.init)
+            ?? bodyText
     }
 
     private var dateText: String {
@@ -23,7 +26,7 @@ struct SearchResultRow: View {
                 .foregroundStyle(Color.ds.textPrimary)
                 .lineLimit(1)
             if normalizedTitle(note.title) != nil {
-                Text(note.body)
+                Text(bodyText)
                     .font(.ds.preview)
                     .foregroundStyle(Color.ds.textSecondary)
                     .lineLimit(2)

@@ -1,6 +1,6 @@
 name: Yourly
 options:
-  bundleIdPrefix: com.yourly
+  bundleIdPrefix: com.astold
   deploymentTarget:
     iOS: "26.0"
   createIntermediateGroups: true
@@ -11,6 +11,13 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     GENERATE_INFOPLIST_FILE: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # iPhone only (README.md §2, docs/06-tech-stack.md). TARGETED_DEVICE_FAMILY must be set on each
+    # target — XcodeGen writes its own "1,2" default per target, which overrides a project-level value.
+    SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+    SUPPORTS_MACCATALYST: NO
+    # Keep the app off the Mac and Vision Pro stores; both default to YES for iOS apps.
+    SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
 targets:
   Yourly:
     type: application
@@ -22,16 +29,36 @@ targets:
       - Core
       - Models
       - Resources
+    # Custom (non-Apple) Info.plist keys cannot be set via INFOPLIST_KEY_* build settings — Xcode
+    # only honors that prefix for keys on its own allowlist and silently drops the rest. The relay
+    # URL therefore has to live in a real Info.plist; Xcode merges the generated keys into it
+    # because GENERATE_INFOPLIST_FILE stays YES. See Core/Voice/TranscriptionConfig.swift.
+    info:
+      path: App/Info.plist
+      properties:
+        TranscribeBaseURL: "https://as-told-relay.fly.dev"   # Fly relay (transcription-service/DEPLOY.md)
+        # XcodeGen otherwise bakes literal defaults here, which would shadow the project-level
+        # MARKETING_VERSION / CURRENT_PROJECT_VERSION.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.yourly.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.astold.app
+        INFOPLIST_KEY_CFBundleDisplayName: "As Told"
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_NSFaceIDUsageDescription: "Use Face ID to keep your notes private when you reopen the app."
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Record your voice to add a note by speaking."
-        INFOPLIST_KEY_TranscribeBaseURL: ""   # set to your deployed relay URL to enable real transcription
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1"
+        # Portrait only: one column of text, no landscape layouts to review (README.md §2).
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+      configs:
+        # App Attest environment must match the relay's APP_ATTEST_PRODUCTION flag.
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: App/Yourly.Debug.entitlements
+        Release:
+          CODE_SIGN_ENTITLEMENTS: App/Yourly.Release.entitlements
   YourlyTests:
     type: bundle.unit-test
     platform: iOS
@@ -42,7 +69,8 @@ targets:
       - target: Yourly
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.yourly.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.astold.tests
+        TARGETED_DEVICE_FAMILY: "1"
   YourlyUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -53,7 +81,8 @@ targets:
       - target: Yourly
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.yourly.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: com.astold.uitests
+        TARGETED_DEVICE_FAMILY: "1"
 schemes:
   Yourly:
     build:

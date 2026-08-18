@@ -37,11 +37,49 @@ final class NavigationUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Back to notes"].exists, "Editor should be gone")
     }
 
-    func testComposeThenDoneReturnsHome() {
+    /// A new note is a capture intent: the editor opens with the keyboard already up.
+    func testNewNoteOpensWithTheKeyboard() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        tap(app.buttons["Done"], "editor Done button")
-        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 8), "Done should return to Home")
+        XCTAssertTrue(app.keyboards.element.waitForExistence(timeout: 8),
+                      "A new note should open ready to type")
+    }
+
+    /// An existing note is a reading intent: nothing takes first responder, so no keyboard.
+    func testExistingNoteOpensForReadingWithoutTheKeyboard() {
+        let app = launchedApp()
+        let note = app.buttons
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Alaska trip idea"))
+            .firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 8), "seeded note should exist")
+        note.tap()
+        XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8), "Editor should open")
+        XCTAssertFalse(app.keyboards.element.waitForExistence(timeout: 3),
+                       "Opening an existing note must not raise the keyboard")
+        // No completion control while reading — autosave is the only save (RULES.md §4).
+        XCTAssertFalse(app.buttons["Dismiss keyboard"].exists,
+                       "Done should not be offered when there is nothing to dismiss")
+    }
+
+    /// Tapping the body starts editing, and Done puts the keyboard away without leaving the note.
+    func testTappingBodyStartsEditingAndDoneDismissesTheKeyboard() {
+        let app = launchedApp()
+        let note = app.buttons
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Alaska trip idea"))
+            .firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 8))
+        note.tap()
+        XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8))
+
+        app.textViews.firstMatch.tap()
+        XCTAssertTrue(app.keyboards.element.waitForExistence(timeout: 8),
+                      "Tapping the body should start editing")
+
+        tap(app.buttons["Dismiss keyboard"], "editor Done button")
+        XCTAssertTrue(app.keyboards.element.waitForNonExistence(timeout: 8),
+                      "Done should dismiss the keyboard")
+        XCTAssertTrue(app.buttons["Back to notes"].exists,
+                      "Done must not navigate away — it only dismisses the keyboard")
     }
 
     func testSwipeToDeleteRemovesNote() {
@@ -76,8 +114,8 @@ final class NavigationUITests: XCTestCase {
         tap(app.buttons["Profile"], "profile button")
         XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 8))
 
-        tap(app.buttons["What is Yourly"], "What is Yourly row")
-        XCTAssertTrue(app.navigationBars["What is Yourly"].waitForExistence(timeout: 8), "About should push")
+        tap(app.buttons["What is As Told"], "What is As Told row")
+        XCTAssertTrue(app.navigationBars["What is As Told"].waitForExistence(timeout: 8), "About should push")
         back(app)
         XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 8), "Back to Profile")
 
@@ -99,6 +137,18 @@ final class NavigationUITests: XCTestCase {
         let app = launchedApp()
         tap(app.buttons["Profile"], "profile button")
         XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 8))
+        try app.performAccessibilityAudit(for: Self.enforcedAudits)
+    }
+
+    /// The editor in its reading state — the screen a user spends the most time looking at.
+    @MainActor func testEditorAccessibilityAudit() throws {
+        let app = launchedApp()
+        let note = app.buttons
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Alaska trip idea"))
+            .firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 8))
+        note.tap()
+        XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8))
         try app.performAccessibilityAudit(for: Self.enforcedAudits)
     }
 

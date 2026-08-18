@@ -6,6 +6,7 @@ import { healthRoutes } from './routes/health.js';
 import { appAttestRoutes } from './routes/appAttest.js';
 import { transcribeRoutes } from './routes/transcribe.js';
 import { makeVerifier, type AttestationVerifier } from './security/attestation.js';
+import { makeAttestedKeyStore } from './security/attestedKeyStore.js';
 import { InMemoryRateLimiter, type RateLimiter } from './security/rateLimit.js';
 import { FakeTranscriptionProvider } from './services/fakeTranscription.js';
 import { OpenAITranscriptionProvider } from './services/openaiTranscription.js';
@@ -21,13 +22,22 @@ export interface Deps {
 /** Wire default dependencies from config: real provider only when a key is present. */
 export function makeDefaultDeps(config: Config): Deps {
   const provider: TranscriptionProvider = config.OPENAI_API_KEY
-    ? new OpenAITranscriptionProvider(config.OPENAI_API_KEY, config.TRANSCRIBE_MODEL)
+    ? new OpenAITranscriptionProvider(
+        config.OPENAI_API_KEY,
+        config.TRANSCRIBE_MODEL,
+        config.TRANSCRIBE_PROMPT_VARIANT,
+      )
     : new FakeTranscriptionProvider();
 
   return {
     config,
     provider,
-    verifier: makeVerifier(config.APP_ATTEST_REQUIRED, config.APP_ATTEST_APP_ID, config.APP_ATTEST_PRODUCTION),
+    verifier: makeVerifier(
+      config.APP_ATTEST_REQUIRED,
+      config.APP_ATTEST_APP_ID,
+      config.APP_ATTEST_PRODUCTION,
+      makeAttestedKeyStore(config),
+    ),
     limiter: new InMemoryRateLimiter(
       config.RATE_LIMIT_MAX,
       config.RATE_LIMIT_WINDOW_SECONDS * 1000,

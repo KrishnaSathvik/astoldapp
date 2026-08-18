@@ -1,8 +1,11 @@
 import SwiftUI
 
-/// Dark recording surface rising from the mic control: live waveform, elapsed time, Cancel / stop /
-/// Done — plus the transcribing and error/retry states. The only dark surface over content
-/// (docs/03-design-system.md §4.8, §10). Drives the injected VoiceCaptureModel.
+/// Dark recording surface rising from the mic control: live waveform, elapsed time, and exactly two
+/// controls — **Cancel** (stop, delete the temp audio, leave the note untouched) and **Done** (stop
+/// and transcribe) — plus the transcribing and error/retry states. There is no separate "Stop":
+/// this recorder has no review-before-transcribe step, so a third control would have been Done
+/// under another name. The only dark surface over content (docs/03-design-system.md §4.8, §10).
+/// Drives the injected VoiceCaptureModel.
 struct RecordingPanel: View {
     @Bindable var model: VoiceCaptureModel
     var onClose: () -> Void
@@ -35,6 +38,8 @@ struct RecordingPanel: View {
         .padding(.horizontal, DSSpacing.s4)
         .onAppear(perform: startTicker)
         .onDisappear { ticker?.invalidate() }
+        // Subtle haptics at the state changes the user is waiting on (docs/02-features.md, Voice).
+        .sensoryFeedback(trigger: model.phase) { Self.haptic(from: $0, to: $1) }
         .onChange(of: model.phase) { _, new in
             switch new {
             case .recording, .transcribing, .failed, .permissionDenied:
@@ -54,24 +59,34 @@ struct RecordingPanel: View {
             Text(timeString)
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.8))
-            HStack {
-                Button("Cancel") { stop(); model.cancel(); onClose() }
-                    .foregroundStyle(.white.opacity(0.8))
-                Spacer()
-                Button {
-                    stop(); model.done()
-                } label: {
-                    Image(systemName: "stop.fill")
-                        .font(.title2)
-                        .foregroundStyle(.black)
-                        .frame(width: 56, height: 56)
-                        .background(.white, in: Circle())
+            ZStack {
+                // Done is the primary target, centred under the waveform.
+                VStack(spacing: DSSpacing.s2) {
+                    Button {
+                        stop(); model.done()
+                    } label: {
+                        Image(systemName: "stop.fill")
+                            .font(.title2)
+                            .foregroundStyle(.black)
+                            .frame(width: 56, height: 56)
+                            .background(.white, in: Circle())
+                    }
+                    .accessibilityLabel("Done")
+                    .accessibilityHint("Stops recording and adds the transcript to this note")
+
+                    Text("Done")
+                        .font(.ds.caption)
+                        .foregroundStyle(.white)
+                        .accessibilityHidden(true)
                 }
-                .accessibilityLabel("Stop recording")
-                Spacer()
-                Button("Done") { stop(); model.done() }
-                    .foregroundStyle(.white)
-                    .fontWeight(.semibold)
+
+                HStack {
+                    Button("Cancel") { stop(); model.cancel(); onClose() }
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(minWidth: 44, minHeight: 44)
+                        .accessibilityHint("Discards this recording and leaves the note unchanged")
+                    Spacer()
+                }
             }
         }
     }
@@ -112,6 +127,18 @@ struct RecordingPanel: View {
     }
 
     // MARK: Helpers
+
+    /// One haptic per meaningful capture transition; silence for everything else.
+    private static func haptic(from old: VoiceCaptureModel.Phase,
+                               to new: VoiceCaptureModel.Phase) -> SensoryFeedback? {
+        switch (old, new) {
+        case (_, .recording): return .start
+        case (.recording, .transcribing): return .stop
+        case (.transcribing, .idle): return .success
+        case (_, .failed), (_, .permissionDenied): return .error
+        default: return nil
+        }
+    }
 
     private var timeString: String {
         String(format: "%02d:%02d", elapsed / 60, elapsed % 60)

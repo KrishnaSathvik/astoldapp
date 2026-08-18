@@ -1,15 +1,15 @@
 # Premium Notes App — Product & Engineering Docs
 
-> **Working name:** `[AppName]`  
+> **Name:** **As Told** (internal Xcode target/module: `Yourly`)  
 > **Tagline:** **Write it. Say it. Keep it.**  
 > **Platform:** iPhone / iOS  
 > **Product style:** Quiet Editorial  
-> **Status:** V1 specification — ready to begin implementation  
-> **Last updated:** 2026-08-17
+> **Status:** V1 implemented — in polish / release-readiness  
+> **Last updated:** 2026-08-18
 
 ## 1. Product in one sentence
 
-A private, local-first iPhone app for capturing a thought exactly as it came to you — by typing or speaking.
+A private, local-first iPhone app for putting anything you want into words — a thought, a note, a draft, a plan, a list — exactly as it came to you, by typing or speaking.
 
 The app is intentionally **not** a productivity workspace, AI writing assistant, traditional folder-based notes system, or journaling program. It should feel like a personal space that opens quickly, gets out of the way, and lets the user write or speak.
 
@@ -17,6 +17,9 @@ The app is intentionally **not** a productivity workspace, AI writing assistant,
 
 These decisions should be treated as product constraints unless intentionally changed later.
 
+- Product name is **As Told** (locked 2026-08-17). Full marketing name: **As Told — Private Notes**. App Store name and home-screen icon label: **As Told**. The internal Xcode target/module stays `Yourly`; the bundle id is `com.astold.app` (changed 2026-08-18, before any App Store Connect record existed).
+- Primary descriptor: **A private place for anything you want to put into words.** Brand promise: **Your words, as told by you.** (Repositioned 2026-08-18 from the thoughts-only *"Private notes, in your own words."* framing. This **widens the invitation, not the product**: V1 shipped scope, the do-not-build fences, and all shipped-feature marketing claims are unchanged; structured writing and voice-structure commands are sequenced roadmap, not V1. Tagline is unchanged. Full brand / ASO / SEO / website direction: `docs/08-positioning-marketing.md`.)
+- iPhone only, **portrait only** (locked 2026-08-18). No iPad, Mac Catalyst, or visionOS.
 - No account or sign-in.
 - No onboarding carousel.
 - One first-run welcome screen.
@@ -35,7 +38,13 @@ These decisions should be treated as product constraints unless intentionally ch
 - Voice and typing are two input methods for the same note.
 - Voice transcript becomes ordinary editable text.
 - V1 voice target: English, Telugu, Hindi, Telugu+English, Hindi+English.
-- Voice must not intentionally translate, summarize, rewrite, or grammar-correct.
+- Voice: **preserve the words, format the speech** (refined 2026-08-18). Natural capitalization,
+  punctuation, sentence boundaries, and paragraph breaks are allowed; translating, summarizing,
+  rewriting, paraphrasing, or grammar-correcting the user's words is not.
+- The transcription model is chosen from measured benchmark performance, not model recency. V1 ships
+  `gpt-4o-transcribe`.
+- A new note opens with the keyboard; an existing note opens for reading with the keyboard hidden
+  (locked 2026-08-18). No Read/Edit mode toggle.
 - No audio is retained after successful transcription in V1.
 - Face ID / device authentication lock is optional.
 - App content is obscured in the app switcher when privacy lock is enabled.
@@ -67,6 +76,7 @@ Specifications (`docs/`):
 | `docs/05-architecture.md` | iOS architecture, modules, models, flows, security and backend boundary |
 | `docs/06-tech-stack.md` | Exact recommended technologies and why |
 | `docs/07-build-plan.md` | Implementation order, phases, and definition of done |
+| `docs/08-positioning-marketing.md` | Long-term positioning, brand/messaging hierarchy, App Store (ASO), SEO, website, screenshots, and the marketing-lags-implementation rule |
 | `docs/design-reference/screens-overview.png` | Canonical 10-screen visual reference for V1 |
 
 ## 4. Build philosophy

@@ -10,8 +10,12 @@ private final class FakeRecorder: AudioRecording {
     private(set) var canceled = false
     private(set) var cleaned: [URL] = []
     var level: Float = 0.5
+    var onInterruption: (() -> Void)?
 
     init(permission: Bool = true) { self.permission = permission }
+
+    /// Simulates a call/Siri taking the microphone mid-recording.
+    func interrupt() { onInterruption?() }
 
     func requestPermission() async -> Bool { permission }
     func start() throws -> URL { startURL }
@@ -108,5 +112,74 @@ struct VoiceCaptureModelTests {
         model.discard()
         #expect(model.phase == .idle)
         #expect(recorder.cleaned.contains(recorder.startURL))
+    }
+}
+
+// MARK: - Interruption + abandoned audio
+
+@MainActor
+struct VoiceInterruptionTests {
+    /// A call or Siri must not throw away what the user already said: the capture finishes and
+    /// transcribes the audio recorded up to the interruption.
+    @Test func interruptionFinishesTheCaptureInsteadOfDiscardingIt() async {
+        var emitted: String?
+        let recorder = FakeRecorder()
+        let model = VoiceCaptureModel(
+            recorder: recorder,
+            service: FakeTranscriptionService(delay: .milliseconds(1))
+        ) { emitted = $0 }
+
+        await model.begin()
+        #expect(model.phase == .recording)
+
+        recorder.interrupt()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(emitted == FakeTranscriptionService.sampleText)
+        #expect(model.phase == .idle)
+        #expect(recorder.cleaned.contains(recorder.startURL))
+    }
+
+    /// An interruption after the capture already ended is a no-op, not a second transcription.
+    @Test func interruptionAfterDoneIsIgnored() async {
+        var emissions = 0
+        let recorder = FakeRecorder()
+        let model = VoiceCaptureModel(
+            recorder: recorder,
+            service: FakeTranscriptionService(delay: .milliseconds(1))
+        ) { _ in emissions += 1 }
+
+        await model.begin()
+        model.done()
+        try? await Task.sleep(for: .milliseconds(50))
+        recorder.interrupt()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(emissions == 1)
+    }
+}
+
+@MainActor
+struct AbandonedRecordingCleanupTests {
+    /// A crash or force-quit during recording leaves raw audio in tmp; launch must sweep it and
+    /// leave everything else alone (RULES.md §3).
+    @Test func purgeRemovesOnlyAbandonedRecordings() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("purge-\(UUID().uuidString)")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+
+        let abandoned = dir.appendingPathComponent("rec-\(UUID().uuidString).m4a")
+        let unrelatedExtension = dir.appendingPathComponent("rec-notes.txt")
+        let unrelatedName = dir.appendingPathComponent("keep-me.m4a")
+        for url in [abandoned, unrelatedExtension, unrelatedName] {
+            try Data("x".utf8).write(to: url)
+        }
+
+        AVAudioRecorderService.purgeAbandonedRecordings(in: dir)
+
+        #expect(!fm.fileExists(atPath: abandoned.path))
+        #expect(fm.fileExists(atPath: unrelatedExtension.path))
+        #expect(fm.fileExists(atPath: unrelatedName.path))
     }
 }

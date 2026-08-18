@@ -9,6 +9,10 @@ import SwiftData
 enum DebugLaunch {
     static var seedSampleNotes: Bool { args.contains("-seedSampleNotes") }
     static var openSampleEditor: Bool { args.contains("-openSampleEditor") }
+    /// Seeds a single note exercising every structure type — for verifying live-styled rendering.
+    static var seedStructuredDemo: Bool { args.contains("-seedStructuredDemo") }
+    /// Opens the newest seeded note in the editor — the *existing note* (reading) path.
+    static var openSeededNote: Bool { args.contains("-openSeededNote") }
     static var openCalendar: Bool { args.contains("-openCalendar") }
     static var openSettings: Bool { args.contains("-openSettings") }
     static var autoStartVoice: Bool { args.contains("-autoStartVoice") }
@@ -31,6 +35,35 @@ enum DebugLaunch {
             for note in (try? context.fetch(FetchDescriptor<Note>())) ?? [] { context.delete(note) }
             try? context.save()
         }
+        if seedStructuredDemo {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let body = """
+                # Why winter feels different
+
+                I visited in January and the first thing I noticed was how quiet it felt.
+
+                ## What to pack
+
+                - warm layers
+                - empty roads
+
+                Launch checklist
+
+                - [ ] Finish screenshots
+                - [x] Privacy page
+                - [ ] TestFlight
+
+                1. Anchorage
+                2. Seward
+                3. Denali
+                """
+                context.insert(Note(title: "Yellowstone notes", body: body))
+                try? context.save()
+            }
+            return
+        }
+
         guard seedSampleNotes else { return }
         let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
         guard existing == 0 else { return }

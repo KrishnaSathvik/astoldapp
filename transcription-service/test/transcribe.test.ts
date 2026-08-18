@@ -84,7 +84,7 @@ describe('POST /v1/transcriptions', () => {
   it('requires attestation when configured (401)', async () => {
     const app = await buildTestServer({
       config: { APP_ATTEST_REQUIRED: true },
-      deps: { verifier: new AppAttestVerifier('ABCDE12345.com.yourly.app') },
+      deps: { verifier: new AppAttestVerifier('ABCDE12345.com.astold.app') },
     });
     const { payload, headers } = multipartAudio(audio);
     const res = await app.inject({ method: 'POST', url: '/v1/transcriptions', payload, headers });

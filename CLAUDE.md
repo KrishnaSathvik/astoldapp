@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Agent operating guide for **[AppName]** — read this first when working in this repo.
+Agent operating guide for **As Told** — read this first when working in this repo.
 
 ## What this repo is
 
@@ -10,17 +10,22 @@ for capturing a thought exactly as it came — by typing or speaking.
 - **Tagline:** Write it. Say it. Keep it.
 - **Loop:** Open → write or speak → leave.
 - **Platform:** iPhone / iOS, SwiftUI + SwiftData, native-first.
-- **Voice:** transcription of English, Telugu, Hindi, and Telugu/Hindi ↔ English code-switching,
-  captured **verbatim** (no translate / summarize / rewrite / grammar-fix).
+- **Voice:** transcription of English, Telugu, Hindi, and Telugu/Hindi ↔ English code-switching.
+  The rule is **"Preserve the words. Format the speech."** — natural punctuation, capitalization,
+  and paragraph breaks are allowed; translate / summarize / rewrite / paraphrase / grammar-fix are
+  not (RULES.md §2).
 - **Not:** an AI notes app, a second brain, a journaling prompt engine, or "Apple Notes with more buttons."
-- **Status:** V1 specification, ready to begin implementation.
+- **Status:** V1 built; in polish / release-readiness.
 
 > **Primary rule:** the note is always more important than the interface.
 
-The app name is intentionally still a placeholder — `[AppName]`. Do not invent or hardcode a final
-name; leave the placeholder until the human decides. The design reference
-(`docs/design-reference/screens-overview.png`) uses **"Yourly"** with a feather/quill mark as the
-visual working name only — treat it as the current logotype, not a committed product name.
+The product name is **As Told** (locked 2026-08-17 — see `README.md` §2). Use it for all user-facing
+brand text, the App Store listing, and the home-screen icon label. The **internal Xcode target/module
+stays `Yourly`** — do not rename it; `Yourly` is now only the code name, not a user-facing label.
+The **bundle id is `com.astold.app`** (changed 2026-08-18, before any App Store Connect record
+existed; it is permanent once an app record is created). The design reference (`docs/design-reference/screens-overview.png`)
+still shows the "Yourly" wordmark with the feather/quill mark — treat the mark as current and read the
+wordmark as **As Told**.
 
 ## The one rule that matters most
 
