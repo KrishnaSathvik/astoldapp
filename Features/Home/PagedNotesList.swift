@@ -84,7 +84,7 @@ struct EmptyHome: View {
                 .font(.ds.homeTitle)
                 .foregroundStyle(Color.ds.textPrimary)
             Spacer().frame(height: DSSpacing.s10)
-            Text("Your thoughts will appear here.")
+            Text("Whatever you write will appear here.")
                 .font(.ds.preview)
                 .foregroundStyle(Color.ds.textSecondary)
             Spacer()
