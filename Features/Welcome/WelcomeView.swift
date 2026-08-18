@@ -12,7 +12,7 @@ struct WelcomeView: View {
                 Text("Write it. Say it. Keep it.")
                     .font(.ds.groupTitle)
                     .foregroundStyle(Color.ds.textPrimary)
-                Text("A private place for the thoughts you want to keep.\nType them or speak them. Keep them as they came.")
+                Text("A quiet place for anything you want to put into words.\nWrite it, say it, shape it your way.")
                     .font(.ds.preview)
                     .foregroundStyle(Color.ds.textSecondary)
                     .multilineTextAlignment(.center)

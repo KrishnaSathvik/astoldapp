@@ -501,6 +501,11 @@ guardrails. Full detail: `docs/02-features.md` (Adopted direction) and `docs/08-
   carve-out in §1 — contextual/collapsible affordances, never a persistent ribbon; structure never dominates writing.
 - **Next voice milestone:** the deterministic command vocabulary and conservative parser in §2
   ("Structure the words"). Only after the editor structures above are stable.
+- **The "Style" control** (converting an existing block — "make this a heading") is a post-release item,
+  design-tested before implementation. Preferred form: a small contextual `Aa` / Style action available
+  only while editing, routing through the existing `setBlockKind` primitive. It MUST NOT arrive as a
+  persistent formatting ribbon. Not a release blocker — typing markers and voice commands already work.
+  See `docs/02-features.md` Milestone B2.
 - **A checklist is content, not a task manager.** It means "write several things and tick them off." It
   MUST NOT bring due dates, deadlines, overdue states, priorities, recurrence, calendar scheduling, task
   inboxes, or notifications. A Todoist/Notion clone stays on the do-not-build list.

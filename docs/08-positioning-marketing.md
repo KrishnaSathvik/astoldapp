@@ -113,17 +113,30 @@ brands or irrelevant/misleading terms (Apple explicitly warns against this).
 
 **As Told** (clean; no keyword stuffing).
 
-### Subtitle — gated on the editor shipping
+### Subtitle — LOCKED 2026-08-18
 
-- **Now (plain-text editor):** keep the current narrower subtitle. Do **not** publish structured-writing
-  claims before the feature ships.
-- **After the broader editor ships:** move to **"Notes, drafts, lists & voice"** (28 chars) — communicates
-  notes, long-form drafts, lists, and voice while leaving the brand name clean.
+**Notes, drafts, lists & voice** — 28 chars, verified against Apple's 30-char limit.
 
-### Keywords (once the new subtitle ships)
+The gate is satisfied: structured writing (headings, subheadings, bullet, numbered, checklist) and the
+nine voice structure commands ship in the editor milestone, so this is a description of the production
+app, not the roadmap.
+
+It was chosen over the verb-led **"Write, speak, draft and plan"** (also 28 chars) because a noun-led
+subtitle states what As Told handles and carries stronger search language. Keep the verb-led line — it
+is warmer and closer to the tagline's cadence — for **marketing copy and screenshot headlines**, where
+it reads better than it searches.
+
+Voice is the differentiator, not the whole category. The store story is:
+
+> A private writing space for notes, thoughts, drafts, lists, plans, and whatever else you want to put
+> into words.
+
+Do **not** describe As Told as only a voice-notes app any more.
+
+### Keywords
 
 Don't repeat terms already in name/subtitle (notes, drafts, lists, voice). Suggested hidden set (~97
-ASCII bytes):
+ASCII bytes — verified 97/100):
 
 ```text
 journal,memo,writing,dictation,speech,text,thoughts,ideas,checklist,todo,private,diary,transcribe
@@ -159,17 +172,23 @@ Closing:
 **Remove any claim about headings / checklists / lists / voice commands until those capabilities are in
 the shipping version.**
 
-### Screenshots (update only once the broader editor ships)
+### Screenshots
 
-1. *Anything you want to put into words.* — Home (support line: "Thoughts, notes, drafts, lists, and more.")
-2. *Just start writing.* — clean long-form Editor.
-3. *Or just say it.* — recording state.
-4. *Your voice becomes your page.* — transcript inserted into writing.
-5. *Write more than thoughts.* — tasteful long-form + bullets + checklist (**not** a productivity dashboard).
-6. *Speak the way you speak.* — Telugu+English or Hindi+English.
-7. *Find it the way you remember it.* — Search.
-8. *Remember the day?* — Calendar.
-9. *Your writing stays yours.* — Face ID / privacy.
+The old sequence was built around *thoughts + voice*. The app is broader now, so the story changes —
+shot 4 (shaping) is the important new one and carries the milestone:
+
+1. *Anything you want to put into words.* — Home.
+2. *Just start writing.* — clean editor.
+3. *Or just say it.* — voice recording state.
+4. *Shape it as you go.* — heading + paragraph + bullet + checklist in one real note. **The key new shot.**
+5. *Keep your own words.* — multilingual voice (Telugu+English or Hindi+English).
+6. *Notes. Drafts. Lists. Plans.* — several different documents side by side.
+7. *Everything finds its day.* — timeline.
+8. *Find it again.* — search / calendar.
+9. *Private by design.* — Face ID / local storage.
+
+Shot 4 must stay tasteful: one natural document that happens to use structure. The moment it reads as a
+productivity dashboard, the implementation and the marketing have both gone too far (RULES.md §7).
 
 ---
 
@@ -229,9 +248,24 @@ Write it. Say it. Keep it.
 
 ### Open Graph
 
+Served at `https://astold.app/og.png`, 1200×630, referenced from every page (`og:image` +
+`twitter:image`, `summary_large_image`). **Never ship `logo.png` as the social preview.**
+
 - Copy: **As Told** / *Anything you want to put into words.* / **WRITE IT. SAY IT. KEEP IT.**
-- Visual: warm ivory canvas, abstract feather, one premium iPhone (Home or Editor), no clutter — not a
-  feature collage. Only show structure (draft/checklist) on the device once it actually ships.
+- Visual: warm ivory / porcelain canvas, deep charcoal type, refined serif for the brand and headline,
+  clean sans for supporting text. One abstract feather mark whose negative-space cuts hint at an audio
+  waveform. One premium dark-titanium iPhone, slightly angled, soft realistic shadow, generous negative
+  space — not a feature collage.
+- **The device must show the current structured-writing UI**, not the pre-milestone plain-text Home:
+  a real note carrying a heading, body text, and a short checklist. Structure has shipped, so showing it
+  is now accurate rather than a roadmap claim.
+- No App Store badge, no fake ratings, no emoji, no dashboard UI, no bottom tab bar, no per-note
+  timestamps on Home, no note cards, no heavy shadows.
+
+> **Generation note (2026-08-18):** the prompt used for the first render still carried the retired
+> headline *"Your thoughts, in your own words."* and a plain-text Home mockup. Both are superseded by
+> this section — regenerate with the headline *"Anything you want to put into words."* and a
+> structured-writing device shot before publishing.
 
 ### Social bio
 
@@ -259,15 +293,40 @@ stuffing; accurate structured data only where the type genuinely applies.
 
 ### Landing pages (start small)
 
-`/` · `/privacy` · `/support` · `/voice-notes` · `/private-notes` · `/multilingual`. Later, and only
-after the matching feature ships: `/writing-app` · `/telugu-voice-to-text` · `/hindi-voice-to-text` ·
-`/speech-to-text-notes` · `/checklists`. Do not generate dozens of shallow keyword pages.
+**Shipped 2026-08-18:** `/` · `/voice-notes` · `/private-notes` · `/multilingual` · `/privacy` ·
+`/support`, each with a unique title, description, canonical, and one H1, all listed in `sitemap.xml`.
+
+`/voice-notes` covers voice → editable note, English/Telugu/Hindi and mixed speech, punctuation without
+rewriting, and what happens to the recording. `/private-notes` covers no account, the local note
+library, Face ID, and the honest boundary around voice. Both describe real, shipped behavior — they
+correspond to genuine product capability, not SEO filler.
+
+Later, and only after the matching feature ships: `/writing-app` · `/telugu-voice-to-text` ·
+`/hindi-voice-to-text` · `/speech-to-text-notes` · `/checklists`. Do not generate dozens of shallow
+keyword pages.
 
 ### Technical checklist
 
-Unique `<title>` and meta description per page · one clear H1 · canonical URLs · `robots.txt` · sitemap ·
-crawlable internal links · meaningful alt text · descriptive screenshot filenames · Open Graph + social
-preview image · mobile performance · semantic HTML · JSON-LD only where the type genuinely applies.
+Production origin is **`https://astold.app`** (matches the locked `com.astold.app` bundle id). Every
+absolute URL — canonical, `og:url`, `og:image`, sitemap — is written against it.
+
+Done (2026-08-18):
+
+- [x] Unique `<title>` and meta description per page
+- [x] Exactly one H1 per page
+- [x] `<link rel="canonical">` on every page
+- [x] `robots.txt` (points at the sitemap)
+- [x] `sitemap.xml` (all six pages; kept in sync with the canonical set)
+- [x] Crawlable internal links — new pages linked from the footer nav and from the relevant home sections
+- [x] Open Graph + Twitter `summary_large_image` on every page, pointing at `/og.png`
+- [x] Favicon / apple-touch-icon / web manifest wired and verified
+
+Outstanding:
+
+- [ ] **Ship `website/og.png`** — every page references it and it does not exist yet (see §5 Open Graph)
+- [ ] Point the `astold.app` DNS at the Vercel project, then re-verify canonicals resolve
+- [ ] Audit alt text and use descriptive screenshot filenames as new shots land
+- [ ] JSON-LD only where the type genuinely applies (`SoftwareApplication` is the plausible one)
 
 ---
 

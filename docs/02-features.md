@@ -602,6 +602,28 @@ voice-only note system. Only after Milestone A structures are stable.
 - "New paragraph... I visited in January." leaves no dots behind; "The heading was completely wrong." stays
   words.
 
+## Milestone B2 — the "Style" control (post-release, design-test first)
+
+Structure can be created two ways today: typing a marker (`- `, `# `, `1. `) and the voice commands.
+Converting an *existing* paragraph — "make this a heading" — has no UI path, because
+`DocumentAction.setBlockKind` is implemented and tested but deliberately has no caller.
+
+This is a real usability hole and an explicitly accepted one. It does **not** block release: the
+capability exists, and destabilising a freshly landed editor to add a control we have not design-tested
+is the worse trade.
+
+When it is built:
+
+- A single contextual **Style** action offering: Paragraph · Heading · Subheading · Bullet · Numbered
+  list · Checklist. It routes through the existing `setBlockKind` primitive — no second formatting path.
+- Available **only while editing**, never in the reading state.
+- Preferred entry point: a small `Aa` keyboard-accessory action. Acceptable alternatives to test: the
+  text-selection context menu, or an editor `…` menu shown only when the cursor is active.
+- MUST NOT become a persistent `B I U H1 H2 • 1. ☑` ribbon across the editor (RULES.md §1, §4).
+  Formatting must never visually dominate writing.
+
+Design-test the entry point before implementing. Nothing else joins this control.
+
 ## Milestone C — Keep at Top (evaluate later)
 
 Broader writing means an unfinished draft/checklist may need to stay visible for several days instead of

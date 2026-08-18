@@ -150,9 +150,9 @@ Centered app mark and/or app name.
 
 **Write it. Say it. Keep it.**
 
-A private place for anything you want to put into words.
+A quiet place for anything you want to put into words.
 
-Type it or say it. As Told stays out of your way.
+Write it, say it, shape it your way.
 
 ### Layout
 

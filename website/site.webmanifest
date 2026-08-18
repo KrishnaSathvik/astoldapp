@@ -1,7 +1,7 @@
 {
   "name": "As Told",
   "short_name": "As Told",
-  "description": "Private notes, in your own words. Write it. Say it. Keep it.",
+  "description": "Anything you want to put into words. Write it. Say it. Keep it.",
   "icons": [
     { "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" }

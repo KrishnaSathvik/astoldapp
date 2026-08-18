@@ -13,7 +13,7 @@ struct AboutView: View {
                     .font(.ds.groupTitle)
                     .foregroundStyle(Color.ds.textPrimary)
 
-                Text("A private place for the thoughts you want to keep — by writing or speaking. No account. No noise. Your notes stay on your device.")
+                Text("A quiet place for anything you want to put into words — write it, say it, shape it your way. No account. No noise. Your notes stay on your device.")
                     .font(.ds.editorBody)
                     .foregroundStyle(Color.ds.textSecondary)
                     .multilineTextAlignment(.center)
