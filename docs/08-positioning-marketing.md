@@ -262,9 +262,12 @@ Served at `https://astold.app/og.png`, 1200×630, referenced from every page (`o
 - No App Store badge, no fake ratings, no emoji, no dashboard UI, no bottom tab bar, no per-note
   timestamps on Home, no note cards, no heavy shadows.
 
-**Shipped 2026-08-18** as `website/og.png` (1200×630, ~686 KB). Generated with `gpt-image-2` at
-1792×1024, then centre-cropped to 1.905:1 against the measured content bounds and resampled — no text
-or device edge is clipped. The device shot shows the structured-writing UI: a note preview, a real
+**Shipped 2026-08-18** as `website/og.png` (1200×630, ~691 KB). Generated with `gpt-image-2` at
+1792×1024, **with `Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png` supplied as a reference
+image** so the card carries the real app feather — its silhouette, lean, curving quill, chalky
+dry-brush texture and pale rachis line — not a model-invented mark. The faint background silhouette is
+the same feather. Fitted to 1.905:1 by height with edge-replicated side padding rather than cropped, so
+no lettering or device edge is lost. The device shot shows the structured-writing UI: a note preview, a real
 three-row checklist (two open, one ticked), and a draft, which is accurate now that structure ships.
 
 > An earlier prompt revision carried the retired headline *"Your thoughts, in your own words."* and a
