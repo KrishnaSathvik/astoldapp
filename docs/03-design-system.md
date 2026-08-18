@@ -26,8 +26,14 @@ A per-screen walkthrough lives in `docs/design-reference/README.md`.
 
 ### Brand mark & wordmark
 
-- **Mark:** a minimal **feather / quill** glyph, used on Splash, Welcome, and Lock. It appears in a
-  soft rounded-square app-tile treatment on Splash, and as a bare glyph on Welcome/Lock.
+- **Mark:** the **feather** glyph, used on Splash, Welcome, Lock, and About. It appears in a
+  soft rounded-square app-tile treatment on Splash, and as a bare glyph elsewhere.
+  **It is the same artwork as the app icon and the OG card** — one feather across every surface
+  (`Core/DesignSystem/FeatherMark.swift`, `Resources/Assets.xcassets/FeatherMark.imageset`), derived
+  from `AppIcon.appiconset/icon-1024.png`. It ships as a **template** image: the artwork lives in the
+  alpha channel, so the chalky texture and pale rachis are opacity rather than colour, and a single
+  asset tints to `Color.ds.accent` and inverts correctly in Dark Mode. The mark is sized by **height**
+  (~0.65 as wide); do not re-draw it as a vector path.
 - **Wordmark:** the word **As Told** rendered in an **elegant serif** logotype (the reference PNG still
   shows the older "Yourly" wordmark; the locked name is **As Told** — see `README.md` §2).
 - **Important — this does not change the "no custom font in V1" rule.** The serif is a **brand

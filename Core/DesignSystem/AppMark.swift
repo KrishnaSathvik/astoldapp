@@ -4,7 +4,7 @@ import SwiftUI
 /// The serif is a brand logotype only, NOT a UI text font. See RULES.md §4, docs/03-design-system.md §0.
 struct AppMark: View {
     var showsWordmark = true
-    var markSize: CGFloat = 44
+    var markSize: CGFloat = 64   // height; the mark is ~0.65 as wide (see FeatherMark)
 
     var body: some View {
         VStack(spacing: DSSpacing.s4) {

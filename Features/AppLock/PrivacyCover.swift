@@ -6,7 +6,7 @@ struct PrivacyCover: View {
     var body: some View {
         ZStack {
             Color.ds.canvas.ignoresSafeArea()
-            AppMark(markSize: 40)
+            AppMark(markSize: 58)
         }
     }
 }
