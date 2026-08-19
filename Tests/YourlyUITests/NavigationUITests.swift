@@ -121,6 +121,17 @@ final class NavigationUITests: XCTestCase {
 
         tap(app.buttons["Privacy"], "Privacy row")
         XCTAssertTrue(app.navigationBars["Privacy"].waitForExistence(timeout: 8), "Privacy should push")
+
+        // App Review 5.1.1(i) wants the policy reachable from inside the app, and the permanent
+        // voice explanation has to be findable without waiting for the one-time disclosure.
+        XCTAssertTrue(app.buttons["Privacy Policy"].waitForExistence(timeout: 8),
+                      "Privacy should link out to the hosted policy")
+
+        tap(app.buttons["Voice Transcription"], "Voice Transcription row")
+        XCTAssertTrue(app.navigationBars["Voice Transcription"].waitForExistence(timeout: 8),
+                      "Voice Transcription detail should push")
+        back(app)
+        XCTAssertTrue(app.navigationBars["Privacy"].waitForExistence(timeout: 8), "Back to Privacy")
     }
 
     /// Apple's automated audit, scoped to the types we enforce: hit-region size + sufficient element

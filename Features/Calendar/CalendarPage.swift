@@ -39,14 +39,8 @@ struct CalendarPage: View {
                 dismiss()
             }
 
-            Button {
-                onSelectDay(calendar.startOfDay(for: .now))
-                dismiss()
-            } label: {
-                Label("Go to Today", systemImage: "arrow.uturn.backward")
-                    .font(.ds.preview)
-                    .foregroundStyle(Color.ds.accent)
-            }
+            // No "Go to Today": back already returns to the timeline, which opens on today.
+            // A second way out of one small screen is one control too many (RULES.md §4).
 
             Spacer()
         }
