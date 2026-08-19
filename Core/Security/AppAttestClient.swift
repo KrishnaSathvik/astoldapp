@@ -12,6 +12,13 @@ import CryptoKit
 /// `clientDataHash` (`src/security/attestation.ts`). Any failure yields no headers rather than an
 /// error: the relay then answers 401, which the UI already maps to `serviceUnavailable`.
 actor AppAttestClient {
+    /// The attestation handshake is two tiny JSON round trips that stand between the user and the
+    /// "Transcribing" spinner, so they get their own short deadline. URLSession's 60 s default meant
+    /// an unreachable relay held the spinner for a minute *before* the upload even started, then
+    /// another minute on the upload. The upload keeps the long timeout it needs — see
+    /// `RelayTranscriptionService`.
+    static let handshakeTimeout: TimeInterval = 12
+
     private let baseURL: URL
     private let session: URLSession
     private let keys: AppAttestKeyProviding
@@ -32,7 +39,13 @@ actor AppAttestClient {
     }
 
     /// Headers for one transcription request, or empty when attestation is unavailable.
-    func headers() async -> [String: String] {
+    ///
+    /// A *network* failure is rethrown as a `TranscriptionError`: the relay is unreachable, so
+    /// uploading the audio anyway would only spend another timeout to learn the same thing, and the
+    /// user would be told "couldn't transcribe" instead of "not responding". Anything else — an
+    /// unsupported device, a rejected attestation — still yields no headers, leaving the decision
+    /// to the relay exactly as before.
+    func headers() async throws -> [String: String] {
         guard keys.isSupported else { return [:] }
         do {
             let keyID = try await registeredKeyID()
@@ -44,6 +57,8 @@ actor AppAttestClient {
                 "x-attest-assertion": assertion.base64EncodedString(),
                 "x-attest-challenge": challenge,
             ]
+        } catch let error as TranscriptionError {
+            throw error
         } catch {
             return [:]
         }
@@ -76,6 +91,7 @@ actor AppAttestClient {
 
         var request = URLRequest(url: baseURL.appending(path: "v1/app-attest/register"))
         request.httpMethod = "POST"
+        request.timeoutInterval = Self.handshakeTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode([
             "keyId": keyID,
@@ -96,6 +112,7 @@ actor AppAttestClient {
     private func fetchChallenge() async throws -> String {
         var request = URLRequest(url: baseURL.appending(path: "v1/app-attest/challenge"))
         request.httpMethod = "POST"
+        request.timeoutInterval = Self.handshakeTimeout
         let data = try await send(request)
         return try JSONDecoder().decode(ChallengeResponse.self, from: data).challenge
     }
@@ -105,7 +122,14 @@ actor AppAttestClient {
     private enum Failure: Error { case rejected }
 
     private func send(_ request: URLRequest) async throws -> Data {
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch let error as URLError {
+            // Transport failure, not an attestation verdict — surfaced so the caller can stop.
+            throw TranscriptionError.transport(error)
+        }
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw Failure.rejected
         }

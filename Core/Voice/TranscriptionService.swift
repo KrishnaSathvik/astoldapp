@@ -30,9 +30,28 @@ enum TranscriptionError: Error, Equatable, Sendable {
     /// follows the server's configuration instead of restating a number the app guessed.
     case recordingTooLong(maxSeconds: Int)
     case rateLimited
+    /// The relay took too long, or could not be reached at all. Distinct from `offline`: the device
+    /// has a connection, the service is simply not answering — and distinct from the generic
+    /// `serviceUnavailable`, because retrying in a moment is the useful advice.
+    case timedOut
     case serviceUnavailable
     case invalidResponse
     case cancelled
+}
+
+extension TranscriptionError {
+    /// One mapping of URLSession transport failures, shared by every network hop in the voice flow
+    /// (attestation handshake and the upload itself), so both report the same thing to the user.
+    static func transport(_ error: URLError) -> TranscriptionError {
+        switch error.code {
+        case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed:
+            return .offline
+        case .timedOut, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+            return .timedOut
+        default:
+            return .serviceUnavailable
+        }
+    }
 }
 
 /// Transcribes a completed recording. The service never mutates the note — the editor owns insertion

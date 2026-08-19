@@ -177,6 +177,7 @@ struct RecordingPanel: View {
     private func message(for error: TranscriptionError) -> String {
         switch error {
         case .offline: return "A connection is needed to transcribe this recording."
+        case .timedOut: return "The transcription service isn't responding. Your recording is safe — try again."
         case .noSpeech: return "No speech was detected."
         case .rateLimited: return "Too many requests. Try again in a moment."
         case .requestTooLarge: return "That recording is too large to send."

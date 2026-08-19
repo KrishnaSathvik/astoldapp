@@ -13,8 +13,10 @@ struct RelayTranscriptionService: TranscriptionService {
 
     let baseURL: URL
     var session: URLSession = .shared
-    /// Optional App Attest headers provider (production). Returns header fields to attach per request.
-    var attestationHeaders: @Sendable (_ requestID: UUID) async -> [String: String] = { _ in [:] }
+    /// Optional App Attest headers provider (production). Returns header fields to attach per
+    /// request, and throws a `TranscriptionError` when the relay could not be reached at all — the
+    /// upload is then skipped rather than spending a second timeout to learn the same thing.
+    var attestationHeaders: @Sendable (_ requestID: UUID) async throws -> [String: String] = { _ in [:] }
     /// Called when the relay rejects the attestation, so the client can re-register before retrying.
     var attestationRejected: @Sendable () async -> Void = {}
 
@@ -35,13 +37,22 @@ struct RelayTranscriptionService: TranscriptionService {
             throw TranscriptionError.invalidResponse
         }
 
+        // The handshake is deliberately *not* on the upload's clock: it is two tiny round trips with
+        // a short deadline (`AppAttestClient.handshakeTimeout`), while the upload below carries
+        // minutes of audio and waits on the transcription itself.
+        let headers = try await attestationHeaders(requestID)
+
         let boundary = "yourly-\(UUID().uuidString)"
         var request = URLRequest(url: baseURL.appending(path: "v1/transcriptions"))
         request.httpMethod = "POST"
-        request.timeoutInterval = 60
+        // Idle-time budget for uploading the recording and waiting on the transcription. Long on
+        // purpose: the relay accepts up to `VoiceLimits.maxRecordingSeconds` of audio, and a long
+        // recording legitimately takes far more than a handshake's worth of time to come back.
+        // Confirm the real ceiling against the live relay on device before release.
+        request.timeoutInterval = Self.uploadTimeout
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.setValue(requestID.uuidString, forHTTPHeaderField: "x-request-id")
-        for (k, v) in await attestationHeaders(requestID) { request.setValue(v, forHTTPHeaderField: k) }
+        for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
         request.httpBody = Self.multipartBody(audio: data, filename: audioURL.lastPathComponent, boundary: boundary)
 
         let responseData: Data
@@ -51,8 +62,8 @@ struct RelayTranscriptionService: TranscriptionService {
             responseData = d
             guard let http = r as? HTTPURLResponse else { throw TranscriptionError.invalidResponse }
             httpResponse = http
-        } catch let error as URLError where error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
-            throw TranscriptionError.offline
+        } catch let error as URLError {
+            throw TranscriptionError.transport(error)
         } catch let error as TranscriptionError {
             throw error
         } catch {
@@ -93,6 +104,9 @@ struct RelayTranscriptionService: TranscriptionService {
             throw TranscriptionError.serviceUnavailable
         }
     }
+
+    /// Idle timeout for the upload + transcription round trip. Not the handshake's short deadline.
+    static let uploadTimeout: TimeInterval = 180
 
     static func multipartBody(audio: Data, filename: String, boundary: String) -> Data {
         var body = Data()

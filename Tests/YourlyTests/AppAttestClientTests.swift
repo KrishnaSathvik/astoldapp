@@ -131,7 +131,7 @@ struct AppAttestClientTests {
     @Test func firstCallRegistersTheKeyAndReturnsAllThreeHeaders() async throws {
         AttestStubURLProtocol.reset()
         let keys = FakeAttestKeys()
-        let headers = await makeClient(keys: keys).headers()
+        let headers = try await makeClient(keys: keys).headers()
 
         #expect(headers["x-attest-key-id"] == "key-1")
         #expect(headers["x-attest-challenge"] == AttestStubURLProtocol.issuedChallenges.last)
@@ -143,7 +143,7 @@ struct AppAttestClientTests {
     @Test func attestationSignsSHA256OfTheIssuedChallenge() async throws {
         AttestStubURLProtocol.reset()
         let keys = FakeAttestKeys()
-        _ = await makeClient(keys: keys).headers()
+        _ = try await makeClient(keys: keys).headers()
 
         let registerChallenge = try #require(AttestStubURLProtocol.registerBodies.first?["challenge"])
         let expected = Data(SHA256.hash(data: Data(registerChallenge.utf8)))
@@ -153,7 +153,7 @@ struct AppAttestClientTests {
     @Test func assertionSignsSHA256OfTheChallengeSentInTheHeader() async throws {
         AttestStubURLProtocol.reset()
         let keys = FakeAttestKeys()
-        let headers = await makeClient(keys: keys).headers()
+        let headers = try await makeClient(keys: keys).headers()
 
         let sent = try #require(headers["x-attest-challenge"])
         let expected = Data(SHA256.hash(data: Data(sent.utf8)))
@@ -164,8 +164,8 @@ struct AppAttestClientTests {
         AttestStubURLProtocol.reset()
         let keys = FakeAttestKeys()
         let client = makeClient(keys: keys)
-        _ = await client.headers()
-        let second = await client.headers()
+        _ = try await client.headers()
+        let second = try await client.headers()
 
         #expect(await keys.generateKeyCalls == 1)
         #expect(AttestStubURLProtocol.registerBodies.count == 1)
@@ -176,8 +176,8 @@ struct AppAttestClientTests {
     @Test func eachRequestCarriesAFreshChallenge() async throws {
         AttestStubURLProtocol.reset()
         let client = makeClient(keys: FakeAttestKeys())
-        let first = await client.headers()
-        let second = await client.headers()
+        let first = try await client.headers()
+        let second = try await client.headers()
 
         #expect(first["x-attest-challenge"] != second["x-attest-challenge"])
     }
@@ -185,7 +185,7 @@ struct AppAttestClientTests {
     @Test func persistedKeyIDSkipsRegistrationOnANewClient() async throws {
         AttestStubURLProtocol.reset()
         let keys = FakeAttestKeys()
-        let headers = await makeClient(keys: keys, storage: MemoryKeyIDStorage(keyID: "stored-key")).headers()
+        let headers = try await makeClient(keys: keys, storage: MemoryKeyIDStorage(keyID: "stored-key")).headers()
 
         #expect(headers["x-attest-key-id"] == "stored-key")
         #expect(await keys.generateKeyCalls == 0)
@@ -194,7 +194,7 @@ struct AppAttestClientTests {
 
     @Test func unsupportedDeviceReturnsNoHeaders() async throws {
         AttestStubURLProtocol.reset()
-        let headers = await makeClient(keys: FakeAttestKeys(isSupported: false)).headers()
+        let headers = try await makeClient(keys: FakeAttestKeys(isSupported: false)).headers()
 
         #expect(headers.isEmpty)
         #expect(AttestStubURLProtocol.issuedChallenges.isEmpty)
@@ -204,7 +204,7 @@ struct AppAttestClientTests {
         AttestStubURLProtocol.reset()
         AttestStubURLProtocol.registerStatus = 401
         let storage = MemoryKeyIDStorage()
-        let headers = await makeClient(keys: FakeAttestKeys(), storage: storage).headers()
+        let headers = try await makeClient(keys: FakeAttestKeys(), storage: storage).headers()
 
         #expect(headers.isEmpty)
         #expect(storage.loadKeyID() == nil)
@@ -212,7 +212,7 @@ struct AppAttestClientTests {
 
     @Test func failedAttestationReturnsNoHeaders() async throws {
         AttestStubURLProtocol.reset()
-        let headers = await makeClient(keys: FakeAttestKeys(attestFails: true)).headers()
+        let headers = try await makeClient(keys: FakeAttestKeys(attestFails: true)).headers()
 
         #expect(headers.isEmpty)
     }
@@ -271,5 +271,88 @@ struct AppAttestWiringTests {
         }
 
         #expect(storage.loadKeyID() == nil)
+    }
+}
+
+/// A URL stub that fails every request with a chosen transport error, standing in for a relay that
+/// is simply not answering.
+final class FailingTransportURLProtocol: URLProtocol {
+    nonisolated(unsafe) static var code: URLError.Code = .timedOut
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+    override func startLoading() {
+        client?.urlProtocol(self, didFailWithError: URLError(Self.code))
+    }
+}
+
+private func makeFailingSession(_ code: URLError.Code) -> URLSession {
+    FailingTransportURLProtocol.code = code
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [FailingTransportURLProtocol.self]
+    return URLSession(configuration: config)
+}
+
+/// An unreachable relay must fail *fast* and say something true, rather than holding the
+/// "Transcribing" spinner through two full 60-second URLSession defaults.
+struct AttestationTimeoutTests {
+    private func client(_ code: URLError.Code) -> AppAttestClient {
+        AppAttestClient(baseURL: URL(string: "https://relay.test")!,
+                        session: makeFailingSession(code),
+                        keys: FakeAttestKeys(),
+                        storage: MemoryKeyIDStorage())
+    }
+
+    @Test func handshakeCarriesAShortExplicitDeadline() {
+        // The upload needs minutes; the two-round-trip handshake in front of it must not.
+        #expect(AppAttestClient.handshakeTimeout <= 15)
+        #expect(AppAttestClient.handshakeTimeout >= 5)
+        #expect(RelayTranscriptionService.uploadTimeout > AppAttestClient.handshakeTimeout)
+    }
+
+    @Test func anUnreachableRelayReportsTimedOutRatherThanNoHeaders() async {
+        await #expect(throws: TranscriptionError.timedOut) {
+            _ = try await client(.timedOut).headers()
+        }
+    }
+
+    @Test func aRefusedConnectionAlsoReportsTimedOut() async {
+        await #expect(throws: TranscriptionError.timedOut) {
+            _ = try await client(.cannotConnectToHost).headers()
+        }
+    }
+
+    @Test func noConnectionReportsOfflineNotTimedOut() async {
+        await #expect(throws: TranscriptionError.offline) {
+            _ = try await client(.notConnectedToInternet).headers()
+        }
+    }
+
+    /// A device that cannot attest at all is not a network failure — the relay still decides.
+    @Test func unsupportedDeviceStillReturnsNoHeadersWithoutThrowing() async throws {
+        let unsupported = AppAttestClient(baseURL: URL(string: "https://relay.test")!,
+                                          session: makeFailingSession(.timedOut),
+                                          keys: FakeAttestKeys(isSupported: false),
+                                          storage: MemoryKeyIDStorage())
+        #expect(try await unsupported.headers().isEmpty)
+    }
+
+    /// The upload must never be attempted once the handshake proved the relay unreachable.
+    @Test func theUploadIsSkippedWhenTheHandshakeFails() async {
+        AttestStubURLProtocol.reset()
+        var service = RelayTranscriptionService(baseURL: URL(string: "https://relay.test")!,
+                                                session: makeSession())
+        service.attestationHeaders = { _ in throw TranscriptionError.timedOut }
+
+        let audio = FileManager.default.temporaryDirectory
+            .appendingPathComponent("attest-timeout-\(UUID().uuidString).m4a")
+        try? Data("audio".utf8).write(to: audio)
+        defer { try? FileManager.default.removeItem(at: audio) }
+
+        await #expect(throws: TranscriptionError.timedOut) {
+            _ = try await service.transcribe(audioURL: audio, requestID: UUID())
+        }
+        #expect(AttestStubURLProtocol.transcribeHeaders.isEmpty, "no upload should have been made")
     }
 }

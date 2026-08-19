@@ -32,7 +32,7 @@ enum TranscriptionConfig {
     ) -> RelayTranscriptionService {
         let attest = AppAttestClient(baseURL: baseURL, session: session, keys: keys, storage: storage)
         var service = RelayTranscriptionService(baseURL: baseURL, session: session)
-        service.attestationHeaders = { _ in await attest.headers() }
+        service.attestationHeaders = { _ in try await attest.headers() }
         service.attestationRejected = { await attest.invalidateRegistration() }
         return service
     }
