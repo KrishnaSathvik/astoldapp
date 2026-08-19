@@ -1,4 +1,5 @@
 import type { Config } from '../src/config.js';
+import { Writable } from 'node:stream';
 import { buildServer, type Deps } from '../src/server.js';
 import { DevBypassVerifier } from '../src/security/attestation.js';
 import { InMemoryRateLimiter } from '../src/security/rateLimit.js';
@@ -37,8 +38,33 @@ export function buildTestServer(opts: {
     limiter:
       opts.deps?.limiter ??
       new InMemoryRateLimiter(config.RATE_LIMIT_MAX, config.RATE_LIMIT_WINDOW_SECONDS * 1000),
+    ...(opts.deps?.logDestination ? { logDestination: opts.deps.logDestination } : {}),
   };
   return buildServer(deps);
+}
+
+/**
+ * Captures the relay's real log output. Records go through the production serializers and redaction
+ * in `loggerOptions`, so assertions here are about what would genuinely be written to a log sink.
+ */
+export function captureLogs(): { records: () => Record<string, unknown>[]; raw: () => string; destination: Writable } {
+  let buffer = '';
+  const destination = new Writable({
+    write(chunk, _encoding, callback) {
+      buffer += chunk.toString();
+      callback();
+    },
+  });
+
+  return {
+    raw: () => buffer,
+    records: () =>
+      buffer
+        .split('\n')
+        .filter((line) => line.trim().length > 0)
+        .map((line) => JSON.parse(line) as Record<string, unknown>),
+    destination,
+  };
 }
 
 /** Build a minimal multipart body with a single audio file part. */

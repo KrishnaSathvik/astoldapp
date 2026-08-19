@@ -5,10 +5,17 @@ import type { FastifyServerOptions } from 'fastify';
  * coarse error category — and NEVER audio, transcript, note title/body, or search terms
  * (RULES.md §3, docs/05-architecture.md §22). We redact aggressively and never log request bodies.
  */
-export function loggerOptions(nodeEnv: string): FastifyServerOptions['logger'] {
-  if (nodeEnv === 'test') return false;
+export function loggerOptions(
+  nodeEnv: string,
+  destination?: NodeJS.WritableStream,
+): FastifyServerOptions['logger'] {
+  // Silent under test unless a test explicitly asks for the output — the metadata-only guarantee is
+  // worth asserting against real log records, and that only proves anything if the records come
+  // through this exact configuration rather than a stand-in logger.
+  if (nodeEnv === 'test' && destination === undefined) return false;
   return {
     level: process.env.LOG_LEVEL ?? 'info',
+    ...(destination ? { stream: destination } : {}),
     // Never serialize bodies; only safe request/response metadata.
     serializers: {
       req(req) {

@@ -14,12 +14,20 @@ primary_region = "ord"   # Chicago. Use `fly platform regions` to pick one neare
   # Start deliberately low while testing; raise once real usage is understood.
   RATE_LIMIT_MAX = "5"
   RATE_LIMIT_WINDOW_SECONDS = "60"
-  # Step 1 runs without attestation. Flip to "true" (see DEPLOY.md) once a device registers.
-  APP_ATTEST_REQUIRED = "false"
+  # The authoritative cost bound on a single request. The byte cap does NOT bound minutes — 25 MB of
+  # low-bitrate AAC is hours of audio — and OpenAI bills per minute, so this is what caps the spend.
+  # Measured server-side from the container, before the paid call (src/media/audioDuration.ts).
+  MAX_DURATION_SECONDS = "600"
+  MAX_AUDIO_BYTES = "26214400"
+  # Attestation is REQUIRED. APP_ATTEST_ALLOW_UNPROTECTED is deliberately absent: with it gone,
+  # `loadConfig` refuses to boot a production relay that has attestation off, so an open paid
+  # endpoint becomes a startup failure rather than a silent risk. Do not re-add it.
+  APP_ATTEST_REQUIRED = "true"
+  # Must match the entitlement the installed build is signed with:
+  #   "false" → App/Yourly.Debug.entitlements   (development AAGUID, "appattestdevelop")
+  #   "true"  → App/Yourly.Release.entitlements (production AAGUID, "appattest")
+  # DEPLOY.md stage 2 verifies against a Debug build first; flip to "true" for TestFlight/Release.
   APP_ATTEST_PRODUCTION = "false"
-  # RELEASE GATE: delete this line at stage 2. The relay refuses to boot in production without it
-  # while attestation is off, so an open transcription endpoint cannot ship by accident.
-  APP_ATTEST_ALLOW_UNPROTECTED = "true"
   # Attested keys + assertion counters, on the mounted volume below. Apple's replay defence is the
   # ever-increasing counter, which only works if it outlives the process.
   APP_ATTEST_DB_PATH = "/data/app-attest.db"

@@ -450,7 +450,9 @@ Source: `docs/06-tech-stack.md`.
   URLSession, DeviceCheck/App Attest, `@AppStorage`, OSLog, MetricKit, SF Symbols, String Catalogs
   (`.xcstrings`), Swift Testing (+ XCUITest where needed). Recommended min target **iOS 26+** _(V1)_.
 - Backend: Node.js 24 LTS, TypeScript, Fastify, Zod/schema validation, official OpenAI Node SDK,
-  model `gpt-transcribe`, Redis-backed rate limit if needed, App Attest verification, metadata-only logs.
+  model `gpt-4o-transcribe`, Redis-backed rate limit if needed, App Attest verification, metadata-only
+  logs. `gpt-transcribe` is a benchmark candidate and must not replace production until the
+  multilingual quality gate passes (§8).
 - Audio: AVFoundation, prefer `AVAudioRecorder`, temporary `.m4a` mono AAC, level metering. Do NOT
   downsample so aggressively that recognition quality suffers.
 - Networking: URLSession + Codable. No Alamofire. Timeout, cancellation, correlation/request ID, typed

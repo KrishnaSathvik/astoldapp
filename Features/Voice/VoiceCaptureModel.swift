@@ -22,11 +22,18 @@ final class VoiceCaptureModel {
     private var recordedURL: URL?
     private var work: Task<Void, Never>?
 
+    /// Client-side mirror of the relay's duration limit. The relay is still the authority — this
+    /// only spares the user from talking past a limit that would reject the upload anyway.
+    private let maxRecordingDuration: Duration
+    private var limitTask: Task<Void, Never>?
+
     init(recorder: AudioRecording,
          service: TranscriptionService,
+         maxRecordingDuration: Duration = VoiceLimits.maxRecordingDuration,
          onTranscript: @escaping (String) -> Void) {
         self.recorder = recorder
         self.service = service
+        self.maxRecordingDuration = maxRecordingDuration
         self.onTranscript = onTranscript
     }
 
@@ -39,6 +46,7 @@ final class VoiceCaptureModel {
             recorder.onInterruption = { [weak self] in self?.done() }
             recordedURL = try recorder.start()
             phase = .recording
+            startLimitTimer()
         } catch {
             phase = .failed(.serviceUnavailable)
         }
@@ -47,6 +55,8 @@ final class VoiceCaptureModel {
     /// Stop recording and transcribe.
     func done() {
         guard phase == .recording else { return }
+        limitTask?.cancel()
+        limitTask = nil
         guard let url = recorder.stop() else { phase = .failed(.noSpeech); return }
         recordedURL = url
         transcribe(url)
@@ -54,6 +64,8 @@ final class VoiceCaptureModel {
 
     /// Abort the whole capture and delete the temporary audio.
     func cancel() {
+        limitTask?.cancel()
+        limitTask = nil
         work?.cancel()
         recorder.cancel()
         recordedURL = nil
@@ -68,6 +80,8 @@ final class VoiceCaptureModel {
 
     /// Discard after a failure: delete the temporary file and reset.
     func discard() {
+        limitTask?.cancel()
+        limitTask = nil
         work?.cancel()
         if let url = recordedURL { recorder.cleanup(url) }
         recordedURL = nil
@@ -75,6 +89,18 @@ final class VoiceCaptureModel {
     }
 
     func refreshLevel() { level = recorder.level }
+
+    /// Stop at the limit the way the user would: finish the recording and transcribe what was
+    /// captured. The audio is never discarded — reaching the cap means the words are already said,
+    /// and dropping them would be the one outcome worse than a rejected upload.
+    private func startLimitTimer() {
+        limitTask?.cancel()
+        limitTask = Task { [maxRecordingDuration] in
+            try? await Task.sleep(for: maxRecordingDuration)
+            guard !Task.isCancelled, phase == .recording else { return }
+            done()
+        }
+    }
 
     private func transcribe(_ url: URL) {
         phase = .transcribing

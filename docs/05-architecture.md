@@ -45,9 +45,11 @@ The architecture must optimize for:
                 v
 ┌───────────────────────────────────────┐
 │        OpenAI Transcription API       │
-│            gpt-transcribe             │
+│           gpt-4o-transcribe           │
 └───────────────────────────────────────┘
 ```
+
+> Production currently uses `gpt-4o-transcribe`. `gpt-transcribe` is a benchmark candidate and must not replace production until the multilingual quality gate passes (`docs/benchmark/README.md`, RULES.md §8).
 
 ---
 
@@ -679,13 +681,19 @@ enum TranscriptionError: Error {
     case microphonePermissionDenied
     case noSpeech
     case offline
-    case requestTooLarge
+    case requestTooLarge                  // over the relay's byte cap
+    case recordingTooLong(maxSeconds: Int) // over the relay's duration cap
     case rateLimited
     case serviceUnavailable
     case invalidResponse
     case cancelled
 }
 ```
+
+`requestTooLarge` and `recordingTooLong` both arrive as HTTP 413; the relay's `error` field separates
+them, because "too long" and "too large" are different problems for the user. `recordingTooLong`
+carries the relay's own limit so the copy follows the server's configuration rather than restating a
+number the app guessed (docs/04-voice-transcription.md §7).
 
 UI maps domain errors to concise human copy.
 

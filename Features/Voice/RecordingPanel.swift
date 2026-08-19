@@ -149,9 +149,20 @@ struct RecordingPanel: View {
         case .offline: return "A connection is needed to transcribe this recording."
         case .noSpeech: return "No speech was detected."
         case .rateLimited: return "Too many requests. Try again in a moment."
-        case .requestTooLarge: return "That recording is too long."
+        case .requestTooLarge: return "That recording is too large to send."
+        case .recordingTooLong(let maxSeconds): return Self.lengthLimitMessage(maxSeconds: maxSeconds)
         default: return "Couldn't transcribe that recording."
         }
+    }
+
+    /// "Recordings can be up to 10 minutes." — stated in the relay's units, not a hard-coded number,
+    /// so changing the server limit changes the copy with it.
+    static func lengthLimitMessage(maxSeconds: Int) -> String {
+        let minutes = maxSeconds / 60
+        guard minutes >= 1, maxSeconds % 60 == 0 else {
+            return "Recordings can be up to \(maxSeconds) seconds."
+        }
+        return "Recordings can be up to \(minutes) minute\(minutes == 1 ? "" : "s")."
     }
 
     private func retryLabel(for error: TranscriptionError) -> String {

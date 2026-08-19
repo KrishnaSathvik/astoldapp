@@ -1,36 +1,70 @@
 # Deploying the relay
 
-> **Live:** `https://as-told-relay.fly.dev` (org `personal`, region `ord`, 1 machine).
-> Currently at **stage 1** — `APP_ATTEST_REQUIRED=false`, so the endpoint is unauthenticated.
-> Stage 2 is a **release blocker**: a public build must not ship against an open, paid endpoint.
+> **Currently OFFLINE.** `as-told-relay` is scaled to **0 machines** (19 Aug 2026). The hostname
+> `https://as-told-relay.fly.dev` resolves but nothing answers — both `/health` and
+> `/v1/transcriptions` time out. This is deliberate: the app is unreleased, and the relay had been
+> running with `APP_ATTEST_REQUIRED=false`, which let anonymous callers reach paid OpenAI inference.
+>
+> **Do not run `fly deploy` to test one component.** `min_machines_running = 1` means any deploy
+> recreates the machine. Prepare the whole secured configuration offline, then bring it back **once**.
+>
+> Stopping the machine is *not* enough on its own: `auto_start_machines = true` resurrects it on the
+> first request (measured: 6.3 s, and the request still reached OpenAI). `fly scale count 0` is what
+> actually closes it.
 
-Three stages. Do them in order — each one proves something the next depends on.
-Nothing here is done until a **real iPhone** has completed stage 2; the Simulator cannot attest.
+The original staged rollout (open endpoint first, attestation second) is superseded. Because the
+relay is already offline and the app is not released, there is nothing to be gained by resurrecting
+an unauthenticated service. Deploy the secured configuration in one step, then verify on a **real
+iPhone** — the Simulator cannot attest.
 
 ## Prerequisites
 
 - A Fly.io account, and `flyctl` authenticated: `fly auth login` (opens a browser).
 - Your OpenAI key, already present in `transcription-service/.env`.
-- Your Apple **Team ID** (Apple Developer → Membership) for stage 3.
+- Your Apple **Team ID** (Apple Developer → Membership) — needed in stage 1, before the deploy.
 
 ---
 
-## Stage 1 — Deploy without attestation, prove real transcription
+## Stage 1 — Prepare the secured configuration (relay stays at 0 machines)
+
+Everything here is done **offline**. No `fly deploy`, no machine.
+
+**Done already (19 Aug 2026):**
+
+- [x] Duration guard committed — `src/media/audioDuration.ts` measures the recording server-side,
+      before the paid call, and fails closed on audio it cannot read.
+- [x] `fly.toml` hardened — `MAX_DURATION_SECONDS=600`, `MAX_AUDIO_BYTES`, `APP_ATTEST_REQUIRED=true`,
+      `APP_ATTEST_DB_PATH=/data/app-attest.db`, and `APP_ATTEST_ALLOW_UNPROTECTED` **deleted**.
+      With that line gone, `loadConfig` refuses to boot a production relay that has attestation off,
+      so an open paid endpoint is now a startup failure rather than a silent risk. Do not re-add it.
+- [x] Durable volume created — `attest_data`, 1 GB, `ord`, encrypted (`vol_vp2xzq27zyz581w4`),
+      unattached until the deploy.
+- [x] Relay suite green offline — 84 tests, 8 files; `tsc --noEmit` clean.
+- [x] The real `fly.toml` `[env]` block validated against `loadConfig`: it boots in the secure shape,
+      and is **refused** both with attestation off and with attestation on but no durable registry.
+
+**Still required before the deploy:**
 
 ```bash
-cd transcription-service
-fly launch --no-deploy --copy-config --name as-told-relay   # edit fly.toml's app name if taken
-fly secrets set OPENAI_API_KEY="$(grep '^OPENAI_API_KEY=' .env | cut -d= -f2-)"
-fly deploy
-fly status                     # note the hostname, e.g. as-told-relay.fly.dev
-curl -s https://as-told-relay.fly.dev/health
+# Your Apple Team ID (Apple Developer → Membership). Secrets, not fly.toml.
+fly secrets set APP_ATTEST_APP_ID="TEAMID.com.astold.app" --stage --app as-told-relay
+fly secrets list --app as-told-relay    # expect OPENAI_API_KEY + APP_ATTEST_APP_ID
 ```
 
-`fly.toml` already sets `APP_ATTEST_REQUIRED=false` and `RATE_LIMIT_MAX=5`. The endpoint is
-**unauthenticated at this stage** — anyone with the URL can spend your OpenAI credit. Keep the URL
-private and keep the stage short.
+`--stage` writes the secret without triggering a deploy, which is the point — the machine stays gone
+until the whole configuration is ready.
 
-Point the app at it:
+`APP_ATTEST_PRODUCTION` must match the entitlement the installed build is signed with:
+
+| Build | Entitlement | `APP_ATTEST_PRODUCTION` | AAGUID |
+|---|---|---|---|
+| Debug / device-attached | `App/Yourly.Debug.entitlements` | `false` | `appattestdevelop` |
+| TestFlight / App Store | `App/Yourly.Release.entitlements` | `true` | `appattest` |
+
+`fly.toml` currently ships `false`, so verification runs against a Debug build first. Flip it before
+the TestFlight build, or attestation fails with an AAGUID error.
+
+Point the app at the relay (already done — verify rather than re-do):
 
 ```yaml
 # project.yml → targets.Yourly.info.properties
@@ -42,60 +76,44 @@ info:
     TranscribeBaseURL: "https://as-told-relay.fly.dev"
 ```
 
-Verify the key actually shipped (an empty result means the app will use the fake):
-
 ```bash
-plutil -p build/dd/Build/Products/Debug-iphonesimulator/Yourly.app/Info.plist | grep Transcribe
+# An empty result means the app would silently fall back to FakeTranscriptionService.
+plutil -p <built>/Yourly.app/Info.plist | grep Transcribe
 ```
 
-```bash
-cd .. && xcodegen generate
-```
+## Stage 2 — Bring the relay back, once, secured
 
-Build to a real iPhone, record a mixed Telugu/English sentence, confirm the transcript is inserted
-at the cursor. Verify no content leaked into the logs:
+Everything in stage 1 must be done first. This is the **only** deploy — do not deploy earlier to
+test one component, because any deploy recreates the machine (`min_machines_running = 1`).
 
-```bash
-fly logs | grep -iE "text|transcript"   # must return nothing
-```
+The attested-key registry is durable (`src/security/attestedKeyStore.ts`, SQLite on `/data`) because
+Apple's replay defence is an ever-increasing assertion counter: it only rejects a replayed assertion
+if the counter it is compared against outlived the process. Challenges stay in-process by design.
 
-## Stage 2 — Turn on App Attest
-
-Release-blocking: a public build must not ship against an unauthenticated transcription endpoint.
-
-Requires stage 1 working, **exactly one machine**, and **a mounted volume**. The attested-key
-registry is now durable (`src/security/attestedKeyStore.ts`, SQLite on `/data`) because Apple's
-replay defence is an ever-increasing assertion counter — it only rejects a replayed assertion if the
-counter it is compared against outlived the process. Challenges remain in-process by design.
-
-Still one machine: challenges are per-process, and so is the rate limiter. A challenge issued by
-machine A cannot be consumed by machine B, so roughly half of all requests would 401 and the app
-would re-register in a loop that never converges.
+**Exactly one machine.** Challenges are per-process, and so is the rate limiter. A challenge issued
+by machine A cannot be consumed by machine B, so roughly half of all requests would 401 and the app
+would re-register in a loop that never converges. Do not raise the count without Redis (stage 3).
 
 ```bash
-fly volumes create attest_data --size 1 --region ord --app as-told-relay
-fly scale count 1 --app as-told-relay   # already applied
-fly status --app as-told-relay          # expect a single machine
+fly scale count 1 --app as-told-relay   # recreates the machine and attaches attest_data
+fly status --app as-told-relay          # expect one machine, volume attached
 ```
 
-`fly.toml` already declares the `[[mounts]]` and `APP_ATTEST_DB_PATH=/data/app-attest.db`.
-`APP_ATTEST_PRODUCTION` must match the entitlement the build is signed with —
-`App/Yourly.Debug.entitlements` is `development`, `App/Yourly.Release.entitlements` is `production`.
-A mismatch fails with an AAGUID error.
+If `loadConfig` rejects the environment the machine will fail to start — that is the safety rail
+working, not a deploy failure. Read `fly logs` for which invariant it refused.
 
-```bash
-fly secrets set APP_ATTEST_APP_ID="TEAMID.com.astold.app"     # your real Team ID
-fly secrets set APP_ATTEST_REQUIRED=true APP_ATTEST_PRODUCTION=false   # false = Debug build
-```
+### Verify immediately after the deploy
 
-Then **delete the `APP_ATTEST_ALLOW_UNPROTECTED` line from `fly.toml`** and deploy:
+Before touching a device, from any shell:
 
-```bash
-fly deploy
-```
+| # | Check | Expected |
+|---|---|---|
+| 0a | `curl /health` | `200 {"status":"ok"}` |
+| 0b | `curl -X POST /v1/transcriptions` with **no** attest headers | **`401 attestation_failed`** |
+| 0c | `fly logs` for that request | **no OpenAI call** — status 401, no `transcription ok`/`failed` |
 
-That line is the only thing letting a production relay boot with attestation off — `loadConfig`
-throws without it. Removing it makes an open endpoint a startup failure rather than a silent risk.
+If 0b returns anything other than 401 — 415, 400, 502 — attestation is still off. Scale back to 0
+and fix the configuration before going further.
 
 ### Verify on a real device
 
@@ -109,6 +127,9 @@ Each step proves something the next depends on. The Simulator cannot attest.
 | 4 | **Invalid assertion** — `curl` the endpoint with a junk `x-attest-assertion` | 401, and no OpenAI call in the logs |
 | 5 | **Replayed assertion** — capture one request's three headers and resend them verbatim | 401 (the challenge is one-time; a re-issued one fails the counter check) |
 | 6 | **Re-registration recovery** — `fly volumes destroy` the volume, recreate it, record | one 401, then an automatic `register`, then 200 |
+| 7 | **Malformed audio, authenticated** — send unreadable bytes with valid attestation | `400 unreadable_audio`, **before** any OpenAI call |
+| 8 | **Over-duration, authenticated** — a recording longer than 600 s | `413 audio_duration_exceeded` with `maxSeconds`, **before** any OpenAI call |
+| 9 | **Valid transcription from the real app** — record mixed Telugu/English | 200, transcript inserted at the caret, native script preserved |
 
 Step 3 is the one the durable store exists for; step 6 is the client's self-heal path
 (`AppAttestClient.invalidateRegistration`). Step 5 is the replay defence Apple's counter provides.

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { ALLOWED_AUDIO_MIME, type Config } from '../config.js';
+import { audioDurationSeconds, UnreadableAudioError } from '../media/audioDuration.js';
 import { AttestationError, type AttestationVerifier } from '../security/attestation.js';
 import type { RateLimiter } from '../security/rateLimit.js';
 import {
@@ -72,7 +73,43 @@ export async function transcribeRoutes(
       return reply.code(400).send({ requestId, error: 'empty_audio' });
     }
 
-    // 6) Relay to the provider. Nothing is persisted; the buffer is dropped after this scope.
+    // 6) Duration limit — the authoritative one. The byte cap above does NOT bound minutes (25 MB of
+    //    8 kbps AAC is hours of audio), and OpenAI bills per minute, so this is what actually caps
+    //    the cost of a single request. Measured from the container here, never taken from the client,
+    //    and always checked BEFORE the paid call is made.
+    let durationSeconds: number;
+    try {
+      durationSeconds = audioDurationSeconds(audio);
+    } catch (err) {
+      if (err instanceof UnreadableAudioError) {
+        // Fail closed: audio we cannot measure is audio we cannot bound.
+        req.log.warn(
+          { requestId, status: 400, bytes: audio.byteLength, reason: err.reason },
+          'audio duration unreadable',
+        );
+        return reply.code(400).send({ requestId, error: 'unreadable_audio' });
+      }
+      throw err;
+    }
+    if (durationSeconds > config.MAX_DURATION_SECONDS) {
+      req.log.warn(
+        {
+          requestId,
+          status: 413,
+          bytes: audio.byteLength,
+          seconds: Math.round(durationSeconds),
+          maxSeconds: config.MAX_DURATION_SECONDS,
+        },
+        'audio duration over limit',
+      );
+      return reply.code(413).send({
+        requestId,
+        error: 'audio_duration_exceeded',
+        maxSeconds: config.MAX_DURATION_SECONDS,
+      });
+    }
+
+    // 7) Relay to the provider. Nothing is persisted; the buffer is dropped after this scope.
     try {
       const result = await provider.transcribe({
         audio,
@@ -81,7 +118,13 @@ export async function transcribeRoutes(
         requestId,
       });
       req.log.info(
-        { requestId, model: provider.model, bytes: audio.byteLength, status: 200 },
+        {
+          requestId,
+          model: provider.model,
+          bytes: audio.byteLength,
+          seconds: Math.round(durationSeconds),
+          status: 200,
+        },
         'transcription ok',
       );
       return reply.code(200).send({

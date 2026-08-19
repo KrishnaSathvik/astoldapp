@@ -18,6 +18,8 @@ struct RelayTranscriptionService: TranscriptionService {
         let text: String?
         let languages: [String]?
         let error: String?
+        /// Present on `audio_duration_exceeded` — the relay's configured limit, in seconds.
+        let maxSeconds: Int?
     }
 
     func transcribe(audioURL: URL, requestID: UUID) async throws -> TranscriptionResult {
@@ -62,8 +64,20 @@ struct RelayTranscriptionService: TranscriptionService {
         case 401:
             await attestationRejected()                   // stale registration — re-attest next time
             throw TranscriptionError.serviceUnavailable   // attestation failed — not user-facing detail
+        case 400:
+            // The relay could not read a duration out of the file, so it refused to pay to
+            // transcribe it. Nothing the user can act on beyond trying again.
+            throw TranscriptionError.invalidResponse
         case 413:
-            throw TranscriptionError.requestTooLarge
+            // Two different limits share this status; the error code separates them so the user is
+            // told which one they hit ("too long" and "too large" are not the same problem).
+            let decoded = try? JSONDecoder().decode(Response.self, from: responseData)
+            guard decoded?.error == "audio_duration_exceeded" else {
+                throw TranscriptionError.requestTooLarge
+            }
+            throw TranscriptionError.recordingTooLong(
+                maxSeconds: decoded?.maxSeconds ?? VoiceLimits.maxRecordingSeconds
+            )
         case 415:
             throw TranscriptionError.invalidResponse
         case 422:

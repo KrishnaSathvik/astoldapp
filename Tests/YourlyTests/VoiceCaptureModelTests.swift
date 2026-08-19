@@ -28,8 +28,12 @@ private final class FakeRecorder: AudioRecording {
 struct VoiceCaptureModelTests {
     private func make(recorder: FakeRecorder,
                       service: TranscriptionService,
+                      maxRecordingDuration: Duration = VoiceLimits.maxRecordingDuration,
                       onText: @escaping (String) -> Void = { _ in }) -> VoiceCaptureModel {
-        VoiceCaptureModel(recorder: recorder, service: service, onTranscript: onText)
+        VoiceCaptureModel(recorder: recorder,
+                          service: service,
+                          maxRecordingDuration: maxRecordingDuration,
+                          onTranscript: onText)
     }
 
     @Test func permissionDeniedStopsFlow() async {
@@ -112,6 +116,79 @@ struct VoiceCaptureModelTests {
         model.discard()
         #expect(model.phase == .idle)
         #expect(recorder.cleaned.contains(recorder.startURL))
+    }
+
+    // MARK: Recording length limit
+
+    /// The relay rejects audio over its limit, so the app stops there instead of letting someone
+    /// speak for another four minutes into a request that cannot succeed.
+    @Test func stopsAtTheRecordingLimitAndTranscribesWhatWasCaptured() async {
+        var emitted: String?
+        let recorder = FakeRecorder()
+        let model = make(recorder: recorder,
+                         service: FakeTranscriptionService(delay: .milliseconds(1)),
+                         maxRecordingDuration: .milliseconds(20)) { emitted = $0 }
+        await model.begin()
+        #expect(model.phase == .recording)
+
+        try? await Task.sleep(for: .milliseconds(120))
+
+        // Reaching the limit is the ordinary finish path: the words are already spoken, so they are
+        // transcribed rather than thrown away.
+        #expect(emitted == FakeTranscriptionService.sampleText)
+        #expect(model.phase == .idle)
+    }
+
+    /// Hitting the cap must never be a way to lose a recording.
+    @Test func recordingLimitKeepsTheAudioRatherThanCancelling() async {
+        let recorder = FakeRecorder()
+        let model = make(recorder: recorder,
+                         service: FakeTranscriptionService(delay: .milliseconds(1)),
+                         maxRecordingDuration: .milliseconds(20))
+        await model.begin()
+        try? await Task.sleep(for: .milliseconds(120))
+
+        #expect(recorder.canceled == false)   // cancel() deletes the temp file — never on the limit
+    }
+
+    /// A recording that finishes normally must not be stopped a second time by a timer still running.
+    @Test func finishingBeforeTheLimitCancelsTheTimer() async {
+        let recorder = FakeRecorder()
+        let model = make(recorder: recorder,
+                         service: FakeTranscriptionService(delay: .milliseconds(1)),
+                         maxRecordingDuration: .milliseconds(30))
+        await model.begin()
+        model.done()
+        #expect(model.phase == .transcribing)
+
+        try? await Task.sleep(for: .milliseconds(120))
+        #expect(model.phase == .idle)         // still idle — the timer did not re-enter done()
+    }
+
+    /// Cancelling stops the clock too, so an abandoned capture cannot resurrect itself.
+    @Test func cancellingStopsTheLimitTimer() async {
+        let recorder = FakeRecorder()
+        let model = make(recorder: recorder,
+                         service: FakeTranscriptionService(delay: .milliseconds(1)),
+                         maxRecordingDuration: .milliseconds(20))
+        await model.begin()
+        model.cancel()
+        #expect(model.phase == .idle)
+
+        try? await Task.sleep(for: .milliseconds(120))
+        #expect(model.phase == .idle)         // the elapsed limit did not start a transcription
+    }
+
+    /// The app's mirror of the limit has to be the relay's limit, or the guard is decorative.
+    @Test func clientLimitMatchesTheRelayDefault() {
+        #expect(VoiceLimits.maxRecordingSeconds == 600)
+        #expect(VoiceLimits.maxRecordingDuration == .seconds(600))
+    }
+
+    @Test func lengthLimitCopyReadsInMinutes() {
+        #expect(RecordingPanel.lengthLimitMessage(maxSeconds: 600) == "Recordings can be up to 10 minutes.")
+        #expect(RecordingPanel.lengthLimitMessage(maxSeconds: 60) == "Recordings can be up to 1 minute.")
+        #expect(RecordingPanel.lengthLimitMessage(maxSeconds: 90) == "Recordings can be up to 90 seconds.")
     }
 }
 

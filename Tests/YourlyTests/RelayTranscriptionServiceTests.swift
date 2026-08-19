@@ -68,6 +68,60 @@ struct RelayTranscriptionServiceTests {
         }
     }
 
+    /// The relay uses 413 for both of its limits; only the error code says which one was hit, and
+    /// "too long" and "too large" need different copy.
+    @Test func maps413DurationRejectionToRecordingTooLong() async throws {
+        StubURLProtocol.failWith = nil
+        StubURLProtocol.status = 413
+        StubURLProtocol.body = try JSONSerialization.data(withJSONObject: [
+            "requestId": "r1", "error": "audio_duration_exceeded", "maxSeconds": 600,
+        ])
+        await #expect(throws: TranscriptionError.recordingTooLong(maxSeconds: 600)) {
+            _ = try await makeService().transcribe(audioURL: try tempAudio(), requestID: UUID())
+        }
+    }
+
+    /// The limit comes from the relay, so a server configured differently drives the app's copy.
+    @Test func carriesTheRelaysOwnLimit() async throws {
+        StubURLProtocol.failWith = nil
+        StubURLProtocol.status = 413
+        StubURLProtocol.body = try JSONSerialization.data(withJSONObject: [
+            "error": "audio_duration_exceeded", "maxSeconds": 300,
+        ])
+        await #expect(throws: TranscriptionError.recordingTooLong(maxSeconds: 300)) {
+            _ = try await makeService().transcribe(audioURL: try tempAudio(), requestID: UUID())
+        }
+    }
+
+    /// A duration rejection without the field still has to be a duration rejection.
+    @Test func fallsBackToTheKnownLimitWhenTheRelayOmitsIt() async throws {
+        StubURLProtocol.failWith = nil
+        StubURLProtocol.status = 413
+        StubURLProtocol.body = Data("{\"error\":\"audio_duration_exceeded\"}".utf8)
+        await #expect(throws: TranscriptionError.recordingTooLong(maxSeconds: VoiceLimits.maxRecordingSeconds)) {
+            _ = try await makeService().transcribe(audioURL: try tempAudio(), requestID: UUID())
+        }
+    }
+
+    @Test func maps413ByteRejectionToTooLarge() async throws {
+        StubURLProtocol.failWith = nil
+        StubURLProtocol.status = 413
+        StubURLProtocol.body = Data("{\"error\":\"audio_too_large\"}".utf8)
+        await #expect(throws: TranscriptionError.requestTooLarge) {
+            _ = try await makeService().transcribe(audioURL: try tempAudio(), requestID: UUID())
+        }
+    }
+
+    /// Audio the relay could not measure — it refused to pay to transcribe it.
+    @Test func maps400UnreadableAudioToInvalidResponse() async throws {
+        StubURLProtocol.failWith = nil
+        StubURLProtocol.status = 400
+        StubURLProtocol.body = Data("{\"error\":\"unreadable_audio\"}".utf8)
+        await #expect(throws: TranscriptionError.invalidResponse) {
+            _ = try await makeService().transcribe(audioURL: try tempAudio(), requestID: UUID())
+        }
+    }
+
     @Test func maps422ToNoSpeech() async throws {
         StubURLProtocol.failWith = nil
         StubURLProtocol.status = 422

@@ -44,9 +44,49 @@ curl -s -X POST localhost:8787/v1/transcriptions -F "audio=@note.m4a;type=audio/
 | POST | `/v1/app-attest/register` | Register an attested App Attest key. |
 | POST | `/v1/transcriptions` | multipart `audio` file → `{ requestId, text, languages }`. |
 
-Request flow (`src/routes/transcribe.ts`): attestation → rate limit → multipart read → MIME/size
-guard → provider → validate → respond. The audio buffer lives only for the request and is never
-persisted.
+Request flow (`src/routes/transcribe.ts`): attestation → rate limit → multipart read → MIME guard →
+size guard → **duration guard** → provider → validate → respond. The audio buffer lives only for the
+request and is never persisted.
+
+Every guard runs *before* the provider call, because reaching the provider is what costs money.
+
+### Error responses
+
+All errors are `{ requestId, error }`; `audio_duration_exceeded` also carries `maxSeconds`.
+
+| Status | `error` | Meaning |
+|---|---|---|
+| 400 | `missing_audio` | No file part in the multipart body. |
+| 400 | `empty_audio` | The file part was zero bytes. |
+| 400 | `unreadable_audio` | No duration could be read from the container — see the duration limit below. |
+| 401 | `attestation_failed` | Missing or invalid App Attest assertion. |
+| 413 | `audio_too_large` | Over `MAX_AUDIO_BYTES`. |
+| 413 | `audio_duration_exceeded` | Over `MAX_DURATION_SECONDS`. |
+| 415 | `unsupported_media_type` | Content type outside the allowlist. |
+| 422 | `no_speech` | The provider returned nothing usable. |
+| 429 | `rate_limited` | Over the per-identity rate limit. |
+| 502 | `transcription_failed` | The provider errored. |
+
+### The duration limit
+
+Transcription is billed **per minute**, and `MAX_AUDIO_BYTES` cannot bound minutes: 25 MB of 8 kbps
+AAC is hours of audio. So `MAX_DURATION_SECONDS` is the cap that actually bounds the cost of a
+request, and it is enforced by measuring the uploaded container (`src/media/audioDuration.ts`).
+
+Two properties this relies on:
+
+- **The duration is measured from the bytes**, never taken from a client-supplied field. A caller
+  running up the bill would simply lie.
+- **The container is identified by magic bytes**, not by `Content-Type`, which is equally
+  attacker-controlled. The MIME allowlist governs what is accepted; it never decides how to parse.
+
+Audio whose duration cannot be established is rejected with `unreadable_audio` — **failing open here
+would reintroduce the unbounded-minutes hole the check exists to close.** m4a/mp4, WAV, MP3 and raw
+ADTS AAC are all measurable; the app itself only ever uploads mono AAC `.m4a`.
+
+The app mirrors the same limit (`VoiceLimits.maxRecordingSeconds`) so a recording stops at 10 minutes
+rather than being rejected after the fact. That mirror is a courtesy; **this relay is the authority.**
+If you change `MAX_DURATION_SECONDS`, change the client constant to match.
 
 Transcribe headers: `x-request-id` (echoed), and when attestation is required
 `x-attest-key-id` / `x-attest-assertion` / `x-attest-challenge`.
@@ -60,8 +100,8 @@ Transcribe headers: `x-request-id` (echoed), and when attestation is required
 | `OPENAI_API_KEY` | _(unset)_ | Unset → fake provider. **Never commit.** |
 | `TRANSCRIBE_MODEL` | gpt-4o-transcribe | Chosen by benchmark, never by model recency. |
 | `TRANSCRIBE_PROMPT_VARIANT` | punctuated | `punctuated` \| `strictVerbatim` \| `terse` — see `src/prompt.ts`. |
-| `MAX_AUDIO_BYTES` | 26214400 | 25 MB → 413 when exceeded. |
-| `MAX_DURATION_SECONDS` | 600 | 10 min product limit. |
+| `MAX_AUDIO_BYTES` | 26214400 | 25 MB → 413 `audio_too_large`. Bounds upload size, **not** billable minutes. |
+| `MAX_DURATION_SECONDS` | 600 | 10 min product limit → 413 `audio_duration_exceeded`. Measured from the container; the cap that actually bounds cost. Mirror any change in `VoiceLimits.maxRecordingSeconds`. |
 | `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_SECONDS` | 20 / 60 | Per attested-install + IP. |
 | `APP_ATTEST_REQUIRED` | false | **Set `true` in production.** |
 | `APP_ATTEST_APP_ID` | _(unset)_ | `TEAMID.bundleId`. Required when attestation is on. |
@@ -72,11 +112,14 @@ Transcribe headers: `x-request-id` (echoed), and when attestation is required
 ## Test
 
 ```bash
-npm test          # vitest — 55 tests via fastify.inject (no network)
+npm test          # vitest — 84 tests via fastify.inject (no network)
 ```
 
 Covers: health, success (fake), request-id echo, 415 bad MIME, 413 oversized, 422 empty transcript,
-429 rate limit, 401 attestation, rate-limiter + attestation units, the durable attested-key store
+429 rate limit, 401 attestation, the **duration limit** (599/600/601 s boundaries, long low-bitrate
+audio that sits far under the byte cap, unreadable audio, and proof the provider is never reached on
+a rejection), the container parser against both hand-built fixtures and real ffmpeg output,
+rate-limiter + attestation units, the durable attested-key store
 (including survival across a restart), the boot-time config rails, and the **metadata-only logger**
 (serializers strip body/headers so transcripts/notes can never be logged).
 

@@ -17,6 +17,12 @@ export interface Deps {
   provider: TranscriptionProvider;
   verifier: AttestationVerifier;
   limiter: RateLimiter;
+  /**
+   * Where log records are written. Exists so tests can assert what the relay actually logs, while
+   * still going through the configured serializers and redaction — a seam that replaced the logger
+   * wholesale would quietly disable the metadata-only guarantee it is meant to verify (RULES.md §3).
+   */
+  logDestination?: NodeJS.WritableStream;
 }
 
 /** Wire default dependencies from config: real provider only when a key is present. */
@@ -47,7 +53,7 @@ export function makeDefaultDeps(config: Config): Deps {
 
 export async function buildServer(deps: Deps): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: loggerOptions(deps.config.NODE_ENV),
+    logger: loggerOptions(deps.config.NODE_ENV, deps.logDestination),
     bodyLimit: deps.config.MAX_AUDIO_BYTES + 1_048_576, // audio + small multipart overhead
   });
 

@@ -254,7 +254,8 @@ The interaction feels right using a fake service.
 - `/health`
 - `/v1/transcriptions`
 - size/type validation
-- OpenAI `gpt-transcribe`
+- duration validation (measured from the container, before the paid call)
+- OpenAI `gpt-4o-transcribe` (`gpt-transcribe` is a benchmark candidate, not the shipping model)
 - content-safe logging
 - timeouts
 - typed error response

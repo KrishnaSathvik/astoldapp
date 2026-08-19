@@ -93,13 +93,15 @@ not automatic English translation.
 
 ### V1 recommended path
 
-**Record completed audio → send file → `gpt-transcribe` → insert final transcript.**
+**Record completed audio → send file → `gpt-4o-transcribe` → insert final transcript.**
+
+> Production currently uses `gpt-4o-transcribe`. `gpt-transcribe` is a benchmark candidate and must not replace production until the multilingual quality gate passes (`docs/benchmark/README.md`, RULES.md §8).
 
 Reason:
 
 - product does not require live words while user is still speaking
 - completed-file transcription is simpler to reason about
-- current OpenAI guidance recommends `gpt-transcribe` for recorded speech in its original language
+- OpenAI's file-transcription models are built for recorded speech in its original language
 - API supports language/context guidance
 - no need to introduce Realtime/WebRTC complexity for V1
 
@@ -211,12 +213,23 @@ Do not prematurely downsample so aggressively that recognition quality suffers.
 
 ### Product limit
 
-Start with a configurable maximum voice capture duration (for example 10 minutes) to protect:
+The maximum voice capture duration is **10 minutes**, and it protects:
 
 - latency
 - memory/storage
 - service cost
 - accidental long recordings
+
+**The relay is the authority.** It measures the duration of the uploaded audio from the container
+itself and rejects anything longer with `413 audio_duration_exceeded`, before the paid call is made
+(`transcription-service/src/media/audioDuration.ts`, `MAX_DURATION_SECONDS`). A client-reported
+duration is never trusted, and the byte cap is not a substitute: transcription is billed per minute,
+and 25 MB of low-bitrate audio is hours of speech. Audio whose duration cannot be read is rejected
+(`400 unreadable_audio`) rather than sent — failing open would reopen the hole the check closes.
+
+The app mirrors the same limit in `VoiceLimits.maxRecordingSeconds` so a recording **stops** at the
+cap instead of being rejected after the fact. Stopping at the limit is the ordinary finish path: the
+audio captured so far is kept and transcribed, never discarded. Keep the two constants in step.
 
 Do not hardcode business limits deep in the view layer.
 

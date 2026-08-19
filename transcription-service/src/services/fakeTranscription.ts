@@ -11,12 +11,17 @@ import type {
 export class FakeTranscriptionProvider implements TranscriptionProvider {
   readonly model = 'fake-transcribe';
 
+  /** How many times the provider was reached. Lets tests prove a request was rejected *before* the
+   *  paid call — the whole point of the pre-flight guards in the route. */
+  calls = 0;
+
   constructor(
     private readonly override?: TranscriptionResult,
     private readonly failWith?: Error,
   ) {}
 
   async transcribe(_input: TranscriptionInput): Promise<TranscriptionResult> {
+    this.calls++;
     if (this.failWith) throw this.failWith;
     return (
       this.override ?? {
