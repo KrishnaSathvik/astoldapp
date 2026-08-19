@@ -8,6 +8,11 @@
 > **Do not run `fly deploy` to test one component.** `min_machines_running = 1` means any deploy
 > recreates the machine. Prepare the whole secured configuration offline, then bring it back **once**.
 >
+> **`fly scale count 1` is not a bring-up.** It clones the last *release*, not this `fly.toml`, and on
+> this app that release predates the hardening — so it silently restores the unprotected endpoint
+> while `fly status` looks healthy. This was tried on 19 Aug 2026 and did exactly that; the relay
+> served an unattested request before being scaled back to 0. Stage 2 uses `fly deploy`.
+>
 > Stopping the machine is *not* enough on its own: `auto_start_machines = true` resurrects it on the
 > first request (measured: 6.3 s, and the request still reached OpenAI). `fly scale count 0` is what
 > actually closes it.
@@ -43,16 +48,21 @@ Everything here is done **offline**. No `fly deploy`, no machine.
 - [x] The real `fly.toml` `[env]` block validated against `loadConfig`: it boots in the secure shape,
       and is **refused** both with attestation off and with attestation on but no durable registry.
 
-**Still required before the deploy:**
+- [x] `APP_ATTEST_APP_ID` staged (19 Aug 2026) — `766WG2GGCA.com.astold.app`. The Team ID is the
+      `DEVELOPMENT_TEAM` in `Yourly.xcodeproj/project.pbxproj`, and matches the `TeamIdentifier` in
+      the local provisioning profiles; the bundle id is `com.astold.app` (CLAUDE.md).
 
 ```bash
-# Your Apple Team ID (Apple Developer → Membership). Secrets, not fly.toml.
-fly secrets set APP_ATTEST_APP_ID="TEAMID.com.astold.app" --stage --app as-told-relay
+# Kept for reference — already done. Secrets, not fly.toml.
+fly secrets set APP_ATTEST_APP_ID="766WG2GGCA.com.astold.app" --stage --app as-told-relay
 fly secrets list --app as-told-relay    # expect OPENAI_API_KEY + APP_ATTEST_APP_ID
 ```
 
 `--stage` writes the secret without triggering a deploy, which is the point — the machine stays gone
-until the whole configuration is ready.
+until the whole configuration is ready. Both secrets read `Staged` until the deploy in stage 2
+applies them; that is expected, not a problem to fix.
+
+**Still required before the deploy:** nothing in configuration — stage 2 is ready to run.
 
 `APP_ATTEST_PRODUCTION` must match the entitlement the installed build is signed with:
 
@@ -94,13 +104,34 @@ if the counter it is compared against outlived the process. Challenges stay in-p
 by machine A cannot be consumed by machine B, so roughly half of all requests would 401 and the app
 would re-register in a loop that never converges. Do not raise the count without Redis (stage 3).
 
+**Use `fly deploy`, never `fly scale count 1`.** Scaling does not read this `fly.toml`. It clones the
+app's current *release* config, so on an app whose last release predates the hardening it silently
+recreates the **old image with the old `[env]`** — including `APP_ATTEST_REQUIRED=false` and the
+`APP_ATTEST_ALLOW_UNPROTECTED=true` that stops `loadConfig` from refusing it. That reopens the exact
+anonymous paid endpoint this document exists to close, and it looks like a successful bring-up:
+`fly status` reports a started machine with a passing health check. Staged secrets are not applied
+either. Only a deploy publishes a new release carrying this file's `[env]`.
+
 ```bash
-fly scale count 1 --app as-told-relay   # recreates the machine and attaches attest_data
+fly deploy --app as-told-relay          # new image + this fly.toml's [env] + staged secrets, one release
 fly status --app as-told-relay          # expect one machine, volume attached
 ```
 
 If `loadConfig` rejects the environment the machine will fail to start — that is the safety rail
 working, not a deploy failure. Read `fly logs` for which invariant it refused.
+
+**Confirm the machine actually got this configuration** before trusting it. `fly.toml` on disk is
+what you *intend* to run; these are what you *are* running:
+
+```bash
+fly releases --app as-told-relay        # a NEW version, dated now — not the pre-hardening one
+fly secrets list --app as-told-relay    # OPENAI_API_KEY + APP_ATTEST_APP_ID, no longer "Staged"
+fly logs --app as-told-relay | grep -i "APP_ATTEST_REQUIRED=false"   # must print NOTHING
+```
+
+That last line is the one that matters: the relay warns `APP_ATTEST_REQUIRED=false in production —
+the endpoint is unprotected` at boot whenever attestation is off. If it appears, the endpoint is
+open — `fly scale count 0` immediately, before running any other check.
 
 ### Verify immediately after the deploy
 
@@ -109,8 +140,23 @@ Before touching a device, from any shell:
 | # | Check | Expected |
 |---|---|---|
 | 0a | `curl /health` | `200 {"status":"ok"}` |
-| 0b | `curl -X POST /v1/transcriptions` with **no** attest headers | **`401 attestation_failed`** |
+| 0b | a **well-formed multipart** POST to `/v1/transcriptions` with **no** attest headers | **`401 attestation_failed`** |
 | 0c | `fly logs` for that request | **no OpenAI call** — status 401, no `transcription ok`/`failed` |
+
+0b must send a real multipart body. `@fastify/multipart` validates the content type in the
+content-type parser, *before* the route handler runs, so a bare `curl -X POST` never reaches the
+attestation check at all — it returns `406 FST_INVALID_MULTIPART_CONTENT_TYPE` on an open relay and
+a secured one alike. A 406 tells you nothing:
+
+```bash
+head -c 2048 /dev/urandom > /tmp/probe.m4a
+curl -sS -i -X POST https://as-told-relay.fly.dev/v1/transcriptions \
+  -F "file=@/tmp/probe.m4a;type=audio/m4a"
+```
+
+Random bytes are deliberate: attestation is step 1 in the handler, before the file is read, so a
+secured relay rejects this at 401 without ever looking at the audio. Any other status means the
+request got past attestation.
 
 If 0b returns anything other than 401 — 415, 400, 502 — attestation is still off. Scale back to 0
 and fix the configuration before going further.
