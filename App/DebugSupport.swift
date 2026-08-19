@@ -8,6 +8,9 @@ import SwiftData
 ///  -hasCompletedWelcome YES   (handled automatically by UserDefaults launch args)
 enum DebugLaunch {
     static var seedSampleNotes: Bool { args.contains("-seedSampleNotes") }
+    /// Seeds the sample timeline shifted back a week, so nothing lands on today — the case where
+    /// Home must still anchor on `Today` rather than opening on `Yesterday`.
+    static var seedOlderNotesOnly: Bool { args.contains("-seedOlderNotesOnly") }
     static var openSampleEditor: Bool { args.contains("-openSampleEditor") }
     /// Seeds a single note exercising every structure type — for verifying live-styled rendering.
     static var seedStructuredDemo: Bool { args.contains("-seedStructuredDemo") }
@@ -64,13 +67,15 @@ enum DebugLaunch {
             return
         }
 
-        guard seedSampleNotes else { return }
+        guard seedSampleNotes || seedOlderNotesOnly else { return }
         let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
         guard existing == 0 else { return }
 
         let cal = Calendar.current
+        // Shifted a week back when only older notes are wanted, so no sample lands on today.
+        let shift = seedOlderNotesOnly ? 7 : 0
         func at(_ daysAgo: Int, _ hour: Int, _ minute: Int) -> Date {
-            let day = cal.date(byAdding: .day, value: -daysAgo, to: .now)!
+            let day = cal.date(byAdding: .day, value: -(daysAgo + shift), to: .now)!
             return cal.date(bySettingHour: hour, minute: minute, second: 0, of: day)!
         }
 

@@ -336,3 +336,49 @@ final class CalendarDayNotesUITests: XCTestCase {
         XCTAssertTrue(note(app, "Work ideas").waitForExistence(timeout: 8), "Undo restores it")
     }
 }
+
+/// Home's chronological identity. The defect these lock down: `Today` was printed by the day
+/// grouping rather than by Home itself, so a day with nothing written on it opened on `Yesterday`.
+final class TimelineHeaderUITests: XCTestCase {
+    override func setUp() { continueAfterFailure = false }
+
+    private func launchedApp(seed: String? = "-seedSampleNotes") -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-hasCompletedWelcome", "YES", "-resetStore"]
+        if let seed { app.launchArguments.append(seed) }
+        app.launch()
+        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 15), "Home did not appear")
+        return app
+    }
+
+    private static func todayLabel() -> String {
+        let df = DateFormatter(); df.dateFormat = "MMMM d, yyyy"
+        return df.string(from: .now).uppercased()
+    }
+
+    func testHomeAnchorsOnTodayAboveTheGroups() {
+        let app = launchedApp()
+        XCTAssertTrue(app.staticTexts[Self.todayLabel()].waitForExistence(timeout: 8),
+                      "Home should show the current date")
+        XCTAssertTrue(app.staticTexts["Today"].exists, "Today should anchor Home")
+        XCTAssertTrue(app.staticTexts["Yesterday"].exists, "older groups still have their headers")
+    }
+
+    /// With nothing written today, `Today` must still be the first heading — never `Yesterday`.
+    func testTodayStillAnchorsHomeWithNoNotesToday() {
+        let app = launchedApp(seed: nil)
+        XCTAssertTrue(app.staticTexts["Today"].waitForExistence(timeout: 8),
+                      "Today should anchor Home even with no notes")
+    }
+
+    /// The regression that matters: notes exist, but none of them are from today. Home must still
+    /// open on `Today`, with the older groups beneath it.
+    func testTodayAnchorsHomeWhenEveryNoteIsOlder() {
+        let app = launchedApp(seed: "-seedOlderNotesOnly")
+        XCTAssertTrue(app.staticTexts["Today"].waitForExistence(timeout: 8),
+                      "Today should anchor Home even when nothing was written today")
+        XCTAssertTrue(app.staticTexts[Self.todayLabel()].exists, "current date still leads Home")
+        XCTAssertFalse(app.staticTexts["Yesterday"].exists,
+                       "the seed is a week old, so Yesterday should not appear at all")
+    }
+}

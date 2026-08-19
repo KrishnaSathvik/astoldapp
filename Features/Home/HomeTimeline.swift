@@ -2,6 +2,9 @@ import SwiftUI
 
 /// Continuous day-grouped timeline as a chromeless List so native swipe-to-delete works.
 /// No visible pagination, no separators, canvas row backgrounds (RULES.md §1, §4).
+///
+/// This renders Home and only Home — a single day's notes live under the calendar's own grid, so
+/// the current date and the `Today` anchor below are unconditional.
 struct HomeTimeline: View {
     let notes: [Note]
     var onSelect: (Note) -> Void
@@ -9,18 +12,20 @@ struct HomeTimeline: View {
     /// Fired when the bottom of the list scrolls into view — used to load the next batch.
     var onReachEnd: (() -> Void)? = nil
 
+    private let calendar = Calendar.current
+
     private var groups: [NoteDayGroup] { groupedByDay(notes) }
 
     var body: some View {
         List {
-            Text(HomeDate.top)
-                .font(.ds.dateLabel)
-                .foregroundStyle(Color.ds.textTertiary)
-                .plainRow(topInset: DSSpacing.s2)
+            header
 
             ForEach(groups) { group in
-                DateGroupHeader(day: group.day)
-                    .plainRow(topInset: DSSpacing.s5)
+                // Today's notes hang under the prominent `Today` anchor instead of repeating it.
+                if !calendar.isDateInToday(group.day) {
+                    DateGroupHeader(day: group.day)
+                        .plainRow(topInset: DSSpacing.s5)
+                }
 
                 ForEach(Array(group.notes.enumerated()), id: \.element.id) { idx, note in
                     Button { onSelect(note) } label: { NoteRow(note: note) }
@@ -56,6 +61,22 @@ struct HomeTimeline: View {
         .environment(\.defaultMinListRowHeight, 8)   // let rows hug their content
         .background(Color.ds.canvas)
         .padding(.horizontal, DSSpacing.screenH)
+    }
+
+    /// Home's identity: a subtle current date over a prominent `Today` (docs/03-design-system.md
+    /// §4.3). `Today` anchors the screen even when nothing has been written today — the first thing
+    /// read must never be `Yesterday`.
+    @ViewBuilder private var header: some View {
+        Text(HomeDate.top)
+            .font(.ds.dateLabel)
+            .foregroundStyle(Color.ds.textTertiary)
+            .plainRow(topInset: DSSpacing.s2)
+
+        Text("Today")
+            .font(.ds.homeTitle)
+            .foregroundStyle(Color.ds.textPrimary)
+            .plainRow(topInset: DSSpacing.s1)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
