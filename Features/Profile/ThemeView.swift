@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Theme picker — Light / Dark / Use device settings, plus Increase contrast. As Told editorial style
-/// (warm canvas, chromeless rows). See docs/03-design-system.md §15.
+/// Theme picker — Light / Dark / Use device settings. As Told editorial style (warm canvas,
+/// chromeless rows). See docs/03-design-system.md §15.
 struct ThemeView: View {
     @Environment(ThemeStore.self) private var themeStore
 

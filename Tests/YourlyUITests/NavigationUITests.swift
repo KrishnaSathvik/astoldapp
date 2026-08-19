@@ -232,3 +232,107 @@ final class EditorOverflowUITests: XCTestCase {
         XCTAssertTrue(deleted.firstMatch.waitForExistence(timeout: 8), "Undo should restore the note")
     }
 }
+
+/// The calendar reaches a day's notes in place: tap a day, its notes appear under the grid, tap one
+/// to open it — and Back comes home to the calendar, not to Home.
+final class CalendarDayNotesUITests: XCTestCase {
+    override func setUp() { continueAfterFailure = false }
+
+    private func launchedApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-hasCompletedWelcome", "YES", "-resetStore", "-seedSampleNotes"]
+        app.launch()
+        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 15), "Home did not appear")
+        return app
+    }
+
+    private func openCalendar(_ app: XCUIApplication) {
+        app.buttons["Open calendar"].tap()
+        XCTAssertTrue(app.navigationBars["Calendar"].waitForExistence(timeout: 8), "Calendar should push")
+    }
+
+    private static func dayIdentifier(daysAgo: Int) -> String {
+        let cal = Calendar.current
+        let date = cal.date(byAdding: .day, value: -daysAgo, to: .now)!
+        let c = cal.dateComponents([.year, .month, .day], from: date)
+        return String(format: "day-%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+
+    private func note(_ app: XCUIApplication, _ text: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", text)).firstMatch
+    }
+
+    /// The core of the change: a day's notes are listed on the calendar, not on another screen.
+    func testTappingADayListsThatDaysNotesOnTheCalendar() {
+        let app = launchedApp()
+        openCalendar(app)
+
+        // Two days ago the seed has "Work ideas"; yesterday it has "Random thoughts at night".
+        app.buttons[Self.dayIdentifier(daysAgo: 2)].tap()
+        XCTAssertTrue(note(app, "Work ideas").waitForExistence(timeout: 8),
+                      "that day's note should be listed under the grid")
+        XCTAssertFalse(note(app, "Random thoughts at night").exists,
+                       "another day's note must not be listed")
+        XCTAssertTrue(app.navigationBars["Calendar"].exists, "still on the calendar — no navigation")
+
+        app.buttons[Self.dayIdentifier(daysAgo: 1)].tap()
+        XCTAssertTrue(note(app, "Random thoughts at night").waitForExistence(timeout: 8),
+                      "selecting another day swaps the list")
+        XCTAssertFalse(note(app, "Work ideas").exists)
+    }
+
+    /// Opening a note from the calendar and coming back must land on the calendar, with the same
+    /// day still selected — never on Home.
+    func testOpeningANoteFromTheCalendarReturnsToTheCalendar() {
+        let app = launchedApp()
+        openCalendar(app)
+
+        app.buttons[Self.dayIdentifier(daysAgo: 2)].tap()
+        let row = note(app, "Work ideas")
+        XCTAssertTrue(row.waitForExistence(timeout: 8))
+        row.tap()
+
+        XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8), "editor should open")
+        app.buttons["Back to notes"].tap()
+
+        XCTAssertTrue(app.navigationBars["Calendar"].waitForExistence(timeout: 8),
+                      "Back should return to the calendar, not Home")
+        XCTAssertTrue(note(app, "Work ideas").waitForExistence(timeout: 8),
+                      "the same day should still be selected")
+        XCTAssertFalse(app.buttons["New note"].exists, "should not have fallen through to Home")
+    }
+
+    /// A day with nothing on it says so, in place.
+    func testADayWithNoNotesSaysSoInPlace() {
+        let app = launchedApp()
+        openCalendar(app)
+
+        app.buttons[Self.dayIdentifier(daysAgo: 4)].tap()   // the seed stops at 2 days ago
+        XCTAssertTrue(app.staticTexts["Nothing written on this day."].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.navigationBars["Calendar"].exists, "still on the calendar")
+    }
+
+    /// Deleting from a note opened via the calendar is offered and reversible, right here.
+    func testDeletingANoteOpenedFromTheCalendarIsUndoableOnTheCalendar() {
+        let app = launchedApp()
+        openCalendar(app)
+
+        app.buttons[Self.dayIdentifier(daysAgo: 2)].tap()
+        let row = note(app, "Work ideas")
+        XCTAssertTrue(row.waitForExistence(timeout: 8))
+        row.tap()
+
+        XCTAssertTrue(app.buttons["More actions"].waitForExistence(timeout: 8))
+        app.buttons["More actions"].tap()
+        XCTAssertTrue(app.buttons["Delete Note"].waitForExistence(timeout: 8))
+        app.buttons["Delete Note"].tap()
+
+        let undo = app.buttons["Undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 8), "Undo should be offered on the calendar")
+        XCTAssertTrue(app.navigationBars["Calendar"].exists, "deletion returns to the calendar")
+        XCTAssertFalse(note(app, "Work ideas").exists, "the row should be gone")
+
+        undo.tap()
+        XCTAssertTrue(note(app, "Work ideas").waitForExistence(timeout: 8), "Undo restores it")
+    }
+}

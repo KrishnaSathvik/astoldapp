@@ -10,12 +10,9 @@ struct HomeView: View {
     @State private var searchQuery = ""
     @State private var showingCalendar = false
     @State private var showingProfile = false
-    @State private var selectedDay: Date?
     @State private var pageLimit = 40
     @AppStorage("profileName") private var profileName = ""
     @Environment(AppLockModel.self) private var lock
-
-    private let calendar = Calendar.current
 
     private var isSearching: Bool {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -57,9 +54,7 @@ struct HomeView: View {
                 )
             }
             .navigationDestination(isPresented: $showingCalendar) {
-                CalendarPage(initialSelection: selectedDay) { day in
-                    selectedDay = calendar.isDateInToday(day) ? nil : day
-                }
+                CalendarPage()
             }
             .navigationDestination(isPresented: $showingProfile) {
                 ProfileView(lock: lock)
@@ -82,7 +77,6 @@ struct HomeView: View {
                     Button { showingCalendar = true } label: {
                         Image(systemName: "calendar")
                             .foregroundStyle(Color.ds.iconCalendar)
-                            .symbolVariant(selectedDay == nil ? .none : .fill)
                     }
                     .accessibilityLabel("Open calendar")
                 }
@@ -99,43 +93,21 @@ struct HomeView: View {
         }
     }
 
-    private var filterDateText: String {
-        let df = DateFormatter(); df.dateFormat = "MMMM d, yyyy"
-        return df.string(from: selectedDay ?? .now)
-    }
-
     private var profileInitial: String? {
         let t = profileName.trimmingCharacters(in: .whitespaces)
         guard let f = t.first else { return nil }
         return String(f).uppercased()
     }
 
-    @ViewBuilder private var content: some View {
-        if let selectedDay {
-            VStack(spacing: 0) {
-                HStack {
-                    Text(filterDateText)
-                        .font(.ds.groupTitle)
-                        .foregroundStyle(Color.ds.textPrimary)
-                    Spacer()
-                    Button("Return to Today") { self.selectedDay = nil }
-                        .font(.ds.preview)
-                        .foregroundStyle(Color.ds.accent)
-                }
-                .padding(.horizontal, DSSpacing.screenH)
-                .padding(.top, DSSpacing.s6)
-
-                DayNotesList(day: selectedDay, onSelect: { editingNote = $0 },
-                             onDelete: { deletion.delete($0, in: context) })
-            }
-        } else {
-            PagedNotesList(
-                limit: pageLimit,
-                onSelect: { editingNote = $0 },
-                onDelete: { deletion.delete($0, in: context) },
-                onLoadMore: { pageLimit += 40 }
-            )
-        }
+    /// Home is always the whole timeline. Browsing a single day belongs to the calendar, which
+    /// shows that day's notes under its own grid rather than sending the reader back here filtered.
+    private var content: some View {
+        PagedNotesList(
+            limit: pageLimit,
+            onSelect: { editingNote = $0 },
+            onDelete: { deletion.delete($0, in: context) },
+            onLoadMore: { pageLimit += 40 }
+        )
     }
 
     private func newNote() {

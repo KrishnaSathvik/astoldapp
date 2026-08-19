@@ -31,6 +31,12 @@ struct MonthGrid: View {
         }
     }
 
+    /// e.g. "day-2026-08-17".
+    static func cellIdentifier(for date: Date, calendar: Calendar = .current) -> String {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "day-%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+
     @ViewBuilder private func dayCell(_ date: Date) -> some View {
         let isSelected = selectedDay.map { calendar.isDate($0, inSameDayAs: date) } ?? false
         let isToday = calendar.isDateInToday(date)
@@ -40,7 +46,7 @@ struct MonthGrid: View {
             VStack(spacing: 3) {
                 Text("\(calendar.component(.day, from: date))")
                     .font(.body)
-                    .foregroundStyle(isSelected ? Color.white
+                    .foregroundStyle(isSelected ? Color.ds.onAccent
                                      : (isToday ? Color.ds.accent : Color.ds.textPrimary))
                     .frame(width: 36, height: 36)
                     .background {
@@ -54,6 +60,8 @@ struct MonthGrid: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
+        // Stable handle for UI tests; invisible to users, who hear the accessibility label.
+        .accessibilityIdentifier(Self.cellIdentifier(for: date, calendar: calendar))
         .accessibilityLabel(Text(date, style: .date))
         .accessibilityValue(hasNotes ? "Has notes" : "No notes")
     }

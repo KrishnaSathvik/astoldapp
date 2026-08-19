@@ -256,7 +256,12 @@ Native-style search from Home, preferably pull-down `.searchable`.
 
 ### Presentation
 
-Sheet.
+Navigation push inside Home's stack (system back button). Originally specified as a sheet — the
+push shipped and is kept; see `docs/03-design-system.md` §4.6.
+
+Selecting a day does not navigate: that day's notes are listed under the grid, and tapping one opens
+it from the calendar, so Back returns to the calendar with the day still selected. _(Changed
+2026-08-19 — this replaced a mode where choosing a day sent the reader back to a filtered Home.)_
 
 ### Month view
 
@@ -275,8 +280,11 @@ Sheet.
 
 - month boundaries work
 - timezone/daylight-saving boundaries do not misgroup notes
-- tapping a day with notes shows that day
+- tapping a day with notes lists that day's notes under the grid, without navigating
+- tapping another day swaps the list; no stale notes from the previous day remain
+- tapping a note opens it, and Back returns to the calendar with the same day selected
 - tapping an empty day has a clear empty state
+- deleting a note opened from the calendar is offered there and is undoable there
 
 ---
 

@@ -39,40 +39,6 @@ struct PagedNotesList: View {
     }
 }
 
-/// Notes for a single calendar day (from the Calendar filter). A day is small, so no pagination.
-struct DayNotesList: View {
-    @Query private var notes: [Note]
-    private let onSelect: (Note) -> Void
-    private let onDelete: (Note) -> Void
-
-    init(day: Date, onSelect: @escaping (Note) -> Void, onDelete: @escaping (Note) -> Void) {
-        self.onSelect = onSelect
-        self.onDelete = onDelete
-        let cal = Calendar.current
-        let start = cal.startOfDay(for: day)
-        let end = cal.date(byAdding: .day, value: 1, to: start)!
-        _notes = Query(FetchDescriptor<Note>(
-            predicate: #Predicate { $0.deletedAt == nil && $0.createdAt >= start && $0.createdAt < end },
-            sortBy: [SortDescriptor(\.createdAt, order: .reverse), SortDescriptor(\.id, order: .reverse)]
-        ))
-    }
-
-    var body: some View {
-        if notes.isEmpty {
-            VStack {
-                Spacer()
-                Text("No notes on this day.")
-                    .font(.ds.preview)
-                    .foregroundStyle(Color.ds.textSecondary)
-                Spacer()
-            }
-            .frame(maxWidth: .infinity)
-        } else {
-            HomeTimeline(notes: notes, onSelect: onSelect, onDelete: onDelete)
-        }
-    }
-}
-
 /// Empty Home state.
 struct EmptyHome: View {
     var body: some View {

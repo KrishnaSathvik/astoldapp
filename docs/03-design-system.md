@@ -15,7 +15,7 @@ A per-screen walkthrough lives in `docs/design-reference/README.md`.
 1. Splash — brand mark centered above the wordmark.
 2. Welcome (first launch) — mark, wordmark, tagline, short explanation, single `Continue` button.
 3. Home — Light and Dark, identical layout.
-4. Calendar sheet — month grid with note dots + a "Go to" list (`Today`, most recent note date).
+4. Calendar — month grid with note dots + the selected day's notes beneath it, pushed inside Home's stack.
 5. Note editor — Light and Dark (`Title` placeholder, `Start writing…`, mic bottom-left/right).
 6. Voice recording — inline transcript with real Telugu+English code-switching, dark recording surface
    (waveform, elapsed time, `Cancel` / stop / `Done`).
@@ -112,7 +112,7 @@ Welcome (first launch only)
        Home
    ┌────┼───────────┐
    │    │           │
-Editor Search    Calendar Sheet
+Editor Search    Calendar
    │
  Voice
    │
@@ -294,29 +294,43 @@ Dates are useful in search even though they are omitted from normal Home rows.
 
 ---
 
-## 4.6 Calendar sheet
+## 4.6 Calendar
 
 ### Presentation
 
-Native sheet.
+Pushed inside Home's navigation stack, not a sheet. _(Changed 2026-08-19: the spec said sheet, the
+push shipped. It carries the system back button, so the screen needs no close control and no second
+way out — the reason there is also no "Go to Today" button on it.)_
 
 ### Header
 
 - current month/year
-- close control where appropriate
+- month step controls (previous / next)
 
 ### Grid
 
 - native weekday rhythm
 - days with notes: tiny dot
-- selected date: clear selection
+- selected date: clear selection (the selection replaces that day's dot — its notes are listed below)
 - Today: native distinction
+- opens with today selected; stepping months selects today when it is in view, else the 1st
+
+### Selected day
+
+Beneath the grid: the day label (`Today` / `Yesterday` / `August 15`) and that day's notes, using the
+same `NoteRow` as Home. Tapping one opens it **from here**, so Back returns to the calendar with the
+day still selected. A day with nothing on it reads `Nothing written on this day.`
+
+This list is a way *to* a note, not a place to browse. It has no search, no sort, no grouping, no
+pagination, and no counts — see RULES.md §1. Swipe-to-delete is deliberately not offered here; the
+note's own overflow (`···` → Delete Note) covers it, and the Undo banner appears on this screen.
 
 ### No
 
 - heatmap
 - note-count badge
 - streak colors
+- a second search field
 
 ---
 

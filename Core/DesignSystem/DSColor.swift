@@ -10,6 +10,9 @@ extension Color {
         static let textSecondary = Color("TextSecondary")
         static let textTertiary = Color("TextTertiary")
         static let accent = Color("Accent")
+        /// Text/glyphs drawn *on* an accent fill. Not a fixed white: the dark accent is light
+        /// enough that white on it would be the low-contrast pairing.
+        static let onAccent = Color("OnAccent")
 
         /// Distinct, muted tints for the header action icons (adaptive Light/Dark).
         static let iconProfile = Color("IconProfile")     // terracotta

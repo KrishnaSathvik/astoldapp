@@ -41,7 +41,12 @@ These are treated as fixed product constraints unless intentionally changed.
 - Notes MUST be grouped automatically by day.
 - MUST NOT expose user-facing pagination or a "Load more" control.
 - Search MUST be available from Home via native pull-down/`.searchable` behavior.
-- Calendar is a **secondary** navigation tool for jumping to a date — not a second database UI.
+- Calendar is a **secondary** navigation tool for reaching a date — not a second database UI.
+  Selecting a day lists that day's notes **on the calendar itself**, and opening one returns there
+  (changed 2026-08-19, replacing the day-filtered Home mode). The fence that keeps it from becoming
+  a second browsing surface: the day list is rows and nothing else — no search, no sort, no
+  grouping, no pagination, no counts, the same `NoteRow` Home uses. Home remains the only complete
+  timeline.
 - Note title MUST be optional. MUST NOT ever render `Untitled`.
 - Empty notes (no meaningful title or body) MUST be discarded automatically.
 - Home MUST NOT show note creation times on normal rows.
@@ -336,7 +341,12 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
 ### Navigation
 
 - No tab bar in V1 — not enough top-level destinations. Model: Welcome (first launch) → Home →
-  {Editor → Voice, Search, Calendar sheet, Settings → App Lock}.
+  {Editor → Voice, Search, Calendar → Editor, Settings → App Lock}.
+  (Calendar was specified as a sheet; it ships as a navigation push inside Home's stack, which
+  gives it the system back button and one obvious way out. Implementation is the source of truth
+  here — changed 2026-08-19. See `docs/03-design-system.md` §4.6.)
+- A note opened from the calendar MUST return to the calendar, with the same day still selected.
+  Back always undoes the step the user took; it MUST NOT reroute anyone to Home.
 
 ### Design direction — "Quiet Editorial"
 
@@ -350,7 +360,9 @@ decorative animation that slows capture.
   native system colors. MUST NOT scatter `Color(hex:)` or `gray500` across views.
 - Reference palette (light / dark): `canvas` `#F8F7F3`/`#101112`, `surfaceElevated` `#FFFFFF`/`#1A1B1D`,
   `textPrimary` `#1C1C1E`/`#F3F2EE`, `textSecondary` `#68686D`/`#A6A6AB`, `textTertiary` `#99999F`/`#747479`,
-  `accent` `#314D63`/`#8AA9BE`, `destructive` = iOS system red. Warm canvas/accent are custom adaptive tokens.
+  `accent` `#314D63`/`#8AA9BE`, `onAccent` `#FFFFFF`/`#101112` (text drawn *on* an accent fill — not a
+  fixed white, because the dark accent is light), `destructive` = iOS system red. Warm canvas/accent
+  are custom adaptive tokens.
 - Typography: system San Francisco + Dynamic Type-backed semantic styles. **No custom font in V1.**
   Editor line height ~1.35–1.45×.
 - Spacing: 4-pt foundation (4/8/12/16/20/24/32/40/48/64). Default horizontal margin 20 pt (Home),
