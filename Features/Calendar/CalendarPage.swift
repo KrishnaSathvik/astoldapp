@@ -17,7 +17,6 @@ struct CalendarPage: View {
     @State private var selectedDay = Calendar.current.startOfDay(for: .now)
     @State private var noteDays: Set<Date> = []
     @State private var editingNote: Note?
-    @State private var deletion = NoteDeletion()
 
     private let calendar = Calendar.current
 
@@ -43,26 +42,14 @@ struct CalendarPage: View {
             .padding(.top, DSSpacing.s4)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if deletion.pending != nil {
-                UndoBanner { deletion.undo(in: context) }
-                    .padding(.bottom, DSSpacing.s4)
-            }
         }
-        .animation(DSMotion.standard, value: deletion.pending != nil)
         .navigationTitle("Calendar")
         .navigationBarTitleDisplayMode(.inline)
         // Opening a note from here pushes onto the same stack, so Back returns to this screen.
         .navigationDestination(item: $editingNote) { note in
-            EditorView(
-                note: note,
-                onClose: { editingNote = nil },
-                onDelete: { note in
-                    editingNote = nil
-                    deletion.delete(note, in: context)
-                }
-            )
+            EditorView(note: note, onClose: { editingNote = nil })
         }
-        // `.task(id:)` alone would not re-run after returning from a note that was just deleted.
+        // `.task(id:)` alone would not re-run after returning from a note that changed while open.
         .onAppear { reloadDots() }
         .onChange(of: visibleMonth) { _, _ in reloadDots() }
     }
@@ -118,7 +105,7 @@ struct CalendarPage: View {
     }
 }
 
-/// The selected day's notes. A `@Query` so a note deleted from the editor disappears on the way
+/// The selected day's notes. A `@Query` so a note emptied in the editor disappears on the way
 /// back, without the calendar having to re-fetch by hand.
 private struct CalendarDayNotes: View {
     @Query private var notes: [Note]

@@ -24,6 +24,12 @@ private final class FakeRecorder: AudioRecording {
     func cleanup(_ url: URL) { cleaned.append(url) }
 }
 
+/// Consent that has never been granted — the first-recording state.
+private struct NeverGrantedConsent: TranscriptionConsentStoring {
+    var hasConsented: Bool { false }
+    func grant() {}
+}
+
 @MainActor
 struct VoiceCaptureModelTests {
     private func make(recorder: FakeRecorder,
@@ -215,6 +221,80 @@ struct VoiceInterruptionTests {
         #expect(emitted == FakeTranscriptionService.sampleText)
         #expect(model.phase == .idle)
         #expect(recorder.cleaned.contains(recorder.startURL))
+    }
+
+    // MARK: Leaving the editor mid-recording
+
+    /// The data-loss bug this method exists for: tapping Back while recording used to call
+    /// `cancel()`, which deleted the audio before it was ever transcribed. Everything the user had
+    /// just said disappeared, and the note went with it for being empty.
+    ///
+    /// Leaving now finishes the capture, exactly as backgrounding, an interruption, and the duration
+    /// cap already did. Back was the only exit that destroyed the recording.
+    @Test func leavingMidRecordingTranscribesInsteadOfDiscarding() async {
+        var emitted: String?
+        let recorder = FakeRecorder()
+        let model = VoiceCaptureModel(
+            recorder: recorder,
+            service: FakeTranscriptionService(delay: .milliseconds(1))
+        ) { emitted = $0 }
+
+        await model.begin()
+        #expect(model.phase == .recording)
+
+        model.finishOnLeave()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(emitted == FakeTranscriptionService.sampleText, "the spoken words must survive leaving")
+        #expect(!recorder.canceled, "leaving must not cancel the recorder out from under the capture")
+        #expect(model.phase == .idle)
+    }
+
+    /// Leaving stops the microphone either way — the temporary file is cleaned up once the transcript
+    /// lands, so nothing is left hot or on disk (RULES.md §3).
+    @Test func leavingMidRecordingLeavesNoTemporaryAudioBehind() async {
+        let recorder = FakeRecorder()
+        let model = VoiceCaptureModel(
+            recorder: recorder,
+            service: FakeTranscriptionService(delay: .milliseconds(1))
+        ) { _ in }
+
+        await model.begin()
+        model.finishOnLeave()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(recorder.cleaned.contains(recorder.startURL))
+    }
+
+    /// The one case that still discards: a first recording whose disclosure was never accepted. The
+    /// audio cannot be sent, and it cannot sit on disk with no UI left to ask.
+    @Test func leavingBeforeConsentIsGrantedStillDiscardsTheAudio() async {
+        var emitted: String?
+        let recorder = FakeRecorder()
+        let model = VoiceCaptureModel(
+            recorder: recorder,
+            service: FakeTranscriptionService(delay: .milliseconds(1)),
+            consent: NeverGrantedConsent()
+        ) { emitted = $0 }
+
+        await model.begin()
+        model.finishOnLeave()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(emitted == nil, "nothing may be sent before the disclosure is accepted")
+        #expect(recorder.canceled, "the audio must not be left on disk")
+        #expect(model.phase == .idle)
+    }
+
+    /// Leaving a note where nothing is being recorded is just leaving.
+    @Test func leavingWhenNotRecordingIsHarmless() async {
+        let model = VoiceCaptureModel(
+            recorder: FakeRecorder(),
+            service: FakeTranscriptionService(delay: .milliseconds(1))
+        ) { _ in }
+
+        model.finishOnLeave()
+        #expect(model.phase == VoiceCaptureModel.Phase.idle)
     }
 
     /// An interruption after the capture already ended is a no-op, not a second transcription.

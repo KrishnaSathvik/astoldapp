@@ -63,14 +63,14 @@ final class WritingHelpUITests: XCTestCase {
 
     func testStyleControlIsAbsentWhileReading() {
         let app = launchedIntoSeededNote()
-        XCTAssertFalse(app.buttons["Text style"].exists,
+        XCTAssertFalse(app.buttons["Style"].exists,
                        "reading a note must keep the editor chrome clean")
     }
 
     func testStyleControlAppearsWhileWritingInTheBody() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        XCTAssertTrue(app.buttons["Text style"].waitForExistence(timeout: 8),
+        XCTAssertTrue(app.buttons["Style"].waitForExistence(timeout: 8),
                       "the Style control should be reachable while writing")
     }
 
@@ -79,26 +79,28 @@ final class WritingHelpUITests: XCTestCase {
     func testStyleControlIsAbsentWhileTheTitleHasTheCaret() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        XCTAssertTrue(app.buttons["Text style"].waitForExistence(timeout: 8),
+        XCTAssertTrue(app.buttons["Style"].waitForExistence(timeout: 8),
                       "the Style control should start out available")
 
         tap(app.textFields["Title"], "Title field")
-        XCTAssertTrue(app.buttons["Text style"].waitForNonExistence(timeout: 8),
+        XCTAssertTrue(app.buttons["Style"].waitForNonExistence(timeout: 8),
                       "styling a title is meaningless — the control must not be offered")
-        XCTAssertTrue(app.buttons["Dismiss keyboard"].exists,
-                      "the title is still being edited, so Done should remain")
+        XCTAssertTrue(app.keyboards.element.exists,
+                      "the title is still being edited — only the Style control went away")
     }
 
-    /// Dismissing the keyboard is leaving the writing state, so the control leaves with it.
-    func testStyleControlDisappearsWhenEditingEnds() {
+    /// Leaving the writing state takes the control with it. There is no Done to press, so the exit
+    /// under test is the real one: navigating Back.
+    func testStyleControlDisappearsWhenTheNoteIsLeft() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        let style = app.buttons["Text style"]
+        let style = app.buttons["Style"]
         XCTAssertTrue(style.waitForExistence(timeout: 8), "the control should be present while writing")
 
-        tap(app.buttons["Dismiss keyboard"], "Done")
+        app.typeText("Something")
+        tap(app.buttons["Back to notes"], "Back to notes")
         XCTAssertTrue(style.waitForNonExistence(timeout: 8),
-                      "leaving the writing state should take the Style control with it")
+                      "leaving the note should take the Style control with it")
     }
 
     /// The standalone `?` was folded into the Style menu. It must not survive as a second control —
@@ -106,7 +108,7 @@ final class WritingHelpUITests: XCTestCase {
     func testTheStandaloneHelpButtonIsGone() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        XCTAssertTrue(app.buttons["Text style"].waitForExistence(timeout: 8), "editor did not open")
+        XCTAssertTrue(app.buttons["Style"].waitForExistence(timeout: 8), "editor did not open")
         XCTAssertFalse(app.buttons["Writing help"].exists,
                        "the standalone ? should have been folded into the Style menu")
     }
@@ -116,7 +118,7 @@ final class WritingHelpUITests: XCTestCase {
     func testStyleMenuOffersTheSixStructuresAndNothingElse() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        tap(app.buttons["Text style"], "Text style")
+        tap(app.buttons["Style"], "Style")
 
         for name in ["Normal", "Heading", "Subheading", "Bullet list", "Numbered list", "Checklist"] {
             XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 8),
@@ -136,7 +138,7 @@ final class WritingHelpUITests: XCTestCase {
         tap(app.buttons["New note"], "New note")
         app.typeText("# Alaska")
 
-        tap(app.buttons["Text style"], "Text style")
+        tap(app.buttons["Style"], "Style")
         let heading = app.buttons["Heading"]
         XCTAssertTrue(heading.waitForExistence(timeout: 8), "the Style menu did not open")
         XCTAssertTrue(heading.isSelected, "the current block should be checked")
@@ -148,7 +150,7 @@ final class WritingHelpUITests: XCTestCase {
     func testWritingHelpIsReachableThroughTheStyleMenu() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        tap(app.buttons["Text style"], "Text style")
+        tap(app.buttons["Style"], "Style")
         tap(app.buttons["Writing help…"], "Writing help…")
 
         XCTAssertTrue(app.navigationBars["Writing in As Told"].waitForExistence(timeout: 8),
@@ -168,7 +170,7 @@ final class WritingHelpUITests: XCTestCase {
     func testHelpSheetOffersNoFormattingActions() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        tap(app.buttons["Text style"], "Text style")
+        tap(app.buttons["Style"], "Style")
         tap(app.buttons["Writing help…"], "Writing help…")
         XCTAssertTrue(app.staticTexts["Heading"].waitForExistence(timeout: 8), "the sheet did not open")
 

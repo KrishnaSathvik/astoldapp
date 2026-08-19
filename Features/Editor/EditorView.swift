@@ -14,9 +14,6 @@ struct EditorView: View {
     let note: Note
     /// Set by Home to nil the navigationDestination item — the reliable way to pop an item-based push.
     var onClose: (() -> Void)? = nil
-    /// Deletes this note through Home's existing soft-delete + Undo path, then pops. Home owns the
-    /// undo window, so the banner appears where the user lands.
-    var onDelete: ((Note) -> Void)? = nil
     @State private var model: EditorModel?
     @State private var voice: VoiceCaptureModel?
     @State private var bodySelection = NSRange(location: 0, length: 0)
@@ -26,8 +23,6 @@ struct EditorView: View {
     /// Whether the body had the caret when recording started — decides whether the keyboard comes
     /// back after the transcript lands.
     @State private var refocusBodyAfterVoice = false
-    /// Set while this note is being deleted, so leaving does not autosave it on the way out.
-    @State private var isDeleting = false
     /// Owns the one-time voice tip. A reference type so the decision (and its persistence) is testable
     /// away from the view — see `WritingEducation`.
     @State private var education = WritingEducation()
@@ -49,24 +44,6 @@ struct EditorView: View {
         if let onClose { onClose() } else { dismiss() }
     }
 
-    /// Deletion is reversible for a short period (RULES.md §4 core rule 8), so this takes the same
-    /// soft-delete + Undo path as a swipe on Home rather than asking for confirmation first.
-    private func deleteNote() {
-        guard let onDelete else { return }
-        dismissKeyboard()
-        voice?.cancel()
-        voice = nil
-        // Skip the autosave-on-leave: the note is going away, and `finish()` would only bump its
-        // updatedAt on the way out.
-        isDeleting = true
-        model?.cancelPendingSave()
-        onDelete(note)
-    }
-
-    private func dismissKeyboard() {
-        titleFocused = false
-        bodyFocused = false
-    }
 
     /// Drives the Style menu: reads the selection's current style so the menu can check it, and
     /// applies a chosen one through the body's shared `DocumentAction` path.
@@ -110,13 +87,16 @@ struct EditorView: View {
             #endif
         }
         .onDisappear {
-            // Leaving mid-recording must not leave the microphone hot or raw audio on disk.
-            voice?.cancel()
+            // Back is not a cancel. A running recording is finished and transcribed, exactly as
+            // backgrounding, a phone call, and the duration cap already do — leaving used to delete
+            // the audio, so tapping Back mid-sentence destroyed everything the user had said.
+            // `finishOnLeave` stops the microphone either way, so nothing is left hot or on disk.
+            voice?.finishOnLeave()
             voice = nil
-            if !isDeleting { model?.finish() }
+            model?.finish()
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active, !isDeleting { model?.flush() }
+            if phase != .active { model?.flush() }
             // Recording cannot continue once the app is suspended, so finish the capture with the
             // audio already on disk rather than stranding it.
             if phase == .background, voice?.phase == .recording { voice?.done() }
@@ -131,16 +111,6 @@ struct EditorView: View {
                     .foregroundStyle(Color.ds.accent)
                 }
                 .accessibilityLabel("Back to notes")
-            }
-            // Autosave is the only save (RULES.md §4), so this is *not* a completion control — it
-            // exists solely to put the keyboard away, and only while the keyboard is up.
-            if isEditing {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismissKeyboard() }
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.ds.accent)
-                        .accessibilityLabel("Dismiss keyboard")
-                }
             }
             // The Style control (docs/02-features.md Milestone B2). One contextual button, shown only
             // while the *body* has the caret — styling a title is meaningless, and a control that
@@ -167,24 +137,7 @@ struct EditorView: View {
                         Image(systemName: "textformat")
                             .foregroundStyle(Color.ds.accent)
                     }
-                    .accessibilityLabel("Text style")
-                }
-            }
-            // The overflow holds exactly one action: there must be a way to delete the note you are
-            // looking at. It is not a place to put formatting, sharing, or export — those are on the
-            // do-not-build list (RULES.md §7) and a junk-drawer menu is how they arrive.
-            if onDelete != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Delete Note", systemImage: "trash", role: .destructive) {
-                            deleteNote()
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .foregroundStyle(Color.ds.accent)
-                    }
-                    .disabled(isCapturing)   // the transcript owns the note until the capture ends
-                    .accessibilityLabel("More actions")
+                    .accessibilityLabel("Style")
                 }
             }
         }

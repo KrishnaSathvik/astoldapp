@@ -110,7 +110,7 @@ Responsibilities:
 - selection anchor
 - **focus state** — two-way with the `UITextView` body, so the editor always knows whether a caret
   is active. Drives three things: whether the keyboard opens on arrival (new note yes, existing note
-  no), whether the keyboard-dismissing `Done` is offered, and whether a transcript inserts at the
+  no), whether the Style menu is offered (body caret only), and whether a transcript inserts at the
   caret or appends to the end.
 - autosave scheduling
 - empty draft cleanup

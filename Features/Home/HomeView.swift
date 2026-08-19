@@ -42,16 +42,9 @@ struct HomeView: View {
             #endif
             .animation(DSMotion.standard, value: deletion.pending != nil)
             .navigationDestination(item: $editingNote) { note in
-                EditorView(
-                    note: note,
-                    onClose: { editingNote = nil },
-                    // Same soft-delete + Undo path as a swipe on Home; the banner appears here,
-                    // where the user lands.
-                    onDelete: { note in
-                        editingNote = nil
-                        deletion.delete(note, in: context)
-                    }
-                )
+                // Deleting a note happens on the timeline, by swiping it. The editor deliberately
+                // carries no delete of its own — see RULES.md §4.
+                EditorView(note: note, onClose: { editingNote = nil })
             }
             .navigationDestination(isPresented: $showingCalendar) {
                 CalendarPage()

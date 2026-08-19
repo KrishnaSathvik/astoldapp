@@ -164,6 +164,9 @@ iPhone
 - delete temporary file
 - no text mutation
 
+Cancel is the **only** way a recording is deliberately thrown away, and it is always an explicit tap.
+Leaving the note is not cancelling — see "Leaving mid-recording" below.
+
 ### Done
 
 - stop recorder
@@ -172,6 +175,31 @@ iPhone
 - **one-time disclosure gate** — see below; on a consented install this is a no-op
 - show `Transcribing…`
 - upload
+
+### Leaving mid-recording — **Back finishes, it does not cancel** (fixed 2026-08-19)
+
+Navigating away while a recording is running behaves exactly as **Done** does: stop the recorder,
+finalize the file, upload, insert the transcript into the note.
+
+This was a data-loss bug. Leaving previously called `cancel()`, which deleted the audio before it
+was ever transcribed — so tapping Back mid-sentence silently destroyed everything the user had said,
+and the note went with it for being empty. Every *other* way a recording ends already finished the
+capture:
+
+| Exit | Behavior |
+|---|---|
+| Done | finish + transcribe |
+| Backgrounding the app | finish + transcribe |
+| Call / Siri interruption | finish + transcribe |
+| 10-minute duration cap | finish + transcribe |
+| **Back** | **was: delete. now: finish + transcribe** |
+
+The rule the rest of the capture already followed: *the words are already said, and dropping them is
+the one outcome worse than a rejected upload.* Back was the single exit that broke it.
+
+`VoiceCaptureModel.finishOnLeave()` owns this. The microphone is stopped either way, so nothing is
+left hot and no temporary audio survives. The one exception is a first recording whose disclosure has
+not been accepted — that audio cannot be sent and cannot be kept, so leaving still discards it.
 
 ### One-time transcription disclosure
 
@@ -190,7 +218,9 @@ is the moment before the first upload.
 - **Continue** → remember, then send the waiting recording.
 - **Cancel** → delete the recording, send nothing, leave the note untouched. Declining is not
   remembered as consent, so the question returns on the next attempt.
-- Abandoning it (leaving the note mid-question) aborts the capture and deletes the audio.
+- Abandoning it (leaving the note mid-question) aborts the capture and deletes the audio. This is the
+  one place leaving still discards: the audio may not be sent without an answer, and it may not sit
+  on disk with no UI left to ask (RULES.md §3).
 - Only applies when the configured service actually uploads (`TranscriptionService.sendsAudioOffDevice`).
   Disclosing a transfer that does not happen would be its own inaccuracy, so the local fake is never
   gated. The property defaults to `true`, so a new service that forgets to answer discloses rather

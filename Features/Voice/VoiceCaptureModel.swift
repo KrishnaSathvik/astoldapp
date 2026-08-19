@@ -82,6 +82,22 @@ final class VoiceCaptureModel {
         transcribe(url)
     }
 
+    /// Leaving the editor while a recording is running.
+    ///
+    /// Finishing, not cancelling. Backgrounding, a phone call, and the duration cap all already
+    /// finish the capture and transcribe what was said; Back was the one exit that deleted it, which
+    /// meant tapping it mid-sentence silently destroyed everything the user had spoken. The words are
+    /// already said — the rule the rest of this type follows is that dropping them is the one outcome
+    /// worse than a rejected upload.
+    ///
+    /// The single exception is a first recording whose disclosure has not been accepted. That audio
+    /// cannot be sent, and it cannot be kept on disk with no UI left to ask (RULES.md §3), so it is
+    /// the one case where leaving still discards.
+    func finishOnLeave() {
+        guard phase == .recording, consent.hasConsented else { cancel(); return }
+        done()
+    }
+
     /// Abort the whole capture and delete the temporary audio.
     func cancel() {
         limitTask?.cancel()

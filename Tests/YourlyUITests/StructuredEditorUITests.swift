@@ -187,7 +187,7 @@ final class StructuredEditorUITests: XCTestCase {
 
     /// Opens the contextual `Aa` menu and picks a structure.
     private func applyStyle(_ name: String, in app: XCUIApplication) {
-        let control = app.buttons["Text style"]
+        let control = app.buttons["Style"]
         XCTAssertTrue(control.waitForExistence(timeout: 8), "the Style control was not available")
         control.tap()
         let item = app.buttons[name]

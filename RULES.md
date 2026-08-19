@@ -51,7 +51,10 @@ These are treated as fixed product constraints unless intentionally changed.
 - Empty notes (no meaningful title or body) MUST be discarded automatically.
 - Home MUST NOT show note creation times on normal rows.
 - Editor shows the note **date**, not a prominent time.
-- Notes MUST autosave. MUST NOT show a Save button.
+- Notes MUST autosave. MUST NOT show a Save button — and MUST NOT show a `Done` either. A control
+  that ends editing implies that not pressing it loses work, which is the belief autosave exists to
+  make false. Removed 2026-08-19 after a user lost a note to exactly that belief. The keyboard leaves
+  by scrolling the body interactively or by navigating Back; **Back always saves.**
 - MUST NOT show a visible formatting toolbar. Light structure — headings / subheadings / bullet /
   numbered / checklist — **shipped in V1** (§7) and is created three equivalent ways: choosing it in
   the contextual **Style** menu, typing its marker, or speaking its command. All three route through
@@ -306,17 +309,19 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
 
 ### Editor
 
-- Required elements: Back, Style menu, overflow menu, date, optional title field, body text area,
-  mic control. The Style menu is contextual — present only while the body has the caret, gone while
-  reading and while the title is being edited (styling a title means nothing).
-- The overflow menu holds **exactly one** action in V1: `Delete Note`, routed through the same
-  soft-delete + Undo path as a swipe on Home (no confirmation dialog — Undo is the safety net).
-  It MUST NOT become a drawer for share / export / duplicate / formatting / word count / pin; those
-  are on the do-not-build list (§7) and an overflow is how they get in.
-- Forbidden default UI: Save button, formatting bar, standalone checklist button, attachment row, AI
-  button, word count, prominent timestamp, toolbar occupying writing width. The Style menu is not a
-  formatting bar: one item, contextual, and its options live behind a tap rather than on the page.
-  A keyboard-accessory row of style buttons (`H1 H2 • 1. ☑`) IS the forbidden bar and MUST NOT ship.
+- Required elements: Back, Style menu, date, optional title field, body text area, mic control —
+  and nothing else. The Style menu is contextual: present only while the body has the caret, gone
+  while reading and while the title is being edited (styling a title means nothing).
+- The editor has **no overflow menu**. Deleting a note happens on the timeline, by swiping it —
+  one place, one gesture, still soft-delete + Undo with no confirmation dialog. (Changed 2026-08-19;
+  the editor previously held a `Delete Note` overflow. An overflow in the editor is how share /
+  export / duplicate / word count / pin arrive, and those are all on the do-not-build list (§7) —
+  removing the menu removes the door.)
+- Forbidden default UI: Save button, `Done`, overflow menu, formatting bar, standalone checklist
+  button, attachment row, AI button, word count, prominent timestamp, toolbar occupying writing
+  width. The Style menu is not a formatting bar: one item, contextual, and its options live behind a
+  tap rather than on the page. A keyboard-accessory row of style buttons (`H1 H2 • 1. ☑`) IS the
+  forbidden bar and MUST NOT ship.
 - Title placeholder `Title`; body placeholder `Start writing…` and nothing else. No visible
   box/border on either. (The empty note carried a marker cheat-sheet until 2026-08-19; it went with
   the arrival of the Style menu — teaching syntax before the first word was the price of having no
@@ -662,7 +667,7 @@ Source: `docs/01-product-requirements.md` §15, `docs/07-build-plan.md` (Definit
 - No user-facing surface says `Yourly`: UI copy, accessibility labels, display name, App Store
   listing, website, and support content all read **As Told**.
 - The verification suite in `docs/07-build-plan.md` ("Verification suite") is green at its stated
-  baseline — 376 unit, 41 UI, 84 relay, clean typecheck, Release build succeeds. (Was written as
+  baseline — 380 unit, 41 UI, 84 relay, clean typecheck, Release build succeeds. (Was written as
   "305 unit, 33 UI"; the unit figure was already stale at 345 before the Style menu landed, so the
   number had drifted from the suite it was supposed to guard. Measured, not estimated, 2026-08-19.)
   The UI suite flakes

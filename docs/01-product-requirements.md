@@ -255,7 +255,7 @@ Use native iOS conventions wherever they improve familiarity, accessibility, mot
 4. Microphone permission is requested only if not already determined.
 5. Recording interface appears inline/bottom.
 6. User speaks.
-7. User taps Done.
+7. User taps Done — or simply leaves the note, which finishes the capture the same way.
 8. Recording stops.
 9. App shows `Transcribing…`.
 10. Audio is securely sent to the transcription service.
@@ -371,7 +371,7 @@ Exact batch size is an implementation tuning parameter.
 ### Required visual elements
 
 - Back
-- overflow menu
+- Style menu (contextual — only while the body has the caret)
 - date
 - optional title field
 - body text area

@@ -692,7 +692,7 @@ discover that As Told has structure. Promoted into V1 on 2026-08-19 (`RULES.md` 
 **As built** (`Core/Editor/BlockStyle.swift`, `Features/Editor/EditorView.swift`,
 `Features/Editor/BodyTextView.swift`):
 
-- One contextual **`Aa`** toolbar item (SF Symbol `textformat`, accessibility label "Text style")
+- One contextual **`Aa`** toolbar item (SF Symbol `textformat`, accessibility label "Style")
   offering exactly: Normal · Heading · Subheading · Bullet list · Numbered list · Checklist, then a
   divider, then **Writing help…**. It routes through the existing `setBlockKind` primitive — no second
   formatting path.

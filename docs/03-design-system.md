@@ -337,7 +337,7 @@ note's own overflow (`···` → Delete Note) covers it, and the Undo banner ap
 ## 4.7 Editor — idle/typing
 
 ```text
-<                            Aa      ···
+<                                   Aa
 
 AUGUST 17, 2026
 
@@ -370,16 +370,17 @@ The same screen serves both; only the arriving focus differs.
 | | New note | Existing note |
 |---|---|---|
 | On open | body focused, keyboard up | reading — nothing focused, no keyboard |
-| Trailing toolbar | `Done` (dismisses keyboard), `Aa` (Style) | nothing |
+| Trailing toolbar | `Aa` (Style) | nothing |
 | Starting to edit | already editing | tap title or body; caret lands where tapped |
 
-`Aa` is narrower than `Done`: `Done` shows whenever *anything* has the keyboard, `Aa` only when the
-**body** has the caret. Editing the title shows `Done` alone — a title has no block structure, so
-offering to style it would be offering something that does nothing.
+`Aa` shows only when the **body** has the caret. Editing the title shows no trailing chrome at all —
+a title has no block structure, so offering to style it would be offering something that does
+nothing.
 
-No `Read Mode` / `Edit Mode` toggle, and no custom "Hide Keyboard" bar. The keyboard leaves by
-scrolling the body interactively, by `Done`, or by navigating Back. `Done` never navigates —
-autosave already saved, so a completion control would be a second Back.
+No `Read Mode` / `Edit Mode` toggle, no custom "Hide Keyboard" bar, and **no `Done`**. The keyboard
+leaves by scrolling the body interactively or by navigating Back. There is no completion control at
+all: autosave already saved, and a button that ends editing teaches people that not pressing it
+loses work — which is exactly what happened before it was removed (2026-08-19).
 
 ### Title
 
@@ -395,7 +396,7 @@ rather than the price of entry.)
 
 ### Style menu (`Aa`)
 
-One toolbar item, SF Symbol `textformat`, accessibility label "Text style". Shown only while the body
+One toolbar item, SF Symbol `textformat`, accessibility label "Style". Shown only while the body
 has the caret. Opens a menu — never a sheet, because a sheet resigns first responder and would drop
 both the keyboard and the selection being styled.
 

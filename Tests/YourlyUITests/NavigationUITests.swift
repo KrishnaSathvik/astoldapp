@@ -56,13 +56,14 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8), "Editor should open")
         XCTAssertFalse(app.keyboards.element.waitForExistence(timeout: 3),
                        "Opening an existing note must not raise the keyboard")
-        // No completion control while reading — autosave is the only save (RULES.md §4).
-        XCTAssertFalse(app.buttons["Dismiss keyboard"].exists,
-                       "Done should not be offered when there is nothing to dismiss")
+        // Autosave is the only save and the editor carries no completion control at all (RULES.md §4).
+        XCTAssertFalse(app.buttons["Dismiss keyboard"].exists, "the editor must not offer Done")
+        XCTAssertFalse(app.buttons["More actions"].exists, "the editor must not offer an overflow menu")
     }
 
-    /// Tapping the body starts editing, and Done puts the keyboard away without leaving the note.
-    func testTappingBodyStartsEditingAndDoneDismissesTheKeyboard() {
+    /// Tapping the body starts editing. There is no Done: the keyboard leaves by scrolling the body
+    /// or by navigating Back, and autosave means neither is a save (RULES.md §4).
+    func testTappingBodyStartsEditingAndOffersNoDoneButton() {
         let app = launchedApp()
         let note = app.buttons
             .matching(NSPredicate(format: "label CONTAINS[c] %@", "Alaska trip idea"))
@@ -75,11 +76,10 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(app.keyboards.element.waitForExistence(timeout: 8),
                       "Tapping the body should start editing")
 
-        tap(app.buttons["Dismiss keyboard"], "editor Done button")
-        XCTAssertTrue(app.keyboards.element.waitForNonExistence(timeout: 8),
-                      "Done should dismiss the keyboard")
-        XCTAssertTrue(app.buttons["Back to notes"].exists,
-                      "Done must not navigate away — it only dismisses the keyboard")
+        XCTAssertFalse(app.buttons["Dismiss keyboard"].exists,
+                       "the editor must not offer a Done button while writing")
+        // Back is the exit, and it saves. Nothing has to be pressed first.
+        XCTAssertTrue(app.buttons["Back to notes"].exists)
     }
 
     func testSwipeToDeleteRemovesNote() {
@@ -177,9 +177,10 @@ final class NavigationUITests: XCTestCase {
     }
 }
 
-/// The editor's overflow menu. It exists for one reason: there must be a way to delete the note you
-/// are currently looking at, and it must take the same reversible path as a swipe on Home.
-final class EditorOverflowUITests: XCTestCase {
+/// What the editor does *not* show. The screen is Back, Style, and the note — no Done, no overflow,
+/// no delete. Each of those was removed for a reason, and each would look like a harmless addition
+/// to someone who did not know the reason, so their absence is asserted rather than assumed.
+final class EditorChromeUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     private func launchedApp() -> XCUIApplication {
@@ -199,37 +200,31 @@ final class EditorOverflowUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8), "editor should open")
     }
 
-    func testOverflowHoldsOnlyDelete() {
+    /// The editor carries no overflow menu. Deleting a note is done on the timeline, by swiping it —
+    /// one place, one gesture. An overflow in here is how Share / Export / Duplicate arrive
+    /// (RULES.md §7), so its absence is the fence.
+    func testTheEditorHasNoOverflowMenu() {
         let app = launchedApp()
         openSeededNote(app)
 
-        app.buttons["More actions"].tap()
-        XCTAssertTrue(app.buttons["Delete Note"].waitForExistence(timeout: 8),
-                      "the overflow should offer Delete Note")
-        // Guard against the menu becoming a junk drawer (RULES.md §7).
-        for forbidden in ["Share", "Export", "Duplicate", "Format", "Word Count", "Pin"] {
-            XCTAssertFalse(app.buttons[forbidden].exists, "\(forbidden) must not be in the overflow")
+        XCTAssertFalse(app.buttons["More actions"].exists, "the editor must not offer an overflow menu")
+        XCTAssertFalse(app.buttons["Delete Note"].exists, "delete belongs to the timeline, not the editor")
+        for forbidden in ["Share", "Export", "Duplicate", "Word Count", "Pin"] {
+            XCTAssertFalse(app.buttons[forbidden].exists, "\(forbidden) must not be in the editor")
         }
     }
 
-    func testDeletingFromTheEditorReturnsHomeAndIsUndoable() {
+    /// The only chrome the editor shows while writing: Back and Style. Everything else was either a
+    /// save control the app does not need or an action that belongs somewhere else.
+    func testEditorChromeIsBackAndStyleOnly() {
         let app = launchedApp()
         openSeededNote(app)
+        app.textViews.firstMatch.tap()
+        XCTAssertTrue(app.buttons["Style"].waitForExistence(timeout: 8), "Style should be available")
 
-        app.buttons["More actions"].tap()
-        XCTAssertTrue(app.buttons["Delete Note"].waitForExistence(timeout: 8))
-        app.buttons["Delete Note"].tap()
-
-        // Same reversible path as a swipe: the Undo banner is waiting on Home. Asserted first —
-        // the banner is deliberately short-lived, and every XCUI query costs a snapshot.
-        let undo = app.buttons["Undo"]
-        XCTAssertTrue(undo.waitForExistence(timeout: 8), "Undo should be offered on Home")
-
-        let deleted = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Alaska trip idea"))
-        XCTAssertFalse(deleted.firstMatch.exists, "note should be gone")
-
-        undo.tap()
-        XCTAssertTrue(deleted.firstMatch.waitForExistence(timeout: 8), "Undo should restore the note")
+        XCTAssertFalse(app.buttons["Dismiss keyboard"].exists)
+        XCTAssertFalse(app.buttons["More actions"].exists)
+        XCTAssertTrue(app.buttons["Back to notes"].exists)
     }
 }
 
@@ -312,8 +307,9 @@ final class CalendarDayNotesUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Calendar"].exists, "still on the calendar")
     }
 
-    /// Deleting from a note opened via the calendar is offered and reversible, right here.
-    func testDeletingANoteOpenedFromTheCalendarIsUndoableOnTheCalendar() {
+    /// A note opened from the calendar offers no delete either — the calendar is a way to reach a
+    /// date, not a second place to manage notes (RULES.md §1). Back returns to the calendar.
+    func testANoteOpenedFromTheCalendarOffersNoDeleteAndReturnsThere() {
         let app = launchedApp()
         openCalendar(app)
 
@@ -322,18 +318,15 @@ final class CalendarDayNotesUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 8))
         row.tap()
 
-        XCTAssertTrue(app.buttons["More actions"].waitForExistence(timeout: 8))
-        app.buttons["More actions"].tap()
-        XCTAssertTrue(app.buttons["Delete Note"].waitForExistence(timeout: 8))
-        app.buttons["Delete Note"].tap()
+        XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8), "the note should open")
+        XCTAssertFalse(app.buttons["More actions"].exists, "no overflow in the editor")
+        XCTAssertFalse(app.buttons["Delete Note"].exists, "no delete in the editor")
 
-        let undo = app.buttons["Undo"]
-        XCTAssertTrue(undo.waitForExistence(timeout: 8), "Undo should be offered on the calendar")
-        XCTAssertTrue(app.navigationBars["Calendar"].exists, "deletion returns to the calendar")
-        XCTAssertFalse(note(app, "Work ideas").exists, "the row should be gone")
-
-        undo.tap()
-        XCTAssertTrue(note(app, "Work ideas").waitForExistence(timeout: 8), "Undo restores it")
+        app.buttons["Back to notes"].tap()
+        XCTAssertTrue(app.navigationBars["Calendar"].waitForExistence(timeout: 8),
+                      "Back should return to the calendar")
+        XCTAssertTrue(note(app, "Work ideas").waitForExistence(timeout: 8),
+                      "the note is still there — nothing deleted it")
     }
 }
 
