@@ -507,17 +507,35 @@ Could conflict with purely chronological philosophy; evaluate before building.
 
 ---
 
-# Adopted direction — post-V1 (sequenced, guarded)
+# Adopted direction (sequenced, guarded)
 
 Adopted 2026-08-18 with the "anything you want to put into words" repositioning (`README.md` §2,
-`docs/08-positioning-marketing.md`). These are **not V1 scope** and MUST NOT be marketed until shipped
-(`RULES.md` §7 — marketing lags implementation). Build in order; do not build everything at once. The
-overriding constraint: the app must still feel almost as simple as today (`docs/01` §14 success test).
+`docs/08-positioning-marketing.md`). Build in order; do not build everything at once. The overriding
+constraint: the app must still feel almost as simple as today (`docs/01` §14 success test).
 
-## Milestone A — Structured editor
+> **Status, 2026-08-19 — Milestones A and B shipped in V1.** Both were planned as post-V1 work and this
+> section described them that way; they were pulled forward and the implementation landed before the
+> docs were updated. Their sections below are now **descriptions of shipped behavior**, not plans.
+> Milestone B2 and everything after it remain unbuilt. Marketing still lags implementation
+> (`RULES.md` §7): shipped is the bar for claiming a capability, and B2 has not cleared it.
 
-Give the plain-text editor a **very small** amount of structure so drafts, lists, plans, and checklists
+## Milestone A — Structured editor — **shipped in V1**
+
+Gives the plain-text editor a **very small** amount of structure so drafts, lists, plans, and checklists
 are possible on the same universal document. No document types; the page never asks what the writing is.
+
+**As built** (`Core/Editor/StructuredText.swift`, `StructuredTextRendering.swift`,
+`Features/Editor/BodyTextView.swift`):
+
+- Canonical markers live **inside `body: String`** — `# `, `## `, `- `, `1. `, `- [ ] ` / `- [x] `. The
+  trailing space is part of the marker; without it the line is ordinary text.
+- Markers are **hidden at the glyph layer, never removed**. The source string always holds them, which is
+  what keeps search, structured copy/paste, undo, and voice insertion working on one set of offsets, and
+  what lets SwiftData keep storing plain text.
+- **Return** continues a list and exits an empty item. **Backspace** at line start demotes to paragraph.
+  The **checkbox gutter** toggles an item. All of it routes through the shared `DocumentAction`
+  operations, so typing and voice perform the same edits.
+- Structure is created by **typing a marker**, never by a control (`RULES.md` §1).
 
 Supported structures (and only these):
 
@@ -585,10 +603,21 @@ them (`RULES.md` §4).
 - Copying a checklist into Messages pastes `☐ Call Ravi`; copying it back into As Told restores a real
   checklist item.
 
-## Milestone B — Voice structure commands
+## Milestone B — Voice structure commands — **shipped in V1**
 
-Extend voice from speech-to-string to **speech-to-document**, on the same document model — no separate
-voice-only note system. Only after Milestone A structures are stable.
+Extends voice from speech-to-string to **speech-to-document**, on the same document model — no separate
+voice-only note system.
+
+**As built** (`Core/Editor/VoiceStructure.swift`). A command is recognized only when all four hold:
+
+1. it is at the **start of the transcript** or after a sentence boundary (`.` `!` `?` newline);
+2. it matches one of the nine phrases exactly, case-insensitively;
+3. it ends on a **word boundary** — "headings" is not `heading`;
+4. it is followed by a terminator or the **end of the transcript**.
+
+Anything else is inserted verbatim. Ordinary speech that merely sounds structured — *"buy milk, and also
+eggs, and bread"* — stays one sentence, because inferring a list would be deciding the words meant
+something the speaker did not say.
 
 - Small, fixed, deterministic vocabulary: `new paragraph`, `new line`, `heading`, `subheading`,
   `bullet list`, `numbered list`, `checklist`, `next item`, `end list`.
@@ -609,6 +638,40 @@ voice-only note system. Only after Milestone A structures are stable.
   three-item checklist; speaking the literal words "new paragraph" mid-sentence, ambiguously, keeps the words.
 - "New paragraph... I visited in January." leaves no dots behind; "The heading was completely wrong." stays
   words.
+
+## Discoverability — **shipped in V1** (2026-08-19)
+
+Both ways of creating structure are invisible: typing markers only helps someone who already knows the
+syntax, and the nine voice phrases are unguessable. Three surfaces close that gap without a toolbar —
+the constraint from `RULES.md` §1 is that the affordance may be contextual, never permanent, and
+`WritingHelp` derives all of its content from `BlockKind` and `VoiceStructureParser` so help cannot drift
+from behavior.
+
+| Surface | When | What it teaches |
+|---|---|---|
+| Empty-note hint | body is empty | `# `, `- `, `- [ ] ` — three markers, under the placeholder |
+| Contextual `?` | only while editing | the full reference: five markers, all nine commands |
+| Voice tip | once, after the **first successful** transcription | two examples, near the microphone |
+
+Rules that hold these in place:
+
+- The hint rides with the placeholder, so it can never appear over anyone's words, and the **first
+  keystroke is the dismissal** — no button, no reserved space.
+- The `?` follows the same contextual rule as the Done button: present while editing, gone while reading.
+  It is **reference only** and applies no structure. A formatting action here would be the ribbon §1
+  forbids, arriving one tap deeper. Anything of that kind belongs in Milestone B2 below.
+- The voice tip requires a transcription that **actually succeeded and actually left the device**. A
+  failure, a cancelled capture, or a declined disclosure leaves it unshown *and* unmarked, so it still has
+  its one chance later. This also keeps it from stacking on the consent sheet during a first recording.
+- The tip shows two examples, not nine commands. Nine commands out of context teaches nobody; the `?` is
+  where someone who wants the full list will look.
+
+### Accepted limitation — search matches markers
+
+`noteMatches` runs over the raw source, so a query containing marker characters can match structure:
+`[x]` finds every checked item, `- ` every bullet. Accepted for V1 and deliberately not fixed. It exposes
+no markers visually, corrupts no results, and loses no legitimate match — stripping markers before search
+would mean maintaining a second projection of every note purely to make a rare query tidier.
 
 ## Milestone B2 — the "Style" control (post-release, design-test first)
 

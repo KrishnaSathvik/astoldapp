@@ -18,6 +18,19 @@ enum VoiceStructureParser {
         case command(Command)
     }
 
+    /// The spoken vocabulary in *teaching* order, for the writing-help sheet. `phrases` below is
+    /// ordered by match precedence, which is not an order to show anyone. `WritingHelpTests` pins this
+    /// list to `recognizedPhrases`, so help can never advertise a command the parser does not accept
+    /// (or quietly omit one it does).
+    static let vocabulary = [
+        "New paragraph", "New line", "Heading", "Subheading",
+        "Bullet list", "Numbered list", "Checklist", "Next item", "End list",
+    ]
+
+    /// Every phrase the matcher actually recognizes. Exposed so the help sheet is checked against the
+    /// real parser rather than against a copy of its contents.
+    static var recognizedPhrases: Set<String> { Set(phrases.map(\.text)) }
+
     // Longer phrases first so "numbered list"/"subheading" win over any shorter prefix. `inline` marks a
     // command that may be followed immediately by its content (only "next item"); the rest are standalone
     // and require a following terminator (or end of transcript).

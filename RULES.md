@@ -52,10 +52,11 @@ These are treated as fixed product constraints unless intentionally changed.
 - Home MUST NOT show note creation times on normal rows.
 - Editor shows the note **date**, not a prominent time.
 - Notes MUST autosave. MUST NOT show a Save button.
-- MUST NOT show a visible formatting toolbar. (When light structure — headings / subheadings /
-  bullet / numbered / checklist — is later added per §7 and `docs/02-features.md`, it MUST arrive as
-  contextual or collapsible native affordances, never a persistent formatting ribbon; structure MUST
-  NOT visually dominate writing, and the app MUST still read as a page.)
+- MUST NOT show a visible formatting toolbar. Light structure — headings / subheadings / bullet /
+  numbered / checklist — **shipped in V1** (§7) and is created by typing its marker or speaking its
+  command, never by a control. Any affordance around it MUST stay contextual or collapsible, never a
+  persistent formatting ribbon; structure MUST NOT visually dominate writing, and the app MUST still
+  read as a page. The editor's `?` is help, shown only while editing, and applies nothing.
 - Voice and typing are two input methods for the **same** note — not two note types.
 - A voice transcript MUST become ordinary, editable text.
 - V1 voice target languages: English, Telugu, Hindi, Telugu+English, Hindi+English.
@@ -509,20 +510,49 @@ streaks · productivity analytics · AI summaries · AI rewriting · AI chat · 
 storage · iCloud sync · export · audio archive.
 
 > _(The manual theme selector was previously excluded but has been added — see §1. "checklists" was
-> previously listed here as permanently excluded; as of 2026-08-18 it is reclassified — see "Adopted
-> direction" below — as a **guarded, post-V1 milestone**, still not a task-management system.)_
+> previously listed here as permanently excluded; reclassified 2026-08-18 as a guarded milestone, and
+> **shipping in V1 as of 2026-08-19** — see "Adopted direction" below. Still not a task-management
+> system. "Markdown UI" above means a Markdown **toolbar or preview mode**, which remains excluded; the
+> typed marker syntax that produces a heading or a list is the shipped editor, not a Markdown UI.)_
 
-### Adopted direction — post-V1, sequenced and guarded (not V1 scope, not marketed until shipped)
+### Adopted direction — sequenced and guarded
 
 Repositioning As Told to "anything you want to put into words" makes a **very small** amount of writing
-structure legitimate. This is adopted long-term direction, built incrementally after V1 ships, with hard
-guardrails. Full detail: `docs/02-features.md` (Adopted direction) and `docs/08-positioning-marketing.md`.
+structure legitimate, built incrementally with hard guardrails. Full detail: `docs/02-features.md`
+(Adopted direction) and `docs/08-positioning-marketing.md`.
 
-- **Next editor milestone:** long-form editor performance, then **heading, subheading, bullet list,
-  numbered list, checklist** (optional **quote** later). Nothing else. Delivered per the formatting-toolbar
-  carve-out in §1 — contextual/collapsible affordances, never a persistent ribbon; structure never dominates writing.
-- **Next voice milestone:** the deterministic command vocabulary and conservative parser in §2
-  ("Structure the words"). Only after the editor structures above are stable.
+**Milestones A and B were pulled forward and now ship in V1** (2026-08-19). They were planned as post-V1
+work and this section described them that way; the code landed first and the rules had not caught up.
+What follows is a record of that change, not a claim they were always V1 scope.
+
+#### Shipped in V1 — Milestone A, structured writing
+
+Implemented and covered by tests. Behavior locked as described:
+
+- Block kinds: **paragraph, heading, subheading, bullet, numbered, checklist**. Nothing else
+  (optional **quote** remains a later candidate).
+- Canonical markers are stored **inside `body: String`** — the note stays plain text, no rich-text
+  storage (§5). Markers are **visually hidden at the glyph layer, never removed** from the source.
+- **Return** continues a list and exits an empty item; **Backspace** at line start demotes the block to
+  a paragraph; the **checkbox gutter** toggles a checklist item.
+- **Structured copy/paste** carries the source markers; **undo/redo** stays native and exact.
+
+#### Shipped in V1 — Milestone B, voice structure commands
+
+- Vocabulary, exactly nine: **new paragraph · new line · heading · subheading · bullet list ·
+  numbered list · checklist · next item · end list**.
+- Recognition is a **deterministic client-side parser**, not a model. Structure is applied **only on an
+  explicit command**; anything uncertain stays literal text. This is the §2 contract in the editor:
+  ordinary speech that merely *sounds* structured MUST NOT become a list.
+
+#### Discoverability rule (added 2026-08-19)
+
+Structured writing MUST remain available **without a persistent formatting toolbar**. Discoverability MAY
+use **transient placeholders, contextual editing help, and one-time voice education** — a hint that
+disappears on first keystroke, a `?` reference shown only while editing, and a single tip after the first
+successful transcription. Help surfaces are **reference only**: they explain syntax and MUST NOT apply
+structure, because a sheet of formatting buttons is the forbidden ribbon one tap deeper.
+
 - **The "Style" control** (converting an existing block — "make this a heading") is a post-release item,
   design-tested before implementation. Preferred form: a small contextual `Aa` / Style action available
   only while editing, routing through the existing `setBlockKind` primitive. It MUST NOT arrive as a

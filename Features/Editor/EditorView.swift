@@ -28,6 +28,10 @@ struct EditorView: View {
     @State private var refocusBodyAfterVoice = false
     /// Set while this note is being deleted, so leaving does not autosave it on the way out.
     @State private var isDeleting = false
+    /// Owns the one-time voice tip. A reference type so the decision (and its persistence) is testable
+    /// away from the view — see `WritingEducation`.
+    @State private var education = WritingEducation()
+    @State private var showsWritingHelp = false
 
     private var isCapturing: Bool { voice != nil }
     /// True while the user is actually editing (a field owns the keyboard), false while reading.
@@ -118,6 +122,19 @@ struct EditorView: View {
                         .accessibilityLabel("Dismiss keyboard")
                 }
             }
+            // Writing help, and only while editing — the same contextual rule the Done button follows.
+            // A note being *read* keeps its clean chrome, and structure help never becomes permanent
+            // furniture, which is what RULES.md §1/§7 require of every structure affordance. It is
+            // reference only; it applies nothing (see `WritingHelpSheet`).
+            if isEditing {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showsWritingHelp = true } label: {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundStyle(Color.ds.accent)
+                    }
+                    .accessibilityLabel("Writing help")
+                }
+            }
             // The overflow holds exactly one action: there must be a way to delete the note you are
             // looking at. It is not a place to put formatting, sharing, or export — those are on the
             // do-not-build list (RULES.md §7) and a junk-drawer menu is how they arrive.
@@ -136,6 +153,7 @@ struct EditorView: View {
                 }
             }
         }
+        .sheet(isPresented: $showsWritingHelp) { WritingHelpSheet() }
     }
 
     @ViewBuilder private func editor(_ model: EditorModel) -> some View {
@@ -160,11 +178,23 @@ struct EditorView: View {
             )
             .overlay(alignment: .topLeading) {
                 if model.body.isEmpty {
-                    Text("Start writing…")
-                        .font(.ds.editorBody)
-                        .foregroundStyle(Color.ds.textTertiary)
-                        .padding(.top, 6)
-                        .allowsHitTesting(false)
+                    // Two lines, both transient. The syntax hint is the quietest way to teach the
+                    // markers: it costs no chrome, reserves no space once writing starts, and asks
+                    // for no dismissal — the first keystroke is the dismissal. It rides with the
+                    // placeholder deliberately, so it can never appear over anyone's words.
+                    VStack(alignment: .leading, spacing: DSSpacing.s2) {
+                        Text("Start writing…")
+                            .font(.ds.editorBody)
+                            .foregroundStyle(Color.ds.textTertiary)
+                        Text(WritingHelp.emptyNoteHint)
+                            .font(.ds.caption)
+                            .foregroundStyle(Color.ds.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.top, 6)
+                    .allowsHitTesting(false)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("Writing syntax hint")
                 }
             }
         }
@@ -180,11 +210,20 @@ struct EditorView: View {
             RecordingPanel(model: voice) { endVoice() }
                 .padding(.bottom, DSSpacing.s4)
         } else {
-            HStack {
-                Spacer()
-                VoiceButton(action: { startVoice(model) }, appendsToEnd: !bodyFocused)
+            VStack(spacing: DSSpacing.s3) {
+                // Sits above the microphone that just produced the transcript, after the capture UI
+                // has gone — never stacked on the consent sheet, because it is only reachable once a
+                // transcription has actually succeeded.
+                if education.showsVoiceStructureTip {
+                    VoiceStructureTip { education.dismissVoiceStructureTip() }
+                }
+                HStack {
+                    Spacer()
+                    VoiceButton(action: { startVoice(model) }, appendsToEnd: !bodyFocused)
+                }
             }
             .padding(.bottom, DSSpacing.s4)
+            .animation(DSMotion.fast, value: education.showsVoiceStructureTip)
         }
     }
 
@@ -198,12 +237,19 @@ struct EditorView: View {
             ? bodySelection.location
             : (model.body as NSString).length
 
+        let service = TranscriptionConfig.makeService()   // real relay if configured, else fake
+        // Captured now: the tip teaches a round trip that actually happened, so the offline fake must
+        // not trigger it (`WritingEducation.voiceTranscriptionSucceeded`).
+        let sendsOffDevice = service.sendsAudioOffDevice
         let capture = VoiceCaptureModel(
             recorder: AVAudioRecorderService(),
-            service: TranscriptionConfig.makeService()   // real relay if configured, else fake
+            service: service
         ) { text in
             let cursor = model.insertVoiceTranscript(text, atUTF16: capturedInsertOffset)
             bodySelection = NSRange(location: cursor, length: 0)
+            // Only ever called on success, so a failed, cancelled, or consent-declined capture
+            // cannot reach this — which is exactly the sequencing the tip requires.
+            education.voiceTranscriptionSucceeded(sentOffDevice: sendsOffDevice)
         }
         voice = capture
         Task { await capture.begin() }
