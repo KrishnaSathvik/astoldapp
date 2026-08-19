@@ -405,6 +405,50 @@ Review every screen.
 
 ---
 
+# Verification suite
+
+The canonical run. Everything below must be green before a release build, and the counts are the
+known-good baseline — anything lower means something was lost, not that the baseline moved.
+
+```bash
+xcodegen generate   # the .xcodeproj is generated and gitignored; regenerate after adding files
+
+# 305 unit tests
+xcodebuild test -project Yourly.xcodeproj -scheme Yourly \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:YourlyTests
+
+# 33 UI tests, including the three accessibility audits
+xcodebuild test -project Yourly.xcodeproj -scheme Yourly \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:YourlyUITests -parallel-testing-enabled NO
+
+# Release build (drop CODE_SIGNING_ALLOWED=NO once signing is configured)
+xcodebuild build -project Yourly.xcodeproj -scheme Yourly \
+  -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
+
+# Relay: 84 tests, clean typecheck
+cd transcription-service && npx vitest run && npx tsc --noEmit
+```
+
+## The UI suite flakes — reproduce before believing it
+
+A whole-suite UI run fails occasionally in a way that reads exactly like a navigation regression:
+`Back to notes` never appears, `Calendar should push` times out, several classes fail at once.
+Observed 2026-08-19 — one run produced 8 such failures, and **every one of them passed when re-run
+in isolation**; three later full runs passed 33/33.
+
+So: a UI failure is not a regression until it reproduces under `-only-testing:` for that single
+class or test. Check that before touching product code.
+
+`-parallel-testing-enabled NO` is in the command above as a guard, not as the fix. The generated
+scheme already sets `parallelizable = "NO"` on both bundles and a default run creates no clone
+simulators (verified by polling `xcrun simctl list devices` mid-run), so the flag currently changes
+nothing — it only keeps the canonical command correct if that scheme setting is ever changed. The
+cause of the flaky run has not been identified.
+
+---
+
 # Definition of Done — V1
 
 The build is V1-complete only when:

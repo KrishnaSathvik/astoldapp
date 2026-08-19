@@ -624,6 +624,10 @@ Source: `docs/01-product-requirements.md` §15, `docs/07-build-plan.md` (Definit
   Calendar → Delete/Undo → Profile → Face ID.
 - No user-facing surface says `Yourly`: UI copy, accessibility labels, display name, App Store
   listing, website, and support content all read **As Told**.
+- The verification suite in `docs/07-build-plan.md` ("Verification suite") is green at its stated
+  baseline — 305 unit, 33 UI, 84 relay, clean typecheck, Release build succeeds. The UI suite flakes
+  as a whole-suite run, so a UI failure MUST be reproduced with `-only-testing:` on the single test
+  before it is treated as a regression — and MUST NOT be waved off as flake without that check.
 
 ### Release-blocking voice behavior
 
