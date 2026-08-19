@@ -416,6 +416,27 @@ Style
 - Six structures and the help row. Nothing else joins it — inline formatting (bold, italic, colors,
   alignment) is full rich text and stays on the do-not-build list (RULES.md §7).
 
+### How structure renders (`Core/Editor/StructuredTextRendering.swift`)
+
+Source markers (`# `, `- `, `1. `, `- [ ] `) stay in `body` and are hidden at the glyph layer; the
+visible bullet, number, and checkbox are drawn in a 28pt left gutter.
+
+| Role | Type |
+|---|---|
+| Heading (`# `) | `.title2` semibold |
+| Subheading (`## `) | `.headline` — body size, heavier |
+| Body, list items | `.body` |
+
+- Size carries *heading*, weight carries *subheading*. Two large sizes two points apart at the same
+  weight read as one structure, which makes the choice between them meaningless.
+- A heading and a subheading get space **above** them (0.75 / 0.55 of the body line height, so it
+  tracks Dynamic Type), never on the first line. A section break has to be visible as a break.
+- Drawn gutter markers align to the text **baseline**, not to the middle of the line fragment — the
+  fragment carries the paragraph's line spacing underneath the text, so a centred marker rides low.
+- Marker glyphs are hidden with **zero advancement**, never by being nulled. A null glyph is ignored
+  during layout, which collapses any line holding nothing but its marker — the line Return creates,
+  and the line the Style menu styles on a blank row. Guarded by `Tests/YourlyTests/StructuredLayoutTests.swift`.
+
 ---
 
 ## 4.8 Editor — voice recording
