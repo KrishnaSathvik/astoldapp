@@ -35,6 +35,15 @@ final class EditorModel {
         set { restoreIfDiscarded(); note.body = newValue; scheduleSave() }
     }
 
+    /// Normalizes tolerated marker spellings before the note is written. Parsing accepts `- [X] `
+    /// because that is what a capitalizing keyboard produces; only `- [x] ` is ever stored, so no
+    /// later operation has to know about the other one. The rewrite is same-length, so an open
+    /// editor's caret and selection survive it untouched.
+    private func canonicalizeBody() {
+        let canonical = StructuredText.canonicalized(note.body)
+        if canonical != note.body { note.body = canonical }
+    }
+
     private func scheduleSave() {
         saveTask?.cancel()
         saveTask = Task { [weak self] in
@@ -70,6 +79,7 @@ final class EditorModel {
             if hasReachedDisk { try? store.save(note) } else { discard() }
             return
         }
+        canonicalizeBody()
         try? store.save(note)
         hasReachedDisk = true
     }
@@ -86,6 +96,7 @@ final class EditorModel {
         if note.isEmptyDraft {
             discard()
         } else {
+            canonicalizeBody()
             try? store.save(note)
             hasReachedDisk = true
         }

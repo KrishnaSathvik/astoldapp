@@ -29,6 +29,25 @@ enum WritingHelp {
         Marker(marker: BlockKind.checklist(checked: false).marker, name: "Checklist"),
     ]
 
+    struct VoiceExample: Identifiable, Equatable {
+        let task: String
+        /// Said aloud, exactly as it would be spoken. `WritingHelpTests` runs every one of these
+        /// through `VoiceStructureParser`, so an example that would not actually work fails the build.
+        let utterance: String
+        var id: String { task }
+    }
+
+    /// Voice taught by example rather than by dictionary. Nine commands listed cold teach nobody what
+    /// a sentence containing them sounds like; three real utterances do, and the vocabulary stays
+    /// underneath for reference.
+    static let voiceExamples: [VoiceExample] = [
+        VoiceExample(task: "Make a heading", utterance: "Heading. Alaska plans."),
+        VoiceExample(task: "Make a list",
+                     utterance: "Bullet list. Anchorage. Next item. Seward. End list."),
+        VoiceExample(task: "Make a checklist",
+                     utterance: "Checklist. Book hotel. Next item. Rent car."),
+    ]
+
     /// What to say. The full vocabulary lives here and only here; the one-time voice tip deliberately
     /// shows two examples instead, because nine commands out of context teaches nobody.
     static let voiceCommands = VoiceStructureParser.vocabulary
@@ -38,11 +57,21 @@ enum WritingHelp {
     static let structurePromise =
         "As Told only adds structure when you ask. Otherwise your words stay as written or spoken."
 
-    /// The faint second line under "Start writing…" on an empty note. Deliberately three markers, not
-    /// five: it is a nudge that the syntax exists, and the `?` reference is where the rest lives.
-    static let emptyNoteHint = "Try “\(BlockKind.heading.marker)” for a heading, "
-        + "“\(BlockKind.bullet.marker)” for a list, or "
-        + "“\(BlockKind.checklist(checked: false).marker)” for a checklist."
+    /// The faint hint under "Start writing…" on an empty note. Deliberately three markers, not five:
+    /// it is a nudge that the syntax exists, and the `?` reference is where the rest lives.
+    ///
+    /// Shown as marker/name pairs rather than a sentence, because the trailing space is part of the
+    /// marker and a reader who omits it gets plain text. Prose with the markers quoted inline hid
+    /// exactly the character that matters; the view renders `marker` monospaced, the same treatment
+    /// `WritingHelpSheet` already uses, so the space occupies real width.
+    static let emptyNoteHintMarkers: [Marker] = [
+        Marker(marker: BlockKind.heading.marker, name: "heading"),
+        Marker(marker: BlockKind.bullet.marker, name: "list"),
+        Marker(marker: BlockKind.checklist(checked: false).marker, name: "checklist"),
+    ]
+
+    /// Introduces the markers above. Kept separate so no marker is ever embedded in prose.
+    static let emptyNoteHintLead = "Type a marker to add structure:"
 }
 
 /// Whether the one-time voice-structure tip has been shown. Local only — nothing about it is sent.

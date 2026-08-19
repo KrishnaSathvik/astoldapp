@@ -45,7 +45,10 @@ extension BlockKind {
         if line.hasPrefix("## ") { return (.subheading, 3) }
         if line.hasPrefix("# ") { return (.heading, 2) }
         if line.hasPrefix("- [ ] ") { return (.checklist(checked: false), 6) }
-        if line.hasPrefix("- [x] ") { return (.checklist(checked: true), 6) }
+        // Tolerated, not canonical: iOS autocapitalization is on by default and a hand reaches for
+        // the capital anyway. `StructuredText.canonicalized` puts it back to "- [x] " on save, so
+        // this stays an input spelling and never becomes a second stored format.
+        if line.hasPrefix("- [x] ") || line.hasPrefix("- [X] ") { return (.checklist(checked: true), 6) }
         if line.hasPrefix("- ") { return (.bullet, 2) }
 
         // Numbered: one or more ASCII digits followed by ". ".
@@ -58,6 +61,64 @@ extension BlockKind {
         }
 
         return (.paragraph, 0)
+    }
+}
+
+/// Source-level normalization. Parsing is deliberately tolerant of input spellings; storage is not.
+enum StructuredText {
+    /// Rewrites tolerated marker spellings to their canonical form. Today that is exactly one case:
+    /// a checked checklist typed as `- [X] ` becomes `- [x] `.
+    ///
+    /// Only same-length rewrites belong here. That is what makes it safe to run while an editor is
+    /// open — every caret and selection offset in the note stays valid — and it is why numbered
+    /// markers are left alone (`007. ` would canonicalize to `7. ` and move the text under the caret).
+    /// Longest canonical marker ("- [ ] "), and therefore the only part of a line that can ever be a
+    /// structural prefix. Normalization never looks past it.
+    static let markerWindow = 6
+
+    /// Characters a keyboard substitutes for the ones a marker needs. Both maps are strictly
+    /// length-preserving in UTF-16, which is what lets normalization run as an in-place substitution
+    /// without moving a single caret offset.
+    private static let dashSubstitutes: Set<Character> = ["\u{2010}", "\u{2011}", "\u{2012}",
+                                                          "\u{2013}", "\u{2014}", "\u{2015}",
+                                                          "\u{2212}"]
+    private static let spaceSubstitutes: Set<Character> = ["\u{00A0}", "\u{202F}", "\u{2007}",
+                                                           "\u{2009}"]
+
+    /// Rewrites a line's *structural prefix* to canonical characters — smart dashes back to `-`,
+    /// non-breaking spaces back to a plain space, `[X]` to `[x]` — and returns the line unchanged if
+    /// the result is not actually a marker.
+    ///
+    /// That last condition is the whole safety argument. Only the first `markerWindow` characters are
+    /// touched, and only when they resolve to a real marker, so ordinary prose is never rewritten:
+    /// "I worked 9–5 today." keeps its en dash because the dash is not at a line start, and
+    /// "Xylophone" keeps its capital because "xylophone" is not a marker.
+    static func normalizedStructuralPrefix(_ line: String) -> String {
+        let ns = line as NSString
+        let window = min(ns.length, markerWindow)
+        guard window > 0 else { return line }
+
+        var head = String(ns.substring(to: window).map { ch -> Character in
+            if dashSubstitutes.contains(ch) { return "-" }
+            if spaceSubstitutes.contains(ch) { return " " }
+            return ch
+        })
+        if head.hasPrefix("- [X] ") { head = "- [x] " }
+
+        guard head != ns.substring(to: window) else { return line }
+        let candidate = head + ns.substring(from: window)
+        guard BlockKind.parse(line: candidate).kind != .paragraph else { return line }
+        return candidate
+    }
+
+    static func canonicalized(_ source: String) -> String {
+        guard source.contains("- [X] ") else { return source }
+        return source
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> Substring in
+                line.hasPrefix("- [X] ") ? Substring("- [x] " + line.dropFirst(6)) : line
+            }
+            .joined(separator: "\n")
     }
 }
 
@@ -264,6 +325,81 @@ enum DocumentAction {
         return TextEdit(range: selection,
                         string: insertion,
                         selection: NSRange(location: selection.location + (insertion as NSString).length, length: 0))
+    }
+
+    /// Typing the character that completes a marker the keyboard has quietly altered fixes the
+    /// altered characters in place, so `– ` becomes a bullet and `#\u{00A0}` becomes a heading.
+    ///
+    /// Runs only at the moment the marker is completed, on a line whose prefix is nothing but that
+    /// marker. Ordinary prose never reaches it: the substitution has to resolve to a real marker at a
+    /// line start, so an en dash mid-sentence — or a line that merely begins with one and goes on to
+    /// be a sentence — is left exactly as written. Length-preserving, so it is one in-place edit.
+    static func prefixNormalizationEdit(text: String, selection: NSRange,
+                                        replacementText: String) -> TextEdit? {
+        guard selection.length == 0, !replacementText.isEmpty, !replacementText.contains("\n") else {
+            return nil
+        }
+        let line = MarkupDocument(text).line(containingSource: selection.location)
+        guard line.kind == .paragraph else { return nil }
+
+        let ns = text as NSString
+        let caretInLine = selection.location - line.sourceRange.location
+        guard caretInLine >= 0, caretInLine <= line.sourceRange.length else { return nil }
+
+        let lineText = ns.substring(with: line.sourceRange) as NSString
+        let prospective = lineText.replacingCharacters(
+            in: NSRange(location: caretInLine, length: 0), with: replacementText
+        )
+        let normalized = StructuredText.normalizedStructuralPrefix(prospective)
+        guard normalized != prospective else { return nil }
+
+        let (kind, markerLength) = BlockKind.parse(line: normalized)
+        // Only at the instant the marker is completed — the caret must land exactly at its end.
+        guard kind != .paragraph,
+              caretInLine + (replacementText as NSString).length == markerLength else { return nil }
+
+        // The canonical marker replaces the raw prefix *and* supplies the character just typed, so a
+        // non-breaking space the writer pressed does not survive into the source.
+        return TextEdit(
+            range: NSRange(location: line.sourceRange.location, length: caretInLine),
+            string: kind.marker,
+            selection: NSRange(location: line.sourceRange.location + markerLength, length: 0)
+        )
+    }
+
+    /// Typing a different complete marker on a line that holds *only* a marker replaces it, rather
+    /// than becoming its content. Return leaves the caret exactly there, so this is the moment a
+    /// writer changes their mind: continue a bullet, then type "1. " and get a numbered item.
+    ///
+    /// Deliberately narrow. The line must be structured and otherwise empty, the caret must be at its
+    /// end, and what the writer typed must form a *complete* marker of a *different* kind — so a line
+    /// with words is never rewritten underneath them, and a no-op swap never costs an undo step.
+    /// Because "- " is a prefix of "- [ ] ", bullet-to-bullet is skipped here, which is what lets the
+    /// writer keep typing and land on a checklist.
+    static func markerReplacementEdit(text: String, selection: NSRange,
+                                      replacementText: String) -> TextEdit? {
+        guard selection.length == 0, !replacementText.isEmpty, !replacementText.contains("\n") else {
+            return nil
+        }
+        let line = MarkupDocument(text).line(containingSource: selection.location)
+        guard line.kind != .paragraph else { return nil }
+        let lineEnd = line.sourceRange.location + line.sourceRange.length
+        guard selection.location == lineEnd else { return nil }
+
+        let ns = text as NSString
+        let content = ns.substring(with: NSRange(location: line.contentStart, length: line.contentLength))
+        let candidate = content + replacementText
+        let (kind, markerLength) = BlockKind.parse(line: candidate)
+        guard kind != .paragraph,
+              markerLength == (candidate as NSString).length,
+              kind != line.kind else { return nil }
+
+        let marker = kind.marker
+        return TextEdit(
+            range: line.sourceRange,
+            string: marker,
+            selection: NSRange(location: line.sourceRange.location + (marker as NSString).length, length: 0)
+        )
     }
 
     /// Backspace at the start of a structured line demotes it to a paragraph; otherwise `nil`.

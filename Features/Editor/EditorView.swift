@@ -186,10 +186,25 @@ struct EditorView: View {
                         Text("Start writing…")
                             .font(.ds.editorBody)
                             .foregroundStyle(Color.ds.textTertiary)
-                        Text(WritingHelp.emptyNoteHint)
+                        Text(WritingHelp.emptyNoteHintLead)
                             .font(.ds.caption)
                             .foregroundStyle(Color.ds.textTertiary)
                             .fixedSize(horizontal: false, vertical: true)
+                        // Marker and name in separate columns, the marker monospaced: its trailing
+                        // space is load-bearing, and quoting markers inside a sentence hid exactly
+                        // the character a reader has to type.
+                        VStack(alignment: .leading, spacing: DSSpacing.s1) {
+                            ForEach(WritingHelp.emptyNoteHintMarkers) { m in
+                                HStack(alignment: .firstTextBaseline, spacing: DSSpacing.s3) {
+                                    Text(m.marker)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundStyle(Color.ds.textTertiary)
+                                    Text(m.name)
+                                        .font(.ds.caption)
+                                        .foregroundStyle(Color.ds.textTertiary)
+                                }
+                            }
+                        }
                     }
                     .padding(.top, 6)
                     .allowsHitTesting(false)

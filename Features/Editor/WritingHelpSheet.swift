@@ -20,7 +20,25 @@ struct WritingHelpSheet: View {
                             row(leading: marker.marker, trailing: marker.name, isCode: true)
                         }
                     }
+                    // Examples first: a whole utterance shows how the commands sit inside speech,
+                    // which the bare vocabulary underneath cannot.
                     section("Say") {
+                        VStack(alignment: .leading, spacing: DSSpacing.s4) {
+                            ForEach(WritingHelp.voiceExamples) { example in
+                                VStack(alignment: .leading, spacing: DSSpacing.s1) {
+                                    Text(example.task)
+                                        .font(.ds.caption)
+                                        .foregroundStyle(Color.ds.textSecondary)
+                                    Text("“\(example.utterance)”")
+                                        .font(.ds.preview)
+                                        .foregroundStyle(Color.ds.textPrimary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                    section("Every command") {
                         ForEach(WritingHelp.voiceCommands, id: \.self) { command in
                             row(leading: "“\(command)”", trailing: nil, isCode: false)
                         }

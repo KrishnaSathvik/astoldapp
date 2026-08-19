@@ -67,12 +67,26 @@ struct WritingHelpTests {
     /// The hint is the smallest of the surfaces and must stay that way — three markers, drawn from
     /// the same source as the sheet so it cannot contradict it.
     @Test func emptyNoteHintTeachesRealMarkers() {
-        let hint = WritingHelp.emptyNoteHint
-        #expect(hint.contains(BlockKind.heading.marker))
-        #expect(hint.contains(BlockKind.bullet.marker))
-        #expect(hint.contains(BlockKind.checklist(checked: false).marker))
-        #expect(!hint.contains(BlockKind.subheading.marker),
+        let markers = WritingHelp.emptyNoteHintMarkers.map(\.marker)
+        #expect(markers == [BlockKind.heading.marker,
+                            BlockKind.bullet.marker,
+                            BlockKind.checklist(checked: false).marker])
+        #expect(!markers.contains(BlockKind.subheading.marker),
                 "the hint should stay at three markers; the rest belong in the ? sheet")
+    }
+
+    /// The hint must never quote a marker inside prose: the trailing space is what makes the marker
+    /// work, and a proportional font between quotes is where it went missing.
+    @Test func emptyNoteHintKeepsMarkersOutOfItsSentence() {
+        for marker in WritingHelp.emptyNoteHintMarkers.map(\.marker) {
+            #expect(!WritingHelp.emptyNoteHintLead.contains(marker.trimmingCharacters(in: .whitespaces)))
+        }
+    }
+
+    @Test func everyHintMarkerKeepsItsTrailingSpace() {
+        for marker in WritingHelp.emptyNoteHintMarkers.map(\.marker) {
+            #expect(marker.hasSuffix(" "), "the space is part of the marker and must be shown")
+        }
     }
 
     // MARK: VoiceOver

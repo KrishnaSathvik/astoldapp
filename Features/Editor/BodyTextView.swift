@@ -160,6 +160,23 @@ struct BodyTextView: UIViewRepresentable {
                 }
                 return true
             }
+            // A marker the keyboard altered (smart dash, non-breaking space) is put back to canonical
+            // characters at the moment it is completed, so forgiving input still produces strict source.
+            if !text.isEmpty,
+               let edit = DocumentAction.prefixNormalizationEdit(
+                   text: tv.text, selection: range, replacementText: text
+               ), apply(edit, to: tv) {
+                return false
+            }
+            // A different complete marker typed on a line that holds only a marker replaces it, so a
+            // writer who continues a bullet and then types "1. " gets a numbered item rather than a
+            // bullet reading "1. ". One keystroke, one edit, one undo step.
+            if !text.isEmpty,
+               let edit = DocumentAction.markerReplacementEdit(
+                   text: tv.text, selection: range, replacementText: text
+               ), apply(edit, to: tv) {
+                return false
+            }
             // Backspace at the start of a structured line: demote the structure instead of eating a marker.
             if text.isEmpty, tv.selectedRange.length == 0 {
                 if let edit = DocumentAction.backspaceEdit(text: tv.text, selection: tv.selectedRange),
