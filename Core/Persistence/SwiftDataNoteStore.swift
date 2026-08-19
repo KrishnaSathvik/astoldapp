@@ -38,22 +38,47 @@ final class SwiftDataNoteStore: NoteStore {
         if context.hasChanges { try context.save() }
     }
 
+    /// Longest body that could still be empty: the longest structure marker ("- [ ] " / "- [x] ")
+    /// plus a little slack for stray whitespace. Anything longer necessarily carries visible words.
+    private static let emptyDraftBodyBudget = 12
+
+    /// Removes notes holding no visible content — drafts stranded when the app was terminated while
+    /// an editor was open. Runs at launch beside `purgeDeleted` (RULES.md §4, "empty drafts").
+    ///
+    /// The fetch is narrowed to short bodies so launch stays cheap at realistic note counts; the
+    /// decision itself is the canonical `isEmptyDraft` rule, so a marker-only body ("- ", "# ")
+    /// still counts as empty, and a note carrying only a title is kept.
+    func purgeEmptyDrafts() throws {
+        let budget = Self.emptyDraftBodyBudget
+        let candidates = try context.fetch(
+            FetchDescriptor<Note>(predicate: #Predicate<Note> { note in
+                note.deletedAt == nil && note.body.count < budget
+            })
+        )
+        for note in candidates where note.isEmptyDraft { context.delete(note) }
+        if context.hasChanges { try context.save() }
+    }
+
     func discardIfEmpty(_ note: Note) throws {
         guard note.isEmptyDraft else { return }
         context.delete(note)
         if context.hasChanges { try context.save() }
     }
 
+    /// One page of the timeline, newest first. `before` is a cursor, not a page number: it belongs
+    /// **inside** the fetch, because a limit applied first would return the newest `limit` notes and
+    /// then discard the ones the cursor asked for — leaving every page after the first empty
+    /// (docs/05-architecture.md §8, RULES.md §5).
     func recent(limit: Int, before: Date?) throws -> [Note] {
         var descriptor = FetchDescriptor<Note>(
-            predicate: #Predicate { $0.deletedAt == nil },
+            predicate: #Predicate {
+                $0.deletedAt == nil && (before == nil || $0.createdAt < before!)
+            },
             sortBy: [SortDescriptor(\.createdAt, order: .reverse),
                      SortDescriptor(\.id, order: .reverse)]
         )
         descriptor.fetchLimit = limit
-        let all = try context.fetch(descriptor)
-        if let before { return all.filter { $0.createdAt < before } }
-        return all
+        return try context.fetch(descriptor)
     }
 
     func notes(on day: Date) throws -> [Note] {

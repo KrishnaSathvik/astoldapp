@@ -78,7 +78,12 @@ struct AppRootView: View {
     @ViewBuilder private var routed: some View {
         if hasCompletedWelcome {
             HomeView()
-                .task { try? SwiftDataNoteStore(context: context).purgeDeleted() }
+                .task {
+                    let store = SwiftDataNoteStore(context: context)
+                    try? store.purgeDeleted()
+                    // Drafts stranded by a termination while an editor was open (RULES.md §4).
+                    try? store.purgeEmptyDrafts()
+                }
         } else {
             WelcomeView(onContinue: { hasCompletedWelcome = true })
         }

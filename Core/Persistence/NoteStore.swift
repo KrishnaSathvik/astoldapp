@@ -9,6 +9,7 @@ protocol NoteStore {
     func delete(_ note: Note) throws
     func undoDelete(_ note: Note) throws
     func purgeDeleted() throws
+    func purgeEmptyDrafts() throws
     func discardIfEmpty(_ note: Note) throws
     func recent(limit: Int, before: Date?) throws -> [Note]
     func notes(on day: Date) throws -> [Note]
