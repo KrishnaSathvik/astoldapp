@@ -32,6 +32,8 @@ struct EditorView: View {
     /// away from the view — see `WritingEducation`.
     @State private var education = WritingEducation()
     @State private var showsWritingHelp = false
+    /// The way the Style menu reaches the body text view — see `BodyEditorActions`.
+    @State private var bodyActions = BodyEditorActions()
 
     private var isCapturing: Bool { voice != nil }
     /// True while the user is actually editing (a field owns the keyboard), false while reading.
@@ -64,6 +66,24 @@ struct EditorView: View {
     private func dismissKeyboard() {
         titleFocused = false
         bodyFocused = false
+    }
+
+    /// Drives the Style menu: reads the selection's current style so the menu can check it, and
+    /// applies a chosen one through the body's shared `DocumentAction` path.
+    ///
+    /// The getter is `nil` when the selection spans two different styles, which is what leaves the
+    /// menu with nothing checked. The setter refuses a no-op, because re-applying the style a line
+    /// already has would still be a text edit and would still cost the writer an undo step.
+    private var styleSelection: Binding<BlockStyle?> {
+        Binding(
+            get: { model.map { BlockStyle.current(in: $0.body, selection: bodySelection) } ?? nil },
+            set: { chosen in
+                guard let chosen,
+                      chosen != model.flatMap({ BlockStyle.current(in: $0.body, selection: bodySelection) })
+                else { return }
+                bodyActions.apply(chosen)
+            }
+        )
     }
 
     var body: some View {
@@ -122,17 +142,32 @@ struct EditorView: View {
                         .accessibilityLabel("Dismiss keyboard")
                 }
             }
-            // Writing help, and only while editing — the same contextual rule the Done button follows.
-            // A note being *read* keeps its clean chrome, and structure help never becomes permanent
-            // furniture, which is what RULES.md §1/§7 require of every structure affordance. It is
-            // reference only; it applies nothing (see `WritingHelpSheet`).
-            if isEditing {
+            // The Style control (docs/02-features.md Milestone B2). One contextual button, shown only
+            // while the *body* has the caret — styling a title is meaningless, and a control that
+            // survived into the reading state would be the persistent ribbon RULES.md §1 refuses.
+            //
+            // A menu, not a sheet, and that is a behavioral requirement rather than a taste: a sheet
+            // resigns first responder, so the keyboard would drop and the selection the style applies
+            // to would have to be restored afterwards. A menu leaves both alone, which is what lets a
+            // writer keep the four lines they selected and just pick a style.
+            if bodyFocused {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showsWritingHelp = true } label: {
-                        Image(systemName: "questionmark.circle")
+                    Menu {
+                        Picker("Style", selection: styleSelection) {
+                            ForEach(BlockStyle.allCases) { style in
+                                Text(style.name).tag(Optional(style))
+                            }
+                        }
+                        .pickerStyle(.inline)
+                        Divider()
+                        // The old standalone `?` folded in: reference material one tap deeper, where
+                        // losing the keyboard to a sheet costs nothing because nothing is being applied.
+                        Button("Writing help…") { showsWritingHelp = true }
+                    } label: {
+                        Image(systemName: "textformat")
                             .foregroundStyle(Color.ds.accent)
                     }
-                    .accessibilityLabel("Writing help")
+                    .accessibilityLabel("Text style")
                 }
             }
             // The overflow holds exactly one action: there must be a way to delete the note you are
@@ -174,42 +209,21 @@ struct EditorView: View {
                 text: Binding(get: { model.body }, set: { model.body = $0 }),
                 selectedRange: $bodySelection,
                 isFocused: $bodyFocused,
-                isEditable: !isCapturing   // recording/transcription owns the anchor
+                isEditable: !isCapturing,   // recording/transcription owns the anchor
+                actions: bodyActions
             )
             .overlay(alignment: .topLeading) {
                 if model.body.isEmpty {
-                    // Two lines, both transient. The syntax hint is the quietest way to teach the
-                    // markers: it costs no chrome, reserves no space once writing starts, and asks
-                    // for no dismissal — the first keystroke is the dismissal. It rides with the
-                    // placeholder deliberately, so it can never appear over anyone's words.
-                    VStack(alignment: .leading, spacing: DSSpacing.s2) {
-                        Text("Start writing…")
-                            .font(.ds.editorBody)
-                            .foregroundStyle(Color.ds.textTertiary)
-                        Text(WritingHelp.emptyNoteHintLead)
-                            .font(.ds.caption)
-                            .foregroundStyle(Color.ds.textTertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        // Marker and name in separate columns, the marker monospaced: its trailing
-                        // space is load-bearing, and quoting markers inside a sentence hid exactly
-                        // the character a reader has to type.
-                        VStack(alignment: .leading, spacing: DSSpacing.s1) {
-                            ForEach(WritingHelp.emptyNoteHintMarkers) { m in
-                                HStack(alignment: .firstTextBaseline, spacing: DSSpacing.s3) {
-                                    Text(m.marker)
-                                        .font(.system(.caption, design: .monospaced))
-                                        .foregroundStyle(Color.ds.textTertiary)
-                                    Text(m.name)
-                                        .font(.ds.caption)
-                                        .foregroundStyle(Color.ds.textTertiary)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.top, 6)
-                    .allowsHitTesting(false)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("Writing syntax hint")
+                    // One line, and nothing else. The empty note used to carry a marker cheat-sheet,
+                    // which was the only way to discover structure before the Style menu existed;
+                    // now that structure is a button away, teaching syntax before the first word is
+                    // asking a writer to learn something to start writing.
+                    Text("Start writing…")
+                        .font(.ds.editorBody)
+                        .foregroundStyle(Color.ds.textTertiary)
+                        .padding(.top, 6)
+                        .allowsHitTesting(false)
+                        .accessibilityIdentifier("Body placeholder")
                 }
             }
         }

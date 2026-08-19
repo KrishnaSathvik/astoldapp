@@ -1,10 +1,13 @@
 import Foundation
 
-// Discoverability for structured writing. As Told has no formatting toolbar and never will
-// (RULES.md §1, §4), so the capability has to be learnable some other way: a transient hint on an
-// empty note, a contextual reference while editing, and one voice tip after the first successful
-// transcription. Reference only — nothing here applies a structure. Applying one stays with typing,
-// `DocumentAction`, and `VoiceStructureParser`.
+// Reference content for structured writing. Structure is applied three ways — the Style menu, a
+// typed marker, a spoken command — and this file is none of them: it is what the writing-help sheet
+// shows, plus the one voice tip after a first successful transcription. Reference only; applying a
+// structure stays with `BlockStyle`, `DocumentAction`, and `VoiceStructureParser`.
+//
+// The empty note used to carry a marker cheat-sheet from here too. It went when the Style menu
+// landed (RULES.md §7): teaching syntax before the first word was the price of having no control,
+// and the shortcuts now live one tap inside the menu, for writers who go looking.
 
 /// The content of the writing-help reference, derived from the implementation rather than restated.
 ///
@@ -57,21 +60,6 @@ enum WritingHelp {
     static let structurePromise =
         "As Told only adds structure when you ask. Otherwise your words stay as written or spoken."
 
-    /// The faint hint under "Start writing…" on an empty note. Deliberately three markers, not five:
-    /// it is a nudge that the syntax exists, and the `?` reference is where the rest lives.
-    ///
-    /// Shown as marker/name pairs rather than a sentence, because the trailing space is part of the
-    /// marker and a reader who omits it gets plain text. Prose with the markers quoted inline hid
-    /// exactly the character that matters; the view renders `marker` monospaced, the same treatment
-    /// `WritingHelpSheet` already uses, so the space occupies real width.
-    static let emptyNoteHintMarkers: [Marker] = [
-        Marker(marker: BlockKind.heading.marker, name: "heading"),
-        Marker(marker: BlockKind.bullet.marker, name: "list"),
-        Marker(marker: BlockKind.checklist(checked: false).marker, name: "checklist"),
-    ]
-
-    /// Introduces the markers above. Kept separate so no marker is ever embedded in prose.
-    static let emptyNoteHintLead = "Type a marker to add structure:"
 }
 
 /// Whether the one-time voice-structure tip has been shown. Local only — nothing about it is sent.

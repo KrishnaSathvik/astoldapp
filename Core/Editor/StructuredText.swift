@@ -196,13 +196,34 @@ struct MarkupDocument {
         return (source as NSString).length
     }
 
-    /// The line containing a source caret offset (a caret at a line's start belongs to that line; a
-    /// caret at the trailing newline belongs to the preceding line).
-    func line(containingSource offset: Int) -> Line {
-        for line in lines {
-            if offset <= line.sourceRange.location + line.sourceRange.length { return line }
+    /// The index of the line containing a source caret offset (a caret at a line's start belongs to
+    /// that line; a caret at the trailing newline belongs to the preceding line).
+    func lineIndex(containingSource offset: Int) -> Int {
+        for (index, line) in lines.enumerated() {
+            if offset <= line.sourceRange.location + line.sourceRange.length { return index }
         }
-        return lines.last ?? Line(kind: .paragraph, sourceRange: NSRange(location: 0, length: 0), markerLength: 0)
+        return max(0, lines.count - 1)
+    }
+
+    /// The line containing a source caret offset. See `lineIndex(containingSource:)`.
+    func line(containingSource offset: Int) -> Line {
+        guard !lines.isEmpty else {
+            return Line(kind: .paragraph, sourceRange: NSRange(location: 0, length: 0), markerLength: 0)
+        }
+        return lines[lineIndex(containingSource: offset)]
+    }
+
+    /// The indices of every line the selection touches — the range a block-kind change applies to.
+    ///
+    /// A selection that ends exactly at a line's start has taken the preceding newline and nothing
+    /// else of that line, so the line is not included: "select the first two lines" in a text view
+    /// commonly means a range ending at the third line's offset, and converting three lines there
+    /// would style one the user never touched.
+    func lineIndices(touchedBy selection: NSRange) -> ClosedRange<Int> {
+        let first = lineIndex(containingSource: selection.location)
+        let lastProbe = selection.location + max(0, selection.length - 1)
+        let last = max(first, lineIndex(containingSource: lastProbe))
+        return first...last
     }
 }
 
@@ -275,21 +296,99 @@ enum DocumentAction {
 
     // MARK: Edits
 
-    /// Sets the block kind of the line containing the caret, replacing any existing marker.
+    /// Sets the block kind of every line the selection touches, replacing any existing markers.
+    ///
+    /// One `TextEdit`, always — a caret on one line produces the minimal marker-sized replacement, and
+    /// a selection across four lines produces a single span covering all four. That is what makes a
+    /// multi-line conversion one undo step: the editor registers exactly one inverse per edit it
+    /// applies, so four lines becoming a checklist undo together, as the one thing the user did.
+    ///
+    /// Two per-line details are resolved here rather than by the caller, because only this function can
+    /// see the lines around the selection:
+    ///  - **Numbering** continues from the numbered line immediately above the selection (a paragraph
+    ///    under "2." becomes "3."), and runs in sequence across the selection. Nothing outside the
+    ///    selection is renumbered — a conversion must not rewrite lines the user did not select.
+    ///  - **A ticked checklist item stays ticked.** Re-applying Checklist to a list half worked through
+    ///    would otherwise silently clear it, and the control has to be safe to tap twice.
     static func setBlockKindEdit(_ kind: BlockKind, text: String, selection: NSRange) -> TextEdit {
-        let line = MarkupDocument(text).line(containingSource: selection.location)
-        let newMarker = kind.marker
-        let newMarkerLength = (newMarker as NSString).length
+        let doc = MarkupDocument(text)
+        let indices = doc.lineIndices(touchedBy: selection)
+        let ns = text as NSString
 
-        let caret: Int
-        if selection.location >= line.contentStart {
-            caret = selection.location + (newMarkerLength - line.markerLength)
-        } else {
-            caret = line.sourceRange.location + newMarkerLength
+        // Numbering starts from the line above the selection, so converting under an existing list
+        // continues it instead of restarting at 1.
+        var counter = 1
+        if case .numbered = kind, indices.lowerBound > 0,
+           case .numbered(let above) = doc.lines[indices.lowerBound - 1].kind {
+            counter = above + 1
         }
-        return TextEdit(range: NSRange(location: line.sourceRange.location, length: line.markerLength),
-                        string: newMarker,
-                        selection: NSRange(location: caret, length: 0))
+
+        var markers: [String] = []
+        var pieces: [String] = []
+        var deltas: [Int] = []
+        for index in indices {
+            let line = doc.lines[index]
+            let resolved: BlockKind
+            switch kind {
+            case .numbered:
+                resolved = .numbered(counter)
+                counter += 1
+            case .checklist(let checked):
+                if case .checklist(let already) = line.kind {
+                    resolved = .checklist(checked: already)
+                } else {
+                    resolved = .checklist(checked: checked)
+                }
+            default:
+                resolved = kind
+            }
+            let marker = resolved.marker
+            let content = ns.substring(with: NSRange(location: line.contentStart, length: line.contentLength))
+            markers.append(marker)
+            pieces.append(marker + content)
+            deltas.append((marker as NSString).length - line.markerLength)
+        }
+
+        /// Where a source offset lands once the markers have been rewritten.
+        ///
+        /// `snapIntoContent` is the difference between a caret and the start of a selection. A caret
+        /// must never sit inside a hidden marker, so it snaps forward to the line's first visible
+        /// character. A selection that began at a line start means "this whole line", and snapping it
+        /// forward would leave the new marker outside the selection it created.
+        func mapped(_ offset: Int, snapIntoContent: Bool) -> Int {
+            var cumulative = 0
+            for (step, index) in indices.enumerated() {
+                let line = doc.lines[index]
+                if offset <= line.sourceRange.location + line.sourceRange.length {
+                    if !snapIntoContent, offset <= line.sourceRange.location {
+                        return line.sourceRange.location + cumulative
+                    }
+                    return max(offset, line.contentStart) + cumulative + deltas[step]
+                }
+                cumulative += deltas[step]
+            }
+            return offset + cumulative
+        }
+
+        let isCaret = selection.length == 0
+        let start = mapped(selection.location, snapIntoContent: isCaret)
+        let end = mapped(selection.location + selection.length, snapIntoContent: true)
+        let newSelection = NSRange(location: start, length: max(0, end - start))
+
+        // A single line changes only its marker: the smallest edit the text view can be asked to make,
+        // which keeps a one-line conversion from relaying out the whole paragraph.
+        if indices.count == 1 {
+            let line = doc.lines[indices.lowerBound]
+            return TextEdit(range: NSRange(location: line.sourceRange.location, length: line.markerLength),
+                            string: markers[0],
+                            selection: newSelection)
+        }
+
+        let first = doc.lines[indices.lowerBound]
+        let last = doc.lines[indices.upperBound]
+        let span = NSRange(location: first.sourceRange.location,
+                           length: last.sourceRange.location + last.sourceRange.length - first.sourceRange.location)
+        return TextEdit(range: span, string: pieces.joined(separator: "\n"), selection: newSelection)
     }
 
     /// Toggles a checklist item at the given source offset; `nil` if that line is not a checklist item.

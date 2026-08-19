@@ -337,7 +337,7 @@ note's own overflow (`···` → Delete Note) covers it, and the Undo banner ap
 ## 4.7 Editor — idle/typing
 
 ```text
-<                                      ···
+<                            Aa      ···
 
 AUGUST 17, 2026
 
@@ -355,7 +355,7 @@ Start writing...
 
 - title has no box
 - body has no box
-- no toolbar
+- no toolbar — `Aa` is one contextual item, not a formatting bar (RULES.md §1, §4)
 - no Save
 - no word count
 - keyboard behaves natively
@@ -370,8 +370,12 @@ The same screen serves both; only the arriving focus differs.
 | | New note | Existing note |
 |---|---|---|
 | On open | body focused, keyboard up | reading — nothing focused, no keyboard |
-| Trailing toolbar | `Done` (dismisses keyboard) | nothing |
+| Trailing toolbar | `Done` (dismisses keyboard), `Aa` (Style) | nothing |
 | Starting to edit | already editing | tap title or body; caret lands where tapped |
+
+`Aa` is narrower than `Done`: `Done` shows whenever *anything* has the keyboard, `Aa` only when the
+**body** has the caret. Editing the title shows `Done` alone — a title has no block structure, so
+offering to style it would be offering something that does nothing.
 
 No `Read Mode` / `Edit Mode` toggle, and no custom "Hide Keyboard" bar. The keyboard leaves by
 scrolling the body interactively, by `Done`, or by navigating Back. `Done` never navigates —
@@ -385,7 +389,31 @@ Do not display the word `optional` unless usability testing proves users are con
 
 ### Body
 
-Placeholder: `Start writing…`
+Placeholder: `Start writing…`, and nothing under it. (An empty note carried a three-marker syntax hint
+until 2026-08-19; it went with the arrival of the Style menu, which made the syntax optional knowledge
+rather than the price of entry.)
+
+### Style menu (`Aa`)
+
+One toolbar item, SF Symbol `textformat`, accessibility label "Text style". Shown only while the body
+has the caret. Opens a menu — never a sheet, because a sheet resigns first responder and would drop
+both the keyboard and the selection being styled.
+
+```
+Style
+  Normal
+  Heading
+✓ Bullet list
+  Numbered list
+  Checklist
+  ─────────────
+  Writing help…
+```
+
+- The current block is checked. A selection spanning two different structures checks nothing.
+- Picking a structure converts every line the selection touches, in one undo step.
+- Six structures and the help row. Nothing else joins it — inline formatting (bold, italic, colors,
+  alignment) is full rich text and stays on the do-not-build list (RULES.md §7).
 
 ---
 

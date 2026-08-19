@@ -34,7 +34,11 @@ These decisions should be treated as product constraints unless intentionally ch
 - Home does not show note creation times.
 - Editor shows the note date, not a prominent time.
 - Notes autosave.
-- No visible formatting toolbar.
+- No visible formatting toolbar. Structure — heading / subheading / bullet / numbered / checklist — is
+  reachable three equivalent ways: the contextual `Aa` **Style** menu, a typed marker, or a spoken
+  command (menu added 2026-08-19; the rule previously read "never by a control"). One contextual
+  toolbar item, shown only while the body has the caret — a persistent formatting ribbon and inline
+  rich text both stay forbidden.
 - Voice and typing are two input methods for the same note.
 - Voice transcript becomes ordinary editable text.
 - V1 voice target: English, Telugu, Hindi, Telugu+English, Hindi+English.

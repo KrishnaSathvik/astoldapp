@@ -1,13 +1,20 @@
 import SwiftUI
 
-/// The `?` reference, reachable only while editing. Two columns of syntax and the rule that governs
-/// them — and deliberately **no actions**: nothing here applies a heading or ticks a box.
+/// The writing reference, reached from the Style menu's "Writing help…" row. Two columns of syntax and
+/// the rule that governs them — and deliberately **no actions**: nothing here applies a heading or
+/// ticks a box.
 ///
-/// That restraint is the whole reason this surface is allowed to exist. RULES.md §1 forbids a visible
-/// formatting toolbar and §7 requires structure affordances to be contextual, never a persistent
-/// ribbon. A sheet that *told* you the syntax would stay on the right side of that line; a sheet with
-/// a row of buttons that applied it would be the ribbon, one tap deeper. If a future change wants an
-/// action in here, it belongs in the Style control (`docs/02-features.md` Milestone B2), not here.
+/// It reached the editor as a standalone `?` until 2026-08-19, when the Style menu absorbed it: two
+/// pieces of contextual chrome where the design allows one, and the menu is the surface people
+/// actually go to when they want structure. Being a sheet is fine *here* precisely because it applies
+/// nothing — losing the keyboard costs a reader nothing, while it would have cost the Style menu the
+/// selection it acts on.
+///
+/// The no-actions rule is what keeps this surface allowed at all. RULES.md §1 forbids a visible
+/// formatting toolbar and §7 requires structure affordances to be contextual. A sheet that *tells* you
+/// the syntax stays on the right side of that line; a sheet with a row of buttons that applied it
+/// would be the ribbon, one tap deeper. Applying belongs to `BlockStyle` and the Style menu, and there
+/// must not be a second path to it from here.
 struct WritingHelpSheet: View {
     @Environment(\.dismiss) private var dismiss
 

@@ -1,11 +1,11 @@
 import XCTest
 
-/// Discoverability without chrome: the empty-note hint and the contextual `?`.
+/// Discoverability without chrome: the contextual `Aa` Style menu and the reference folded inside it.
 ///
 /// The absence assertions matter as much as the presence ones. RULES.md §1 forbids permanent
-/// formatting furniture in the editor, so "the `?` is gone while reading" is a product rule under
-/// test, not an incidental detail — a regression that leaves it visible would quietly turn a
-/// contextual affordance into the persistent one the rules refuse.
+/// formatting furniture in the editor, so "the Style control is gone while reading" is a product rule
+/// under test, not an incidental detail — a regression that leaves it visible would quietly turn a
+/// contextual affordance into the persistent ribbon the rules refuse.
 final class WritingHelpUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
@@ -35,74 +35,127 @@ final class WritingHelpUITests: XCTestCase {
         element.tap()
     }
 
-    // MARK: The empty-note hint
+    // MARK: The empty note teaches nothing
 
-    func testEmptyNewNoteShowsTheSyntaxHint() {
+    /// The marker cheat-sheet went with the Style menu (RULES.md §7). An empty note is a place to
+    /// start writing, not a syntax lesson.
+    func testEmptyNewNoteShowsOnlyThePlaceholder() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        XCTAssertTrue(app.descendants(matching: .any)["Writing syntax hint"].waitForExistence(timeout: 8),
-                      "An empty new note should teach the markers")
+        XCTAssertTrue(app.descendants(matching: .any)["Body placeholder"].waitForExistence(timeout: 8),
+                      "an empty note should still say where to start")
+        XCTAssertFalse(app.descendants(matching: .any)["Writing syntax hint"].exists,
+                       "the empty-note syntax hint should be gone")
     }
 
-    /// The first keystroke is the dismissal — no button, no lingering.
-    func testTypingRemovesTheSyntaxHint() {
+    func testTypingRemovesThePlaceholder() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        let hint = app.descendants(matching: .any)["Writing syntax hint"]
-        XCTAssertTrue(hint.waitForExistence(timeout: 8), "hint should start visible")
+        let placeholder = app.descendants(matching: .any)["Body placeholder"]
+        XCTAssertTrue(placeholder.waitForExistence(timeout: 8), "placeholder should start visible")
 
         app.typeText("a")
-        XCTAssertTrue(hint.waitForNonExistence(timeout: 8),
-                      "the first keystroke should dismiss the hint")
+        XCTAssertTrue(placeholder.waitForNonExistence(timeout: 8),
+                      "the first keystroke should dismiss the placeholder")
     }
 
-    /// A note with words in it is someone's writing, not a teaching surface.
-    func testExistingNoteNeverShowsTheSyntaxHint() {
-        let app = launchedIntoSeededNote()
-        XCTAssertFalse(app.descendants(matching: .any)["Writing syntax hint"].exists,
-                       "an existing note must not show the hint")
-    }
+    // MARK: The contextual Style control
 
-    // MARK: The contextual ?
-
-    func testHelpIsAbsentWhileReading() {
+    func testStyleControlIsAbsentWhileReading() {
         let app = launchedIntoSeededNote()
-        XCTAssertFalse(app.buttons["Writing help"].exists,
+        XCTAssertFalse(app.buttons["Text style"].exists,
                        "reading a note must keep the editor chrome clean")
     }
 
-    func testHelpAppearsWhileEditing() {
+    func testStyleControlAppearsWhileWritingInTheBody() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        XCTAssertTrue(app.buttons["Writing help"].waitForExistence(timeout: 8),
-                      "writing help should be reachable while editing")
+        XCTAssertTrue(app.buttons["Text style"].waitForExistence(timeout: 8),
+                      "the Style control should be reachable while writing")
     }
 
-    /// Dismissing the keyboard is leaving the writing state, so the help control leaves with it.
-    func testHelpDisappearsWhenEditingEnds() {
+    /// A title has no block structure, so styling it means nothing. The control follows the *body*'s
+    /// caret, not merely "is a keyboard up".
+    func testStyleControlIsAbsentWhileTheTitleHasTheCaret() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        let help = app.buttons["Writing help"]
-        XCTAssertTrue(help.waitForExistence(timeout: 8), "help should be present while editing")
+        XCTAssertTrue(app.buttons["Text style"].waitForExistence(timeout: 8),
+                      "the Style control should start out available")
+
+        tap(app.textFields["Title"], "Title field")
+        XCTAssertTrue(app.buttons["Text style"].waitForNonExistence(timeout: 8),
+                      "styling a title is meaningless — the control must not be offered")
+        XCTAssertTrue(app.buttons["Dismiss keyboard"].exists,
+                      "the title is still being edited, so Done should remain")
+    }
+
+    /// Dismissing the keyboard is leaving the writing state, so the control leaves with it.
+    func testStyleControlDisappearsWhenEditingEnds() {
+        let app = launchedApp()
+        tap(app.buttons["New note"], "New note")
+        let style = app.buttons["Text style"]
+        XCTAssertTrue(style.waitForExistence(timeout: 8), "the control should be present while writing")
 
         tap(app.buttons["Dismiss keyboard"], "Done")
-        XCTAssertTrue(help.waitForNonExistence(timeout: 8),
-                      "leaving the writing state should take the help control with it")
+        XCTAssertTrue(style.waitForNonExistence(timeout: 8),
+                      "leaving the writing state should take the Style control with it")
     }
 
-    // MARK: The reference itself
-
-    func testHelpSheetListsTypingMarkersAndEveryVoiceCommand() {
+    /// The standalone `?` was folded into the Style menu. It must not survive as a second control —
+    /// two pieces of chrome where the design allows one.
+    func testTheStandaloneHelpButtonIsGone() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        tap(app.buttons["Writing help"], "Writing help")
+        XCTAssertTrue(app.buttons["Text style"].waitForExistence(timeout: 8), "editor did not open")
+        XCTAssertFalse(app.buttons["Writing help"].exists,
+                       "the standalone ? should have been folded into the Style menu")
+    }
 
-        XCTAssertTrue(app.staticTexts["Heading"].waitForExistence(timeout: 8),
-                      "the sheet did not open")
+    // MARK: The menu
+
+    func testStyleMenuOffersTheSixStructuresAndNothingElse() {
+        let app = launchedApp()
+        tap(app.buttons["New note"], "New note")
+        tap(app.buttons["Text style"], "Text style")
+
+        for name in ["Normal", "Heading", "Subheading", "Bullet list", "Numbered list", "Checklist"] {
+            XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 8),
+                          "the Style menu is missing \(name)")
+        }
+        // Inline rich text is a different category and is not in V1 (RULES.md §7).
+        for absent in ["Bold", "Italic", "Underline", "Strikethrough", "Highlight"] {
+            XCTAssertFalse(app.buttons[absent].exists,
+                           "the Style menu must not offer \(absent)")
+        }
+    }
+
+    /// The menu says what the line already is, so a writer can see the structure they are standing in
+    /// rather than guessing.
+    func testStyleMenuChecksTheCurrentBlock() {
+        let app = launchedApp()
+        tap(app.buttons["New note"], "New note")
+        app.typeText("# Alaska")
+
+        tap(app.buttons["Text style"], "Text style")
+        let heading = app.buttons["Heading"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 8), "the Style menu did not open")
+        XCTAssertTrue(heading.isSelected, "the current block should be checked")
+        XCTAssertFalse(app.buttons["Normal"].isSelected, "only the current block should be checked")
+    }
+
+    /// The reference the `?` used to hold, one tap deeper. Losing the keyboard to a sheet costs
+    /// nothing here, because nothing on it applies anything.
+    func testWritingHelpIsReachableThroughTheStyleMenu() {
+        let app = launchedApp()
+        tap(app.buttons["New note"], "New note")
+        tap(app.buttons["Text style"], "Text style")
+        tap(app.buttons["Writing help…"], "Writing help…")
+
+        XCTAssertTrue(app.navigationBars["Writing in As Told"].waitForExistence(timeout: 8),
+                      "the writing-help sheet did not open from the Style menu")
         for name in ["Heading", "Subheading", "Bullet list", "Numbered list", "Checklist"] {
             XCTAssertTrue(app.staticTexts[name].exists, "typing reference is missing \(name)")
         }
-        // All nine spoken commands, quoted as they appear in the "Say" section.
         for command in ["New paragraph", "New line", "Heading", "Subheading", "Bullet list",
                         "Numbered list", "Checklist", "Next item", "End list"] {
             XCTAssertTrue(app.staticTexts["“\(command)”"].exists,
@@ -110,12 +163,13 @@ final class WritingHelpUITests: XCTestCase {
         }
     }
 
-    /// Reference only. A formatting control here would be the ribbon RULES.md §1 forbids, arriving
-    /// one tap deeper than a toolbar.
+    /// The sheet stays reference-only. Applying a structure is the menu's job; a second path to it
+    /// here would be two formatting systems for one document.
     func testHelpSheetOffersNoFormattingActions() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        tap(app.buttons["Writing help"], "Writing help")
+        tap(app.buttons["Text style"], "Text style")
+        tap(app.buttons["Writing help…"], "Writing help…")
         XCTAssertTrue(app.staticTexts["Heading"].waitForExistence(timeout: 8), "the sheet did not open")
 
         // Scoped to the sheet's own bar: the editor's chrome is still on screen behind it, and

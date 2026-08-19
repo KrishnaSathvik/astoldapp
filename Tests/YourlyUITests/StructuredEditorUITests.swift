@@ -94,6 +94,107 @@ final class StructuredEditorUITests: XCTestCase {
         wait(for: [pasted], timeout: 5)
     }
 
+    // MARK: The Style menu
+
+    /// The point of the control: select several lines, pick a structure once, and every selected line
+    /// becomes it. Typing the marker would mean doing it three times.
+    func testStyleMenuConvertsEverySelectedLine() {
+        let app = launchedEditor()
+        let field = body(app)
+        field.tap()
+        field.typeText("Milk\nEggs\nBread")
+        XCTAssertEqual(field.value as? String, "Milk\nEggs\nBread")
+
+        tapMenuItem("Select All", in: app, longPressing: field)
+        applyStyle("Bullet list", in: app)
+
+        let converted = expectation(for: NSPredicate(format: "value == %@", "- Milk\n- Eggs\n- Bread"),
+                                    evaluatedWith: field)
+        wait(for: [converted], timeout: 5)
+    }
+
+    /// Numbering is not "1." three times: the menu produces the sequence a reader expects.
+    func testStyleMenuNumbersASelectionInSequence() {
+        let app = launchedEditor()
+        let field = body(app)
+        field.tap()
+        field.typeText("One\nTwo\nThree")
+
+        tapMenuItem("Select All", in: app, longPressing: field)
+        applyStyle("Numbered list", in: app)
+
+        let converted = expectation(for: NSPredicate(format: "value == %@", "1. One\n2. Two\n3. Three"),
+                                    evaluatedWith: field)
+        wait(for: [converted], timeout: 5)
+    }
+
+    /// One tap is one thing the writer did, so one undo puts all three lines back. Two undos leaving a
+    /// half-converted note would be the editor exposing its own implementation.
+    func testUndoingAMultiLineConversionTakesOneStep() {
+        let app = launchedEditor()
+        let field = body(app)
+        field.tap()
+        field.typeText("Milk\nEggs\nBread")
+
+        tapMenuItem("Select All", in: app, longPressing: field)
+        applyStyle("Bullet list", in: app)
+        let converted = expectation(for: NSPredicate(format: "value == %@", "- Milk\n- Eggs\n- Bread"),
+                                    evaluatedWith: field)
+        wait(for: [converted], timeout: 5)
+
+        app.typeKey("z", modifierFlags: .command)
+        let restored = expectation(for: NSPredicate(format: "value == %@", "Milk\nEggs\nBread"),
+                                   evaluatedWith: field)
+        wait(for: [restored], timeout: 5)
+    }
+
+    /// Converting a paragraph under an existing list joins that list rather than restarting it.
+    func testStyleMenuContinuesNumberingFromTheListAbove() {
+        let app = launchedEditor()
+        let field = body(app)
+        field.tap()
+        // "1. " starts the list, Return continues it to "2. ", and the empty Return exits.
+        field.typeText("1. One\nTwo\n\nThree")
+        XCTAssertEqual(field.value as? String, "1. One\n2. Two\nThree")
+
+        applyStyle("Numbered list", in: app)
+        let continued = expectation(for: NSPredicate(format: "value == %@", "1. One\n2. Two\n3. Three"),
+                                    evaluatedWith: field)
+        wait(for: [continued], timeout: 5)
+    }
+
+    /// Typed markers stay a shortcut for the same operation, not a second system: what the menu makes
+    /// is exactly what typing the marker makes.
+    func testTappingAndTypingProduceTheSameStructure() {
+        let app = launchedEditor()
+        let field = body(app)
+        field.tap()
+        field.typeText("Task")
+        applyStyle("Checklist", in: app)
+
+        let converted = expectation(for: NSPredicate(format: "value == %@", "- [ ] Task"),
+                                    evaluatedWith: field)
+        wait(for: [converted], timeout: 5)
+    }
+
+    private func launchedEditor() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-openSampleEditor", "-exposeSourceForTests", "-resetStore"]
+        app.launch()
+        XCTAssertTrue(body(app).waitForExistence(timeout: 15), "editor body did not appear")
+        return app
+    }
+
+    /// Opens the contextual `Aa` menu and picks a structure.
+    private func applyStyle(_ name: String, in app: XCUIApplication) {
+        let control = app.buttons["Text style"]
+        XCTAssertTrue(control.waitForExistence(timeout: 8), "the Style control was not available")
+        control.tap()
+        let item = app.buttons[name]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "the Style menu is missing \(name)")
+        item.tap()
+    }
+
     /// Taps an edit-menu item, first raising the menu with a long press when one is needed.
     private func tapMenuItem(_ label: String, in app: XCUIApplication, longPressing field: XCUIElement?) {
         field?.press(forDuration: 1.2)

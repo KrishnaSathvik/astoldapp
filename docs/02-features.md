@@ -126,7 +126,7 @@ Make the app feel like writing directly onto the screen.
 ### Rules
 
 - no visible border
-- no formatting toolbar
+- no formatting toolbar — the Style menu is one contextual toolbar item, not a bar (Milestone B2)
 - no rich text controls
 - body uses comfortable line height
 - normal iOS text editing behavior remains available
@@ -513,11 +513,11 @@ Adopted 2026-08-18 with the "anything you want to put into words" repositioning 
 `docs/08-positioning-marketing.md`). Build in order; do not build everything at once. The overriding
 constraint: the app must still feel almost as simple as today (`docs/01` §14 success test).
 
-> **Status, 2026-08-19 — Milestones A and B shipped in V1.** Both were planned as post-V1 work and this
-> section described them that way; they were pulled forward and the implementation landed before the
-> docs were updated. Their sections below are now **descriptions of shipped behavior**, not plans.
-> Milestone B2 and everything after it remain unbuilt. Marketing still lags implementation
-> (`RULES.md` §7): shipped is the bar for claiming a capability, and B2 has not cleared it.
+> **Status, 2026-08-19 — Milestones A, B, and B2 shipped in V1.** All three were planned as post-V1
+> work and this section described them that way; they were pulled forward and the implementation
+> landed before the docs were updated. Their sections below are now **descriptions of shipped
+> behavior**, not plans. Milestone C and everything after it remain unbuilt. Marketing still lags
+> implementation (`RULES.md` §7): shipped is the bar for claiming a capability.
 
 ## Milestone A — Structured editor — **shipped in V1**
 
@@ -535,7 +535,9 @@ are possible on the same universal document. No document types; the page never a
 - **Return** continues a list and exits an empty item. **Backspace** at line start demotes to paragraph.
   The **checkbox gutter** toggles an item. All of it routes through the shared `DocumentAction`
   operations, so typing and voice perform the same edits.
-- Structure is created by **typing a marker**, never by a control (`RULES.md` §1).
+- Structure is created three ways — the Style menu (Milestone B2), a typed marker, a spoken command —
+  all routing through the same `DocumentAction` operations (`RULES.md` §1). Typing a marker is the
+  shortcut, not the requirement.
 
 Supported structures (and only these):
 
@@ -641,30 +643,34 @@ something the speaker did not say.
 
 ## Discoverability — **shipped in V1** (2026-08-19)
 
-Both ways of creating structure are invisible: typing markers only helps someone who already knows the
-syntax, and the nine voice phrases are unguessable. Three surfaces close that gap without a toolbar —
-the constraint from `RULES.md` §1 is that the affordance may be contextual, never permanent, and
-`WritingHelp` derives all of its content from `BlockKind` and `VoiceStructureParser` so help cannot drift
-from behavior.
+Typing a marker only helps someone who already knows the syntax, and the nine voice phrases are
+unguessable. The first answer to that was three teaching surfaces — an empty-note cheat-sheet, a `?`
+reference, and a one-time voice tip — none of which could *apply* anything. That was teaching syntax as
+a substitute for a control, and it was the wrong trade: the Style menu (Milestone B2) makes structure
+discoverable by being visible, and teaching became optional rather than load-bearing.
 
-| Surface | When | What it teaches |
+| Surface | When | What it does |
 |---|---|---|
-| Empty-note hint | body is empty | `# `, `- `, `- [ ] ` — three markers, under the placeholder |
-| Contextual `?` | only while editing | the full reference: five markers, all nine commands |
+| Style menu (`Aa`) | only while the **body** has the caret | applies any of the six structures; checks the current one |
+| Writing help | inside the Style menu | the full reference: five markers, all nine commands |
 | Voice tip | once, after the **first successful** transcription | two examples, near the microphone |
 
 Rules that hold these in place:
 
-- The hint rides with the placeholder, so it can never appear over anyone's words, and the **first
-  keystroke is the dismissal** — no button, no reserved space.
-- The `?` follows the same contextual rule as the Done button: present while editing, gone while reading.
-  It is **reference only** and applies no structure. A formatting action here would be the ribbon §1
-  forbids, arriving one tap deeper. Anything of that kind belongs in Milestone B2 below.
+- The Style menu follows the same contextual rule as the Done button — present while writing, gone
+  while reading — and gates on the *body's* caret specifically. Full behavior in Milestone B2 below.
+- **Writing help is reference only and applies no structure.** Applying belongs to the Style menu; a
+  second path to it from the sheet would be two formatting systems for one document. `WritingHelp`
+  derives all of its content from `BlockKind` and `VoiceStructureParser`, so help cannot drift from
+  behavior.
 - The voice tip requires a transcription that **actually succeeded and actually left the device**. A
   failure, a cancelled capture, or a declined disclosure leaves it unshown *and* unmarked, so it still has
   its one chance later. This also keeps it from stacking on the consent sheet during a first recording.
-- The tip shows two examples, not nine commands. Nine commands out of context teaches nobody; the `?` is
-  where someone who wants the full list will look.
+- The tip shows two examples, not nine commands. Nine commands out of context teaches nobody; writing
+  help is where someone who wants the full list will look.
+- **Removed 2026-08-19:** the empty-note marker hint. It existed to make syntax discoverable when syntax
+  was the only way in; with the Style menu shipped, it asked a writer to learn something before writing
+  their first word. The placeholder is `Start writing…` and nothing else.
 
 ### Accepted limitation — search matches markers
 
@@ -673,27 +679,51 @@ Rules that hold these in place:
 no markers visually, corrupts no results, and loses no legitimate match — stripping markers before search
 would mean maintaining a second projection of every note purely to make a rare query tidier.
 
-## Milestone B2 — the "Style" control (post-release, design-test first)
+## Milestone B2 — the "Style" control — **shipped in V1**
 
-Structure can be created two ways today: typing a marker (`- `, `# `, `1. `) and the voice commands.
-Converting an *existing* paragraph — "make this a heading" — has no UI path, because
-`DocumentAction.setBlockKind` is implemented and tested but deliberately has no caller.
+Structure used to be creatable two ways: typing a marker (`- `, `# `, `1. `) and the voice commands.
+Converting an *existing* paragraph — "make this a heading" — had no UI path at all, because
+`DocumentAction.setBlockKind` was implemented and tested but deliberately had no caller.
 
-This is a real usability hole and an explicitly accepted one. It does **not** block release: the
-capability exists, and destabilising a freshly landed editor to add a control we have not design-tested
-is the worse trade.
+That was recorded here as an accepted usability hole. It was not acceptable: typing `- ` to get a
+bullet is developer knowledge, and it was the *only* way a person who does not know Markdown could
+discover that As Told has structure. Promoted into V1 on 2026-08-19 (`RULES.md` §7).
 
-When it is built:
+**As built** (`Core/Editor/BlockStyle.swift`, `Features/Editor/EditorView.swift`,
+`Features/Editor/BodyTextView.swift`):
 
-- A single contextual **Style** action offering: Paragraph · Heading · Subheading · Bullet · Numbered
-  list · Checklist. It routes through the existing `setBlockKind` primitive — no second formatting path.
-- Available **only while editing**, never in the reading state.
-- Preferred entry point: a small `Aa` keyboard-accessory action. Acceptable alternatives to test: the
-  text-selection context menu, or an editor `…` menu shown only when the cursor is active.
+- One contextual **`Aa`** toolbar item (SF Symbol `textformat`, accessibility label "Text style")
+  offering exactly: Normal · Heading · Subheading · Bullet list · Numbered list · Checklist, then a
+  divider, then **Writing help…**. It routes through the existing `setBlockKind` primitive — no second
+  formatting path.
+- Present only while the **body** has the caret. Not while reading, and not while the title is being
+  edited — a title has no block structure, so styling one means nothing.
+- **A menu, not a sheet.** A sheet resigns first responder: the keyboard would drop and the selection
+  being styled would have to be restored afterwards. The menu leaves the keyboard and the live
+  selection intact, which is what makes "select four lines, pick a style" work at all.
+- The **current** block is checked. A selection spanning two different structures checks nothing rather
+  than claiming to be the first line's style (`BlockStyle.current` returns `nil`).
+- Applying a style converts **every line the selection touches**, as **one `TextEdit`** and therefore
+  one undo step. A selection ending exactly at the next line's start does not convert that line — it
+  took the newline and nothing else.
+- **Numbering** continues from the numbered line immediately above the selection and runs in sequence
+  across it. Lines outside the selection are never renumbered.
+- **A ticked checklist item stays ticked** when Checklist is re-applied, so the menu is safe to tap
+  twice — which a checkmark against the current style invites.
 - MUST NOT become a persistent `B I U H1 H2 • 1. ☑` ribbon across the editor (RULES.md §1, §4).
-  Formatting must never visually dominate writing.
+  A keyboard-accessory row of style buttons is that ribbon, not an alternative to it.
 
-Design-test the entry point before implementing. Nothing else joins this control.
+Nothing else joins this control. Bold and italic are **inline** formatting — selection ranges, nested
+formatting, source↔visible mapping for the markers, copy/paste semantics, VoiceOver, behavior across
+Telugu/Hindi — which is a different category from the line-level structure here, and stays on the
+do-not-build list (`RULES.md` §7).
+
+### What went with it
+
+- The standalone `?` toolbar item, folded into the menu as **Writing help…**. The sheet itself is
+  unchanged and still applies nothing.
+- The empty note's marker cheat-sheet (`WritingHelp.emptyNoteHintMarkers` / `emptyNoteHintLead`). Its
+  only purpose was compensating for the absent control; the placeholder is now `Start writing…` alone.
 
 ## Milestone C — Keep at Top (evaluate later)
 

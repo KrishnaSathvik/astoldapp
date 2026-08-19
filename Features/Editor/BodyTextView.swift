@@ -2,6 +2,22 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
+/// A handle the editor holds to run a document action *inside* the body text view.
+///
+/// The Style control lives in the toolbar, but its edit has to go through the text view's own edit
+/// primitive — that is what keeps one tap to one undo step and leaves the keyboard and the live
+/// selection untouched. Passing a closure the coordinator fills in is the smallest way to reach it;
+/// the alternative, pushing a "pending style" down as state and applying it in `updateUIView`, would
+/// make an action look like a value and fire again on any unrelated update.
+@MainActor
+final class BodyEditorActions {
+    fileprivate var applyStyle: ((BlockStyle) -> Void)?
+
+    /// Applies `style` to every line the body's current selection touches. A no-op before the text
+    /// view exists, or while the body is not editable (a recording owns the anchor).
+    func apply(_ style: BlockStyle) { applyStyle?(style) }
+}
+
 /// UITextView-backed body editor. The backing store holds the raw source string (with lightweight
 /// markers) so voice transcripts insert exactly at the caret and native editing / IME / autocorrect keep
 /// working (docs/04-voice-transcription.md §8, docs/02-features.md Milestone A). Markers are hidden and
@@ -18,6 +34,8 @@ struct BodyTextView: UIViewRepresentable {
     /// Two-way keyboard focus. Setting it true/false focuses/dismisses.
     @Binding var isFocused: Bool
     var isEditable: Bool
+    /// Filled in with a way to run a document action against this text view — see `BodyEditorActions`.
+    var actions: BodyEditorActions? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -47,6 +65,7 @@ struct BodyTextView: UIViewRepresentable {
             }
         }
 
+        context.coordinator.bind(actions, to: tv)
         return tv
     }
 
@@ -109,9 +128,13 @@ struct BodyTextView: UIViewRepresentable {
             isApplyingEdit = false
             undoManager?.enableUndoRegistration()
 
+            // The *length* survives, not just the caret: converting four selected lines leaves those
+            // four lines selected, so a writer who picked the wrong style can pick another without
+            // reselecting. Undo relies on it too — the inverse restores the selection the edit had.
             let length = tv.text.utf16.count
             let target = caret ?? edit.selection
-            tv.selectedRange = NSRange(location: min(target.location, length), length: 0)
+            let location = min(target.location, length)
+            tv.selectedRange = NSRange(location: location, length: min(target.length, length - location))
             restyle(tv)
             syncBindings(tv)
 
@@ -124,6 +147,17 @@ struct BodyTextView: UIViewRepresentable {
                 coordinator.apply(inverse, to: tv, caret: inverse.selection)
             }
             return true
+        }
+
+        /// Gives the editor a way to apply a block style to the live selection. Read straight off the
+        /// text view rather than from the SwiftUI binding: the binding is a copy of the selection as of
+        /// the last update, and this runs against whatever the writer has selected right now.
+        func bind(_ actions: BodyEditorActions?, to tv: UITextView) {
+            actions?.applyStyle = { [weak self, weak tv] style in
+                guard let self, let tv, tv.isEditable else { return }
+                let edit = DocumentAction.setBlockKindEdit(style.kind, text: tv.text, selection: tv.selectedRange)
+                self.apply(edit, to: tv)
+            }
         }
 
         /// A body change that arrives from outside the text view — a voice transcript landing at the

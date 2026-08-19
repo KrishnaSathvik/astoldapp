@@ -53,10 +53,17 @@ These are treated as fixed product constraints unless intentionally changed.
 - Editor shows the note **date**, not a prominent time.
 - Notes MUST autosave. MUST NOT show a Save button.
 - MUST NOT show a visible formatting toolbar. Light structure — headings / subheadings / bullet /
-  numbered / checklist — **shipped in V1** (§7) and is created by typing its marker or speaking its
-  command, never by a control. Any affordance around it MUST stay contextual or collapsible, never a
-  persistent formatting ribbon; structure MUST NOT visually dominate writing, and the app MUST still
-  read as a page. The editor's `?` is help, shown only while editing, and applies nothing.
+  numbered / checklist — **shipped in V1** (§7) and is created three equivalent ways: choosing it in
+  the contextual **Style** menu, typing its marker, or speaking its command. All three route through
+  the one `DocumentAction.setBlockKind` primitive; there is never a second formatting system.
+  (Changed 2026-08-19 from "never by a control" — a control was the whole point of the change; the
+  ban is on a *persistent ribbon*, not on structure being reachable by tapping.) Any affordance
+  around it MUST stay contextual or collapsible, never a persistent formatting ribbon; structure MUST
+  NOT visually dominate writing, and the app MUST still read as a page. The Style menu is exactly one
+  toolbar item, shown only while the **body** has the caret, and offers exactly six structures —
+  Normal / Heading / Subheading / Bullet list / Numbered list / Checklist — plus the writing-help
+  reference. Inline formatting (bold, italic, underline, colors, alignment, font size) MUST NOT join
+  it: that is full rich text, which stays on the §7 do-not-build list.
 - Voice and typing are two input methods for the **same** note — not two note types.
 - A voice transcript MUST become ordinary, editable text.
 - V1 voice target languages: English, Telugu, Hindi, Telugu+English, Hindi+English.
@@ -299,14 +306,21 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
 
 ### Editor
 
-- Required elements: Back, overflow menu, date, optional title field, body text area, mic control.
+- Required elements: Back, Style menu, overflow menu, date, optional title field, body text area,
+  mic control. The Style menu is contextual — present only while the body has the caret, gone while
+  reading and while the title is being edited (styling a title means nothing).
 - The overflow menu holds **exactly one** action in V1: `Delete Note`, routed through the same
   soft-delete + Undo path as a swipe on Home (no confirmation dialog — Undo is the safety net).
   It MUST NOT become a drawer for share / export / duplicate / formatting / word count / pin; those
   are on the do-not-build list (§7) and an overflow is how they get in.
-- Forbidden default UI: Save button, formatting bar, checklist button, attachment row, AI button,
-  word count, prominent timestamp, toolbar occupying writing width.
-- Title placeholder `Title`; body placeholder `Start writing…`. No visible box/border on either.
+- Forbidden default UI: Save button, formatting bar, standalone checklist button, attachment row, AI
+  button, word count, prominent timestamp, toolbar occupying writing width. The Style menu is not a
+  formatting bar: one item, contextual, and its options live behind a tap rather than on the page.
+  A keyboard-accessory row of style buttons (`H1 H2 • 1. ☑`) IS the forbidden bar and MUST NOT ship.
+- Title placeholder `Title`; body placeholder `Start writing…` and nothing else. No visible
+  box/border on either. (The empty note carried a marker cheat-sheet until 2026-08-19; it went with
+  the arrival of the Style menu — teaching syntax before the first word was the price of having no
+  control, and that price is no longer owed.)
 - Editing an old note MUST NOT move it to Today — timeline sorts by creation date, not last edit.
 - Undo MUST cover structural editing exactly as it covers typing: **one user action is one undo step**
   — ticking a checkbox, Return continuing a list, Backspace demoting a line, a voice transcript landing —
@@ -545,19 +559,39 @@ Implemented and covered by tests. Behavior locked as described:
   explicit command**; anything uncertain stays literal text. This is the §2 contract in the editor:
   ordinary speech that merely *sounds* structured MUST NOT become a list.
 
-#### Discoverability rule (added 2026-08-19)
+#### Discoverability rule (added 2026-08-19, superseded the same day)
 
-Structured writing MUST remain available **without a persistent formatting toolbar**. Discoverability MAY
-use **transient placeholders, contextual editing help, and one-time voice education** — a hint that
-disappears on first keystroke, a `?` reference shown only while editing, and a single tip after the first
-successful transcription. Help surfaces are **reference only**: they explain syntax and MUST NOT apply
-structure, because a sheet of formatting buttons is the forbidden ribbon one tap deeper.
+Structured writing MUST remain available **without a persistent formatting toolbar** — but it MUST NOT
+require knowing marker syntax either. The original rule made typed markers and voice commands the only
+ways in, with help surfaces that were reference-only. That shipped a capability most people would never
+find: `- ` for a bullet is developer knowledge, and a note-taking app cannot make its structure
+conditional on it.
 
-- **The "Style" control** (converting an existing block — "make this a heading") is a post-release item,
-  design-tested before implementation. Preferred form: a small contextual `Aa` / Style action available
-  only while editing, routing through the existing `setBlockKind` primitive. It MUST NOT arrive as a
-  persistent formatting ribbon. Not a release blocker — typing markers and voice commands already work.
-  See `docs/02-features.md` Milestone B2.
+**The rule now:** structure is available directly through a small contextual writing control. Typed
+markers remain fast shortcuts, and voice commands remain the spoken equivalent. Three ways in, one
+operation underneath.
+
+- **The Style control shipped in V1** (2026-08-19), promoted from the post-release item this section
+  previously described. Form: one contextual `Aa` toolbar item, present only while the **body** has the
+  caret, opening a menu of the six structures with the current one checked, plus the writing-help
+  reference. It routes through `DocumentAction.setBlockKind` — the same primitive typing and voice
+  already used — so there is one document-action layer, never two formatting systems.
+- **A menu, not a sheet**, and that is a behavioral requirement rather than a preference: a sheet
+  resigns first responder, so the keyboard would drop and the selection being styled would have to be
+  restored afterwards. The menu leaves the keyboard and the live selection intact.
+- **It MUST NOT become a persistent ribbon.** A keyboard-accessory row of style buttons is the forbidden
+  bar, not an alternative to it. The control disappears with the keyboard, and never appears while
+  reading.
+- **Applying a style acts on every line the selection touches, as one undo step.** Four lines becoming a
+  checklist is one thing the writer did and MUST undo as one.
+- **Nothing else joins this control.** Inline formatting — bold, italic, underline, highlight, colors,
+  alignment, font size — is full rich text and stays excluded above. It is a different category
+  (selection ranges, nested formatting, source↔visible mapping, copy/paste semantics), not a smaller
+  version of what shipped.
+- **Help surfaces stay reference-only.** The writing-help sheet explains syntax and applies nothing;
+  applying is the Style menu's job. The standalone `?` was folded into that menu (2026-08-19), and the
+  empty note's marker cheat-sheet was removed — its whole purpose was compensating for the absent
+  control.
 - **A checklist is content, not a task manager.** It means "write several things and tick them off." It
   MUST NOT bring due dates, deadlines, overdue states, priorities, recurrence, calendar scheduling, task
   inboxes, or notifications. A Todoist/Notion clone stays on the do-not-build list.
@@ -596,6 +630,9 @@ appearance override (only if users ask) · pin note (evaluate against chronologi
 Source: `docs/01-product-requirements.md` §15, `docs/07-build-plan.md` (Definition of Done).
 
 - Typing flow, note persistence, and empty-draft cleanup are stable.
+- Structure is reachable **without knowing marker syntax**: the Style menu applies each of the six
+  structures, checks the current one, converts a multi-line selection in one undo step, and is absent
+  while reading and while the title has the caret.
 - Search is useful at realistic note counts (tested to ~10k).
 - Calendar navigation works across months, years, timezones, and DST.
 - Face ID / device authentication behavior is tested (enable/cancel/failure/background/foreground).
@@ -625,7 +662,10 @@ Source: `docs/01-product-requirements.md` §15, `docs/07-build-plan.md` (Definit
 - No user-facing surface says `Yourly`: UI copy, accessibility labels, display name, App Store
   listing, website, and support content all read **As Told**.
 - The verification suite in `docs/07-build-plan.md` ("Verification suite") is green at its stated
-  baseline — 305 unit, 33 UI, 84 relay, clean typecheck, Release build succeeds. The UI suite flakes
+  baseline — 376 unit, 41 UI, 84 relay, clean typecheck, Release build succeeds. (Was written as
+  "305 unit, 33 UI"; the unit figure was already stale at 345 before the Style menu landed, so the
+  number had drifted from the suite it was supposed to guard. Measured, not estimated, 2026-08-19.)
+  The UI suite flakes
   as a whole-suite run, so a UI failure MUST be reproduced with `-only-testing:` on the single test
   before it is treated as a regression — and MUST NOT be waved off as flake without that check.
 

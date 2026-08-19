@@ -413,12 +413,12 @@ known-good baseline — anything lower means something was lost, not that the ba
 ```bash
 xcodegen generate   # the .xcodeproj is generated and gitignored; regenerate after adding files
 
-# 305 unit tests
+# 376 unit tests
 xcodebuild test -project Yourly.xcodeproj -scheme Yourly \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:YourlyTests
 
-# 33 UI tests, including the three accessibility audits
+# 41 UI tests, including the three accessibility audits
 xcodebuild test -project Yourly.xcodeproj -scheme Yourly \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:YourlyUITests -parallel-testing-enabled NO
@@ -490,7 +490,7 @@ The build is V1-complete only when:
 - Light/Dark are both intentional
 - system appearance drives theme
 - SF Symbols only for system icons
-- no visible formatting toolbar
+- no visible formatting toolbar — the `Aa` Style menu is one contextual item, not a bar
 - no card-heavy redesign
 - Dynamic Type/VoiceOver pass
 

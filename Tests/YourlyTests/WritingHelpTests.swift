@@ -62,30 +62,33 @@ struct WritingHelpTests {
         }
     }
 
-    // MARK: Empty-note hint
+    // MARK: The three ways in must agree
 
-    /// The hint is the smallest of the surfaces and must stay that way — three markers, drawn from
-    /// the same source as the sheet so it cannot contradict it.
-    @Test func emptyNoteHintTeachesRealMarkers() {
-        let markers = WritingHelp.emptyNoteHintMarkers.map(\.marker)
-        #expect(markers == [BlockKind.heading.marker,
-                            BlockKind.bullet.marker,
-                            BlockKind.checklist(checked: false).marker])
-        #expect(!markers.contains(BlockKind.subheading.marker),
-                "the hint should stay at three markers; the rest belong in the ? sheet")
-    }
-
-    /// The hint must never quote a marker inside prose: the trailing space is what makes the marker
-    /// work, and a proportional font between quotes is where it went missing.
-    @Test func emptyNoteHintKeepsMarkersOutOfItsSentence() {
-        for marker in WritingHelp.emptyNoteHintMarkers.map(\.marker) {
-            #expect(!WritingHelp.emptyNoteHintLead.contains(marker.trimmingCharacters(in: .whitespaces)))
+    /// Tap, type, and speak must offer the *same* structures. If the Style menu ever grows an option
+    /// the typed reference does not cover, a writer learns a structure in one surface that appears
+    /// not to exist in the other.
+    @Test func theStyleMenuAndTheTypingReferenceCoverTheSameStructures() {
+        let typed = Set(WritingHelp.typingMarkers.map(\.marker))
+        // Normal is the exception by definition: it is the absence of a marker, so it can be tapped
+        // but has nothing to type.
+        let tappable = BlockStyle.allCases.filter { $0 != .normal }
+        for style in tappable {
+            #expect(typed.contains(style.kind.marker),
+                    "\(style.name) can be tapped but the typing reference never teaches it")
         }
+        #expect(typed.count == tappable.count,
+                "the typing reference teaches a marker the Style menu cannot apply")
     }
 
-    @Test func everyHintMarkerKeepsItsTrailingSpace() {
-        for marker in WritingHelp.emptyNoteHintMarkers.map(\.marker) {
-            #expect(marker.hasSuffix(" "), "the space is part of the marker and must be shown")
+    /// The menu's names are the sheet's names. Two labels for one structure is how "Bullet list" and
+    /// "Bullets" end up in the same app.
+    @Test func theStyleMenuNamesMatchTheTypingReference() {
+        let namesByMarker = Dictionary(uniqueKeysWithValues:
+            WritingHelp.typingMarkers.map { ($0.marker, $0.name) })
+        for style in BlockStyle.allCases where style != .normal {
+            let reference = namesByMarker[style.kind.marker] ?? "nothing"
+            #expect(reference == style.name,
+                    "the menu calls it \(style.name), the reference calls it \(reference)")
         }
     }
 
