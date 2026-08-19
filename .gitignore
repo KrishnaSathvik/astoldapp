@@ -28,3 +28,4 @@ Package.resolved
 
 # Vercel local link (project/org ids)
 .vercel/
+.playwright-mcp/

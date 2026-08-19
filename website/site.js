@@ -21,7 +21,16 @@
       if (event.target.closest('a')) closeMenu();
     });
     document.addEventListener('keydown', event => {
-      if (event.key === 'Escape') closeMenu();
+      if (event.key === 'Escape' && document.body.classList.contains('menu-open')) {
+        closeMenu();
+        toggle.focus();
+      }
+    });
+    // A tap outside the sheet should dismiss it the way any iOS menu would.
+    document.addEventListener('pointerdown', event => {
+      if (!document.body.classList.contains('menu-open')) return;
+      if (event.target.closest('.links') || event.target.closest('.navtoggle')) return;
+      closeMenu();
     });
     window.addEventListener('resize', () => {
       if (window.innerWidth > 760) closeMenu();
@@ -32,11 +41,18 @@
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
 
-  const currentPath = location.pathname.replace(/\/$/, '') || '/';
+  // `/foo`, `/foo.html` and `/foo/` are the same page; `/index` is the root.
+  const normalise = path => {
+    const p = path.replace(/\.html$/, '').replace(/\/$/, '') || '/';
+    return p === '/index' ? '/' : p;
+  };
+  const currentPath = normalise(location.pathname);
   document.querySelectorAll('.links a').forEach(link => {
-    const href = new URL(link.href, location.href);
-    const linkPath = href.pathname.replace(/\/$/, '') || '/';
-    if (linkPath !== '/' && linkPath === currentPath) link.setAttribute('aria-current', 'page');
+    const url = new URL(link.href, location.href);
+    // An in-page jump like `#writing` is not a different page — marking it
+    // aria-current would tell a screen reader the wrong thing.
+    if (url.hash) return;
+    if (normalise(url.pathname) === currentPath) link.setAttribute('aria-current', 'page');
   });
 
   const reveals = document.querySelectorAll('.reveal');
@@ -52,7 +68,7 @@
         observer.unobserve(entry.target);
       }
     });
-  }, { rootMargin: '0px 0px -7% 0px', threshold: 0.08 });
+  }, { rootMargin: '0px 0px -6% 0px', threshold: 0.06 });
 
   reveals.forEach(el => observer.observe(el));
 })();

@@ -14,6 +14,8 @@ enum DebugLaunch {
     static var openSampleEditor: Bool { args.contains("-openSampleEditor") }
     /// Seeds a single note exercising every structure type — for verifying live-styled rendering.
     static var seedStructuredDemo: Bool { args.contains("-seedStructuredDemo") }
+    /// Seeds a single spoken, code-switched note — for the multilingual voice screenshot.
+    static var seedVoiceDemo: Bool { args.contains("-seedVoiceDemo") }
     /// Opens the newest seeded note in the editor — the *existing note* (reading) path.
     static var openSeededNote: Bool { args.contains("-openSeededNote") }
     static var openCalendar: Bool { args.contains("-openCalendar") }
@@ -38,6 +40,20 @@ enum DebugLaunch {
             for note in (try? context.fetch(FetchDescriptor<Note>())) ?? [] { context.delete(note) }
             try? context.save()
         }
+        if seedVoiceDemo {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let body = """
+                నాకు Alaska trip గురించి ఒక idea వచ్చింది. Maybe మనం Anchorage లో whole week stay చేయకుండా, Seward లో two nights stay చేస్తే better ఉంటుంది.
+
+                Rest of the days రోడ్డు మీద ఉంటాం — that way we actually see something.
+                """
+                context.insert(Note(title: "Alaska trip idea", body: body))
+                try? context.save()
+            }
+            return
+        }
+
         if seedStructuredDemo {
             let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
             if existing == 0 {
