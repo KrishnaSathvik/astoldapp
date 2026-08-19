@@ -8,6 +8,10 @@ final class VoiceCaptureModel {
         case idle
         case permissionDenied
         case recording
+        /// Recording finished, audio held, waiting on the one-time disclosure before it is sent.
+        /// Only ever reached once per install, and only when the service actually uploads
+        /// (`TranscriptionConsent`).
+        case needsConsent
         case transcribing
         case failed(TranscriptionError)
     }
@@ -17,6 +21,7 @@ final class VoiceCaptureModel {
 
     private var recorder: AudioRecording
     private let service: TranscriptionService
+    private let consent: TranscriptionConsentStoring
     private let onTranscript: (String) -> Void
 
     private var recordedURL: URL?
@@ -29,10 +34,15 @@ final class VoiceCaptureModel {
 
     init(recorder: AudioRecording,
          service: TranscriptionService,
+         consent: TranscriptionConsentStoring? = nil,
          maxRecordingDuration: Duration = VoiceLimits.maxRecordingDuration,
          onTranscript: @escaping (String) -> Void) {
         self.recorder = recorder
         self.service = service
+        // A service that keeps the audio local has no transfer to disclose, so it is never gated.
+        self.consent = consent ?? (service.sendsAudioOffDevice
+            ? UserDefaultsTranscriptionConsent()
+            : AlwaysGrantedTranscriptionConsent())
         self.maxRecordingDuration = maxRecordingDuration
         self.onTranscript = onTranscript
     }
@@ -52,13 +62,23 @@ final class VoiceCaptureModel {
         }
     }
 
-    /// Stop recording and transcribe.
+    /// Stop recording, then transcribe — pausing once for the disclosure if the recording is about
+    /// to leave the device for the first time.
     func done() {
         guard phase == .recording else { return }
         limitTask?.cancel()
         limitTask = nil
         guard let url = recorder.stop() else { phase = .failed(.noSpeech); return }
         recordedURL = url
+        // The audio stays on disk while the question is open; nothing is sent until it is answered.
+        guard consent.hasConsented else { phase = .needsConsent; return }
+        transcribe(url)
+    }
+
+    /// The user accepted the disclosure: remember it and send the recording that is already waiting.
+    func grantConsent() {
+        guard phase == .needsConsent, let url = recordedURL else { return }
+        consent.grant()
         transcribe(url)
     }
 

@@ -6,6 +6,11 @@ import Foundation
 /// The relay endpoint returns `{ requestId, text, languages }`. HTTP status codes map to domain errors
 /// so the UI can show concise copy (RULES.md §5). Nothing about the note is sent — only the audio.
 struct RelayTranscriptionService: TranscriptionService {
+    /// The whole point of the relay: the recording is uploaded. Stated explicitly rather than
+    /// inherited from the protocol default, because this is what turns on the one-time disclosure
+    /// (`TranscriptionConsent`).
+    var sendsAudioOffDevice: Bool { true }
+
     let baseURL: URL
     var session: URLSession = .shared
     /// Optional App Attest headers provider (production). Returns header fields to attach per request.

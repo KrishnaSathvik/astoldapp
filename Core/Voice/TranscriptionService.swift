@@ -39,4 +39,15 @@ enum TranscriptionError: Error, Equatable, Sendable {
 /// (docs/04-voice-transcription.md §8, docs/05-architecture.md §13).
 protocol TranscriptionService: Sendable {
     func transcribe(audioURL: URL, requestID: UUID) async throws -> TranscriptionResult
+
+    /// Whether transcribing sends the recording off the device. Drives the one-time disclosure in
+    /// `TranscriptionConsent` — a service that keeps the audio local has nothing to disclose.
+    ///
+    /// Defaults to `true` on purpose: a new service that forgets to answer shows the disclosure
+    /// rather than silently skipping it.
+    var sendsAudioOffDevice: Bool { get }
+}
+
+extension TranscriptionService {
+    var sendsAudioOffDevice: Bool { true }
 }

@@ -11,6 +11,9 @@ struct FakeTranscriptionService: TranscriptionService {
     var result: Result<TranscriptionResult, TranscriptionError>
     var delay: Duration
 
+    /// Nothing is uploaded, so there is no transfer to disclose (`TranscriptionConsent`).
+    var sendsAudioOffDevice: Bool { false }
+
     init(
         result: Result<TranscriptionResult, TranscriptionError> = .success(
             TranscriptionResult(text: FakeTranscriptionService.sampleText, detectedLanguages: ["te", "en"])

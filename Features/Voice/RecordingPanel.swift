@@ -21,6 +21,8 @@ struct RecordingPanel: View {
             switch model.phase {
             case .recording:
                 recording
+            case .needsConsent:
+                consentRequest
             case .transcribing:
                 TranscribingIndicator()
             case .failed(let error):
@@ -42,7 +44,7 @@ struct RecordingPanel: View {
         .sensoryFeedback(trigger: model.phase) { Self.haptic(from: $0, to: $1) }
         .onChange(of: model.phase) { _, new in
             switch new {
-            case .recording, .transcribing, .failed, .permissionDenied:
+            case .recording, .needsConsent, .transcribing, .failed, .permissionDenied:
                 wasActive = true
             case .idle:
                 if wasActive { onClose() }   // capture completed → dismiss
@@ -91,6 +93,33 @@ struct RecordingPanel: View {
         }
     }
 
+    /// Shown once per install, after Done and before the first upload (`TranscriptionConsent`).
+    /// Deliberately short: name where the recording goes, say what is *not* sent, two choices.
+    /// The recording is already captured and stays on disk until this is answered.
+    private var consentRequest: some View {
+        VStack(spacing: DSSpacing.s4) {
+            Text("Voice transcription")
+                .font(.ds.noteTitle)
+                .foregroundStyle(.white)
+
+            Text("To turn your recording into text, As Told sends it to OpenAI. Nothing else from your note is sent.")
+                .font(.ds.preview)
+                .foregroundStyle(.white.opacity(0.85))
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: DSSpacing.s6) {
+                Button("Cancel") { model.discard(); onClose() }
+                    .foregroundStyle(.white.opacity(0.8))
+                    .accessibilityHint("Deletes this recording without sending it")
+                Button("Continue") { model.grantConsent() }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .accessibilityHint("Sends this recording to be transcribed, and doesn't ask again")
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
     private func failure(_ error: TranscriptionError) -> some View {
         VStack(spacing: DSSpacing.s4) {
             Text(message(for: error))
@@ -133,7 +162,8 @@ struct RecordingPanel: View {
                                to new: VoiceCaptureModel.Phase) -> SensoryFeedback? {
         switch (old, new) {
         case (_, .recording): return .start
-        case (.recording, .transcribing): return .stop
+        // Recording has stopped in both cases; the disclosure just sits between stop and send.
+        case (.recording, .transcribing), (.recording, .needsConsent): return .stop
         case (.transcribing, .idle): return .success
         case (_, .failed), (_, .permissionDenied): return .error
         default: return nil

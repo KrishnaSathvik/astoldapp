@@ -169,8 +169,35 @@ iPhone
 - stop recorder
 - close/finalize file
 - validate non-empty recording
+- **one-time disclosure gate** — see below; on a consented install this is a no-op
 - show `Transcribing…`
 - upload
+
+### One-time transcription disclosure
+
+The microphone permission covers *recording*. It does not cover *sending*. App Review Guideline
+5.1.2(i) requires clearly disclosing where personal data is shared with third parties — "including
+with third-party AI" — and obtaining explicit permission before doing so. Apps with an account
+collect this at sign-up; As Told deliberately has none (RULES.md §1), so the only honest place for it
+is the moment before the first upload.
+
+- Asked **after Done, before the first upload** — never before recording, which would collide with
+  the microphone prompt and put a legal question in front of someone who has not tried voice yet.
+- Asked **once per install**, persisted locally (`voiceTranscriptionConsent`). Nothing about the
+  decision is transmitted.
+- The recording is already captured and **stays on disk unread while the question is open**. Nothing
+  is uploaded until it is answered.
+- **Continue** → remember, then send the waiting recording.
+- **Cancel** → delete the recording, send nothing, leave the note untouched. Declining is not
+  remembered as consent, so the question returns on the next attempt.
+- Abandoning it (leaving the note mid-question) aborts the capture and deletes the audio.
+- Only applies when the configured service actually uploads (`TranscriptionService.sendsAudioOffDevice`).
+  Disclosing a transfer that does not happen would be its own inaccuracy, so the local fake is never
+  gated. The property defaults to `true`, so a new service that forgets to answer discloses rather
+  than silently skipping.
+
+Copy is deliberately short — name the recipient, say what is *not* sent, two choices. The detail
+belongs in the privacy policy, not in a sheet interrupting someone mid-thought.
 
 ### Success
 

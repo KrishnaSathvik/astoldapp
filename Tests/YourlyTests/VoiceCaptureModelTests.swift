@@ -260,3 +260,178 @@ struct AbandonedRecordingCleanupTests {
         #expect(fm.fileExists(atPath: unrelatedName.path))
     }
 }
+
+// MARK: - One-time transcription disclosure
+
+private final class CallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    var count: Int { lock.withLock { value } }
+    func bump() { lock.withLock { value += 1 } }
+}
+
+/// Behaves like the relay: transcribing means the recording leaves the device.
+private struct UploadingTranscriptionService: TranscriptionService {
+    let counter: CallCounter
+    var sendsAudioOffDevice: Bool { true }
+
+    func transcribe(audioURL: URL, requestID: UUID) async throws -> TranscriptionResult {
+        counter.bump()
+        return TranscriptionResult(text: "transcribed words", detectedLanguages: [])
+    }
+}
+
+private final class MemoryConsent: TranscriptionConsentStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var granted: Bool
+    init(granted: Bool = false) { self.granted = granted }
+    var hasConsented: Bool { lock.withLock { granted } }
+    func grant() { lock.withLock { granted = true } }
+}
+
+/// The disclosure required before a recording is shared with a third party (App Review 5.1.2(i)).
+/// The contract these pin down: nothing is uploaded until the question is answered, Cancel deletes
+/// the audio, and the question is asked exactly once.
+@MainActor
+struct TranscriptionConsentTests {
+
+    private func make(recorder: FakeRecorder,
+                      counter: CallCounter,
+                      consent: TranscriptionConsentStoring,
+                      onText: @escaping (String) -> Void = { _ in }) -> VoiceCaptureModel {
+        VoiceCaptureModel(recorder: recorder,
+                          service: UploadingTranscriptionService(counter: counter),
+                          consent: consent,
+                          onTranscript: onText)
+    }
+
+    @Test func firstUploadWaitsForTheDisclosure() async {
+        let recorder = FakeRecorder()
+        let counter = CallCounter()
+        let model = make(recorder: recorder, counter: counter, consent: MemoryConsent())
+
+        await model.begin()
+        model.done()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(model.phase == .needsConsent)
+        #expect(counter.count == 0, "nothing may be uploaded before the disclosure is answered")
+        #expect(recorder.cleaned.isEmpty, "the recording is kept while the question is open")
+    }
+
+    @Test func continueSendsTheWaitingRecordingAndRemembersTheAnswer() async {
+        var emitted: String?
+        let recorder = FakeRecorder()
+        let counter = CallCounter()
+        let consent = MemoryConsent()
+        let model = make(recorder: recorder, counter: counter, consent: consent) { emitted = $0 }
+
+        await model.begin()
+        model.done()
+        model.grantConsent()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(counter.count == 1)
+        #expect(emitted == "transcribed words")
+        #expect(consent.hasConsented)
+        #expect(model.phase == .idle)
+        #expect(recorder.cleaned.contains(recorder.startURL), "temp audio deleted on success")
+    }
+
+    @Test func cancelDeletesTheRecordingAndSendsNothing() async {
+        var emitted: String?
+        let recorder = FakeRecorder()
+        let counter = CallCounter()
+        let consent = MemoryConsent()
+        let model = make(recorder: recorder, counter: counter, consent: consent) { emitted = $0 }
+
+        await model.begin()
+        model.done()
+        #expect(model.phase == .needsConsent)
+        model.discard()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(counter.count == 0, "declining must not upload")
+        #expect(emitted == nil)
+        #expect(model.phase == .idle)
+        #expect(recorder.cleaned.contains(recorder.startURL), "declining deletes the recording")
+        #expect(consent.hasConsented == false, "declining is not remembered as consent")
+    }
+
+    @Test func onceAnsweredItIsNeverAskedAgain() async {
+        let recorder = FakeRecorder()
+        let counter = CallCounter()
+        let model = make(recorder: recorder, counter: counter, consent: MemoryConsent(granted: true))
+
+        await model.begin()
+        model.done()
+
+        #expect(model.phase == .transcribing, "a consented install goes straight to transcribing")
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(counter.count == 1)
+    }
+
+    @Test func grantingIsIgnoredOutsideTheDisclosure() async {
+        let recorder = FakeRecorder()
+        let counter = CallCounter()
+        let consent = MemoryConsent()
+        let model = make(recorder: recorder, counter: counter, consent: consent)
+
+        model.grantConsent()   // nothing recorded, nothing asked
+        #expect(counter.count == 0)
+        #expect(consent.hasConsented == false)
+        #expect(model.phase == .idle)
+    }
+
+    /// A service that keeps the audio on the device has no transfer to disclose, so disclosing one
+    /// would itself be inaccurate.
+    @Test func aLocalOnlyServiceIsNeverGated() async {
+        let recorder = FakeRecorder()
+        let model = VoiceCaptureModel(recorder: recorder,
+                                      service: FakeTranscriptionService(delay: .milliseconds(1)),
+                                      onTranscript: { _ in })
+        #expect(FakeTranscriptionService().sendsAudioOffDevice == false)
+
+        await model.begin()
+        model.done()
+        #expect(model.phase == .transcribing)
+    }
+
+    /// The relay client must be treated as off-device — this is what turns the gate on in the app.
+    @Test func theRelayIsTreatedAsOffDevice() {
+        let relay = RelayTranscriptionService(baseURL: URL(string: "https://example.invalid")!)
+        #expect(relay.sendsAudioOffDevice)
+    }
+
+    /// Leaving the note with the disclosure still open (EditorView.onDisappear calls cancel())
+    /// must abort the capture rather than strand the audio waiting for an answer that never comes.
+    @Test func leavingWhileTheDisclosureIsOpenAbortsTheCapture() async {
+        let recorder = FakeRecorder()
+        let counter = CallCounter()
+        let consent = MemoryConsent()
+        let model = make(recorder: recorder, counter: counter, consent: consent)
+
+        await model.begin()
+        model.done()
+        #expect(model.phase == .needsConsent)
+        model.cancel()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(model.phase == .idle)
+        #expect(counter.count == 0)
+        #expect(recorder.canceled, "the recorder aborts, which deletes the temporary audio")
+        #expect(consent.hasConsented == false)
+    }
+
+    /// "Once, ever" has to survive relaunch, so it lives in UserDefaults rather than memory.
+    @Test func theAnswerSurvivesRelaunch() {
+        let suite = "consent-test-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        #expect(UserDefaultsTranscriptionConsent(defaults: defaults).hasConsented == false)
+        UserDefaultsTranscriptionConsent(defaults: defaults).grant()
+        // A fresh instance stands in for the next launch.
+        #expect(UserDefaultsTranscriptionConsent(defaults: defaults).hasConsented)
+    }
+}

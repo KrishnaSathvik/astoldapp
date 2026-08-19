@@ -185,6 +185,10 @@ Source: `docs/01-product-requirements.md` §11, §13, `docs/04-voice-transcripti
 ### Data ownership
 
 - The note database MUST live in the app container on device (local-first). No cloud note DB in V1.
+- Before the **first** recording ever leaves the device, the app MUST show a one-time disclosure
+  naming the third party that transcribes it and MUST NOT upload until the user accepts. Microphone
+  permission is permission to *record*, never permission to *send* (App Review 5.1.2(i);
+  `docs/04-voice-transcription.md` §6). Declining MUST delete the recording and send nothing.
 - The transcription service receives **only** the audio the user explicitly chose to transcribe,
   plus static instructions, allowed language hints, and non-content metadata.
 - MUST NOT send the full existing note to the transcription model as context.
