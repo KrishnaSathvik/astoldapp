@@ -11,6 +11,11 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     GENERATE_INFOPLIST_FILE: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # Apple Developer team (paid Individual membership). Required for the App Attest entitlement —
+    # a free personal team cannot use DeviceCheck/App Attest at all. Must match the TEAMID half of
+    # the relay's APP_ATTEST_APP_ID (transcription-service/DEPLOY.md).
+    DEVELOPMENT_TEAM: "766WG2GGCA"
+    CODE_SIGN_STYLE: Automatic
     # iPhone only (README.md §2, docs/06-tech-stack.md). TARGETED_DEVICE_FAMILY must be set on each
     # target — XcodeGen writes its own "1,2" default per target, which overrides a project-level value.
     SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
