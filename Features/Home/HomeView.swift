@@ -6,8 +6,7 @@ struct HomeView: View {
     @Environment(\.modelContext) private var context
 
     @State private var editingNote: Note?
-    @State private var recentlyDeleted: Note?
-    @State private var undoDismiss: Task<Void, Never>?
+    @State private var deletion = NoteDeletion()
     @State private var searchQuery = ""
     @State private var showingCalendar = false
     @State private var showingProfile = false
@@ -30,8 +29,8 @@ struct HomeView: View {
                     SearchResultsView(query: searchQuery) { editingNote = $0 }
                 } else {
                     content
-                    if recentlyDeleted != nil {
-                        UndoBanner(onUndo: undoDelete)
+                    if deletion.pending != nil {
+                        UndoBanner { deletion.undo(in: context) }
                             .padding(.bottom, DSSpacing.s4)
                     }
                 }
@@ -44,9 +43,18 @@ struct HomeView: View {
                 if DebugLaunch.openSettings { showingProfile = true }
             }
             #endif
-            .animation(DSMotion.standard, value: recentlyDeleted != nil)
+            .animation(DSMotion.standard, value: deletion.pending != nil)
             .navigationDestination(item: $editingNote) { note in
-                EditorView(note: note, onClose: { editingNote = nil })
+                EditorView(
+                    note: note,
+                    onClose: { editingNote = nil },
+                    // Same soft-delete + Undo path as a swipe on Home; the banner appears here,
+                    // where the user lands.
+                    onDelete: { note in
+                        editingNote = nil
+                        deletion.delete(note, in: context)
+                    }
+                )
             }
             .navigationDestination(isPresented: $showingCalendar) {
                 CalendarPage(initialSelection: selectedDay) { day in
@@ -117,13 +125,14 @@ struct HomeView: View {
                 .padding(.horizontal, DSSpacing.screenH)
                 .padding(.top, DSSpacing.s6)
 
-                DayNotesList(day: selectedDay, onSelect: { editingNote = $0 }, onDelete: deleteNote)
+                DayNotesList(day: selectedDay, onSelect: { editingNote = $0 },
+                             onDelete: { deletion.delete($0, in: context) })
             }
         } else {
             PagedNotesList(
                 limit: pageLimit,
                 onSelect: { editingNote = $0 },
-                onDelete: deleteNote,
+                onDelete: { deletion.delete($0, in: context) },
                 onLoadMore: { pageLimit += 40 }
             )
         }
@@ -135,22 +144,4 @@ struct HomeView: View {
         editingNote = note
     }
 
-    private func deleteNote(_ note: Note) {
-        note.deletedAt = .now
-        try? context.save()
-        recentlyDeleted = note
-        undoDismiss?.cancel()
-        undoDismiss = Task {
-            try? await Task.sleep(for: .seconds(4))
-            guard !Task.isCancelled else { return }
-            recentlyDeleted = nil
-        }
-    }
-
-    private func undoDelete() {
-        undoDismiss?.cancel()
-        recentlyDeleted?.deletedAt = nil
-        try? context.save()
-        recentlyDeleted = nil
-    }
 }

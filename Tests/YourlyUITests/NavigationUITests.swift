@@ -176,3 +176,59 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 8), "Back to Profile")
     }
 }
+
+/// The editor's overflow menu. It exists for one reason: there must be a way to delete the note you
+/// are currently looking at, and it must take the same reversible path as a swipe on Home.
+final class EditorOverflowUITests: XCTestCase {
+    override func setUp() { continueAfterFailure = false }
+
+    private func launchedApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-hasCompletedWelcome", "YES", "-resetStore", "-seedSampleNotes"]
+        app.launch()
+        XCTAssertTrue(app.buttons["New note"].waitForExistence(timeout: 15), "Home did not appear")
+        return app
+    }
+
+    private func openSeededNote(_ app: XCUIApplication) {
+        let note = app.buttons
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Alaska trip idea"))
+            .firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 8), "seeded note should exist")
+        note.tap()
+        XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8), "editor should open")
+    }
+
+    func testOverflowHoldsOnlyDelete() {
+        let app = launchedApp()
+        openSeededNote(app)
+
+        app.buttons["More actions"].tap()
+        XCTAssertTrue(app.buttons["Delete Note"].waitForExistence(timeout: 8),
+                      "the overflow should offer Delete Note")
+        // Guard against the menu becoming a junk drawer (RULES.md §7).
+        for forbidden in ["Share", "Export", "Duplicate", "Format", "Word Count", "Pin"] {
+            XCTAssertFalse(app.buttons[forbidden].exists, "\(forbidden) must not be in the overflow")
+        }
+    }
+
+    func testDeletingFromTheEditorReturnsHomeAndIsUndoable() {
+        let app = launchedApp()
+        openSeededNote(app)
+
+        app.buttons["More actions"].tap()
+        XCTAssertTrue(app.buttons["Delete Note"].waitForExistence(timeout: 8))
+        app.buttons["Delete Note"].tap()
+
+        // Same reversible path as a swipe: the Undo banner is waiting on Home. Asserted first —
+        // the banner is deliberately short-lived, and every XCUI query costs a snapshot.
+        let undo = app.buttons["Undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 8), "Undo should be offered on Home")
+
+        let deleted = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Alaska trip idea"))
+        XCTAssertFalse(deleted.firstMatch.exists, "note should be gone")
+
+        undo.tap()
+        XCTAssertTrue(deleted.firstMatch.waitForExistence(timeout: 8), "Undo should restore the note")
+    }
+}

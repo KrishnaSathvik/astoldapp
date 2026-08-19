@@ -74,6 +74,12 @@ final class EditorModel {
         hasReachedDisk = true
     }
 
+    /// Drops a queued autosave without running it — for a note that is being deleted.
+    func cancelPendingSave() {
+        saveTask?.cancel()
+        saveTask = nil
+    }
+
     /// Call when leaving the editor: flush, or discard the note if it is an empty draft.
     func finish() {
         saveTask?.cancel()

@@ -14,6 +14,9 @@ struct EditorView: View {
     let note: Note
     /// Set by Home to nil the navigationDestination item — the reliable way to pop an item-based push.
     var onClose: (() -> Void)? = nil
+    /// Deletes this note through Home's existing soft-delete + Undo path, then pops. Home owns the
+    /// undo window, so the banner appears where the user lands.
+    var onDelete: ((Note) -> Void)? = nil
     @State private var model: EditorModel?
     @State private var voice: VoiceCaptureModel?
     @State private var bodySelection = NSRange(location: 0, length: 0)
@@ -23,6 +26,8 @@ struct EditorView: View {
     /// Whether the body had the caret when recording started — decides whether the keyboard comes
     /// back after the transcript lands.
     @State private var refocusBodyAfterVoice = false
+    /// Set while this note is being deleted, so leaving does not autosave it on the way out.
+    @State private var isDeleting = false
 
     private var isCapturing: Bool { voice != nil }
     /// True while the user is actually editing (a field owns the keyboard), false while reading.
@@ -36,6 +41,20 @@ struct EditorView: View {
     private func close() {
         // onDisappear runs finish() (flush or discard empty draft).
         if let onClose { onClose() } else { dismiss() }
+    }
+
+    /// Deletion is reversible for a short period (RULES.md §4 core rule 8), so this takes the same
+    /// soft-delete + Undo path as a swipe on Home rather than asking for confirmation first.
+    private func deleteNote() {
+        guard let onDelete else { return }
+        dismissKeyboard()
+        voice?.cancel()
+        voice = nil
+        // Skip the autosave-on-leave: the note is going away, and `finish()` would only bump its
+        // updatedAt on the way out.
+        isDeleting = true
+        model?.cancelPendingSave()
+        onDelete(note)
     }
 
     private func dismissKeyboard() {
@@ -70,10 +89,10 @@ struct EditorView: View {
             // Leaving mid-recording must not leave the microphone hot or raw audio on disk.
             voice?.cancel()
             voice = nil
-            model?.finish()
+            if !isDeleting { model?.finish() }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { model?.flush() }
+            if phase != .active, !isDeleting { model?.flush() }
             // Recording cannot continue once the app is suspended, so finish the capture with the
             // audio already on disk rather than stranding it.
             if phase == .background, voice?.phase == .recording { voice?.done() }
@@ -97,6 +116,23 @@ struct EditorView: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.ds.accent)
                         .accessibilityLabel("Dismiss keyboard")
+                }
+            }
+            // The overflow holds exactly one action: there must be a way to delete the note you are
+            // looking at. It is not a place to put formatting, sharing, or export — those are on the
+            // do-not-build list (RULES.md §7) and a junk-drawer menu is how they arrive.
+            if onDelete != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Delete Note", systemImage: "trash", role: .destructive) {
+                            deleteNote()
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .foregroundStyle(Color.ds.accent)
+                    }
+                    .disabled(isCapturing)   // the transcript owns the note until the capture ends
+                    .accessibilityLabel("More actions")
                 }
             }
         }

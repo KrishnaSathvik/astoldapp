@@ -294,6 +294,10 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
 ### Editor
 
 - Required elements: Back, overflow menu, date, optional title field, body text area, mic control.
+- The overflow menu holds **exactly one** action in V1: `Delete Note`, routed through the same
+  soft-delete + Undo path as a swipe on Home (no confirmation dialog — Undo is the safety net).
+  It MUST NOT become a drawer for share / export / duplicate / formatting / word count / pin; those
+  are on the do-not-build list (§7) and an overflow is how they get in.
 - Forbidden default UI: Save button, formatting bar, checklist button, attachment row, AI button,
   word count, prominent timestamp, toolbar occupying writing width.
 - Title placeholder `Title`; body placeholder `Start writing…`. No visible box/border on either.
