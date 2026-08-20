@@ -34,6 +34,16 @@ struct BodyTextView: UIViewRepresentable {
     /// Two-way keyboard focus. Setting it true/false focuses/dismisses.
     @Binding var isFocused: Bool
     var isEditable: Bool
+    /// The appearance the keyboard is **born** with. Required, and never `.default`.
+    ///
+    /// SwiftUI knows the effective As Told appearance; UIKit has to be told it outright. The keyboard
+    /// lives in its own `UIRemoteKeyboardWindow`, inherits none of `AppRootView`'s
+    /// `preferredColorScheme`, and `.default` asks that window to resolve its own appearance — from
+    /// the device rather than from the app, so a forced Light/Dark theme would stop at the keyboard.
+    /// See `AppTheme.keyboardAppearance(inheriting:)`. There is deliberately **no default value**:
+    /// every construction site has to decide, because "left to decide" is the bug. Set in
+    /// `makeUIView`, before anything can make this view first responder.
+    var keyboardAppearance: UIKeyboardAppearance
     /// Filled in with a way to run a document action against this text view — see `BodyEditorActions`.
     var actions: BodyEditorActions? = nil
 
@@ -64,6 +74,10 @@ struct BodyTextView: UIViewRepresentable {
         tv.textColor = UIColor(Color.ds.textPrimary)
         tv.textContainerInset = UIEdgeInsets(top: 6, left: 0, bottom: 24, right: 0)
         tv.keyboardDismissMode = .interactive
+        // Before first responder, never after. Focus is taken from `updateUIView`, one runloop turn
+        // after this method returns, so a keyboard raised for a new note is already the right colour
+        // the first time it is drawn.
+        tv.keyboardAppearance = keyboardAppearance
         tv.alwaysBounceVertical = true
         // Quiet editorial: no visible scrollbar, here as everywhere else in the app. A long note
         // is a page that flows, not a document with a measuring stick down its side.
@@ -102,6 +116,7 @@ struct BodyTextView: UIViewRepresentable {
         page.placeholderText = bodyPlaceholder
         let field = page.header.titleField
         field.delegate = context.coordinator
+        field.keyboardAppearance = keyboardAppearance   // same reasoning as the body's, above
         field.text = title.wrappedValue
         field.isEnabled = isEditable
         field.addTarget(context.coordinator,
@@ -125,6 +140,14 @@ struct BodyTextView: UIViewRepresentable {
         page.placeholderText = bodyPlaceholder
         updateTitle(page.header.titleField, context: context)
 
+        // A theme changed while this editor was open. Reload the input views *only* when the keyboard
+        // is actually on screen and the value genuinely changed: reloading unconditionally is itself a
+        // flicker, which is the thing this property exists to remove.
+        if tv.keyboardAppearance != keyboardAppearance {
+            tv.keyboardAppearance = keyboardAppearance
+            if tv.isFirstResponder { tv.reloadInputViews() }
+        }
+
         if tv.text != text {
             // A voice transcript (or SwiftUI handing us a different note) is a document mutation too:
             // apply it as one native edit so it undoes in one step, with the caret the editor asked for.
@@ -147,11 +170,15 @@ struct BodyTextView: UIViewRepresentable {
         page.refreshPlaceholder()
     }
 
-    /// The title half of `updateUIView`: value, enabled state, and the same two-way focus dance the
-    /// body does one method up.
+    /// The title half of `updateUIView`: value, enabled state, keyboard appearance, and the same
+    /// two-way focus dance the body does one method up.
     private func updateTitle(_ field: UITextField, context: Context) {
         if field.text != title.wrappedValue { field.text = title.wrappedValue }
         if field.isEnabled != isEditable { field.isEnabled = isEditable }
+        if field.keyboardAppearance != keyboardAppearance {
+            field.keyboardAppearance = keyboardAppearance
+            if field.isFirstResponder { field.reloadInputViews() }
+        }
 
         let wantsFocus = titleFocused.wrappedValue
         if isEditable, wantsFocus, !field.isFirstResponder {

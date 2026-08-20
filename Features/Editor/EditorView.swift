@@ -11,6 +11,11 @@ struct EditorView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
+    @Environment(ThemeStore.self) private var themeStore
+    /// The app's *effective* rendered scheme, already accounting for `AppRootView`'s
+    /// `preferredColorScheme`. Used to resolve the keyboard's appearance under "Use device settings",
+    /// so the keyboard is never asked to work its own out. See `AppTheme.keyboardAppearance(inheriting:)`.
+    @Environment(\.colorScheme) private var colorScheme
     let note: Note
     /// Set by Home to nil the navigationDestination item — the reliable way to pop an item-based push.
     var onClose: (() -> Void)? = nil
@@ -161,6 +166,7 @@ struct EditorView: View {
             selectedRange: $bodySelection,
             isFocused: $bodyFocused,
             isEditable: !isCapturing,   // recording/transcription owns the anchor
+            keyboardAppearance: themeStore.theme.keyboardAppearance(inheriting: colorScheme),
             actions: bodyActions,
             dateText: dateText,
             title: Binding(get: { model.title }, set: { model.title = $0 }),

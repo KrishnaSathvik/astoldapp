@@ -24,7 +24,8 @@ private enum Caret {
         let parent = BodyTextView(text: .constant(source),
                                   selectedRange: .constant(NSRange(location: caret, length: 0)),
                                   isFocused: .constant(false),
-                                  isEditable: true)
+                                  isEditable: true,
+                                  keyboardAppearance: .light)
         let coordinator = BodyTextView.Coordinator(parent)
         let tv = StructuredTextView.make()
         tv.delegate = coordinator

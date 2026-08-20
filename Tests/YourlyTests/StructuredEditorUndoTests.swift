@@ -35,7 +35,8 @@ struct StructuredEditorUndoTests {
                 text: Binding(get: { box.text }, set: { box.text = $0 }),
                 selectedRange: Binding(get: { box.selection }, set: { box.selection = $0 }),
                 isFocused: Binding(get: { box.isFocused }, set: { box.isFocused = $0 }),
-                isEditable: true
+                isEditable: true,
+                keyboardAppearance: .light
             )
             coordinator = view.makeCoordinator()
             textView = StructuredTextView.make()
