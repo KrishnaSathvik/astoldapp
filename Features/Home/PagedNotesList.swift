@@ -27,12 +27,18 @@ struct PagedNotesList: View {
         _notes = Query(descriptor)
     }
 
+    /// What the timeline actually renders. An editor may legitimately own an empty draft while it is
+    /// open — Home must not put a row (or the separator that comes with one) under it in the
+    /// meantime. See `NoteVisibility`.
+    private var visible: [Note] { userVisibleNotes(notes) }
+
     var body: some View {
-        if notes.isEmpty {
+        if visible.isEmpty {
             EmptyHome()
         } else {
-            HomeTimeline(notes: notes, onSelect: onSelect, onDelete: onDelete) {
-                // Only ask for more when the current batch is full (there may be older notes).
+            HomeTimeline(notes: visible, onSelect: onSelect, onDelete: onDelete) {
+                // Only ask for more when the current batch is full (there may be older notes). Counted
+                // on the *fetched* notes, not the visible ones: the batch is what the query returned.
                 if notes.count >= limit { onLoadMore() }
             }
         }

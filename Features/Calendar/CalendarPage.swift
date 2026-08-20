@@ -122,8 +122,11 @@ private struct CalendarDayNotes: View {
         ))
     }
 
+    /// An empty draft an open editor still owns is not a note anyone wrote on this day (`NoteVisibility`).
+    private var visible: [Note] { userVisibleNotes(notes) }
+
     var body: some View {
-        if notes.isEmpty {
+        if visible.isEmpty {
             Text("Nothing written on this day.")
                 .font(.ds.preview)
                 .foregroundStyle(Color.ds.textSecondary)
@@ -132,12 +135,12 @@ private struct CalendarDayNotes: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             List {
-                ForEach(Array(notes.enumerated()), id: \.element.id) { idx, note in
+                ForEach(Array(visible.enumerated()), id: \.element.id) { idx, note in
                     Button { onSelect(note) } label: { NoteRow(note: note) }
                         .buttonStyle(.plain)
                         .plainCalendarRow(topInset: DSSpacing.s3)
 
-                    if idx < notes.count - 1 {
+                    if idx < visible.count - 1 {
                         Rectangle()
                             .fill(Color.ds.textTertiary.opacity(0.16))
                             .frame(height: 0.5)

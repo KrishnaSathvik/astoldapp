@@ -10,7 +10,7 @@ struct SearchResultsView: View {
     let query: String
     var onSelect: (Note) -> Void
 
-    private var results: [Note] { searchNotes(allNotes, query: query) }
+    private var results: [Note] { searchNotes(userVisibleNotes(allNotes), query: query) }
 
     var body: some View {
         Group {

@@ -167,6 +167,69 @@ final class NotePageView: UIView {
         syncChromeToScroll()
     }
 
+    // MARK: Arriving
+
+    /// Work parked until this page reaches a window — see `afterNavigationTransition`.
+    private var pendingArrival: (() -> Void)?
+
+    /// Runs `work` once the navigation transition this page arrived in has finished, or straight away
+    /// when it arrived without one.
+    ///
+    /// A new note asks for the keyboard as it opens, and taken literally that means "become first
+    /// responder while the push is still sliding". The keyboard then belongs to a view that is
+    /// mid-transition, so it *travels with the page*: its surface slides in horizontally from the
+    /// right edge along with the editor instead of rising from the bottom once the editor is there.
+    /// In Light mode the incoming grey reads as a dark panel sweeping across the screen — the flicker
+    /// a frame-by-frame look at the Home → New Note push finally explained (2026-08-20). It is a
+    /// focus *timing* problem, not a keyboard appearance one.
+    ///
+    /// The transition coordinator is the only thing that actually knows when the push is over. A
+    /// fixed delay would only guess, and guess wrong on a slow device, under Reduce Motion, and on
+    /// any transition whose duration is not the one it was tuned against.
+    func afterNavigationTransition(_ work: @escaping () -> Void) {
+        afterNavigationTransition(work, lookAgain: true)
+    }
+
+    private func afterNavigationTransition(_ work: @escaping () -> Void, lookAgain: Bool) {
+        // Not on screen yet: `didMoveToWindow` picks this back up, because a view outside the window
+        // has no responder chain and so no transition to wait on.
+        guard window != nil else { pendingArrival = work; return }
+
+        if let coordinator = owningViewController?.transitionCoordinator {
+            // `animate` returns false when there is nothing to animate alongside — its completion
+            // never runs then, so the work has to happen here rather than be dropped.
+            if !coordinator.animate(alongsideTransition: nil, completion: { _ in work() }) { work() }
+            return
+        }
+
+        // No transition in flight. That can mean the push has not begun yet — SwiftUI can mount the
+        // destination and activate the route in the same runloop turn — so look once more on the next
+        // turn before concluding that the editor is already in place.
+        guard lookAgain else { work(); return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { work(); return }
+            self.afterNavigationTransition(work, lookAgain: false)
+        }
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard window != nil, let work = pendingArrival else { return }
+        pendingArrival = nil
+        afterNavigationTransition(work)
+    }
+
+    /// The view controller presenting this page — the SwiftUI host. `transitionCoordinator` resolves
+    /// through its ancestors, so this finds the navigation controller's push without knowing about it.
+    private var owningViewController: UIViewController? {
+        var responder: UIResponder? = next
+        while let current = responder {
+            if let controller = current as? UIViewController { return controller }
+            responder = current.next
+        }
+        return nil
+    }
+
     /// Moves the header and the placeholder with the text.
     ///
     /// A point at content `y` is drawn at view `y - contentOffset.y`; the header owns content `0`, so

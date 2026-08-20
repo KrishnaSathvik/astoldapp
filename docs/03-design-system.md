@@ -389,6 +389,12 @@ The same screen serves both; only the arriving focus differs.
 | Trailing toolbar | `Aa` (Style) | nothing |
 | Starting to edit | already editing | tap title or body; caret lands where tapped |
 
+A new note takes focus **after the push finishes**, never during it. Focus taken mid-transition puts
+the keyboard on a view that is still sliding, so it travels sideways into the screen with the editor
+instead of rising from the bottom once the editor has arrived — in Light mode, a grey panel sweeping
+in from the right edge. The wait is on the navigation transition coordinator, not a delay
+(`NotePageView.afterNavigationTransition`, 2026-08-20).
+
 `Aa` shows only when the **body** has the caret. Editing the title shows no trailing chrome at all —
 a title has no block structure, so offering to style it would be offering something that does
 nothing.
@@ -397,6 +403,14 @@ No `Read Mode` / `Edit Mode` toggle, no custom "Hide Keyboard" bar, and **no `Do
 leaves by scrolling the body interactively or by navigating Back. There is no completion control at
 all: autosave already saved, and a button that ends editing teaches people that not pressing it
 loses work — which is exactly what happened before it was removed (2026-08-19).
+
+### Rows and drafts
+
+Home, Search, and the calendar never render a note with nothing in it. An editor may hold an
+effectively empty draft — that is what keeps a note from being destroyed by a temporary scene
+transition — but such a draft is not a row. Home used to draw one as a zero-height row whose
+separator survived as a stray line under `Today` for the moment between leaving an untouched New
+Note and the deletion propagating. The rule lives in `Note.isUserVisible` (RULES.md §4).
 
 ### Scrolling
 

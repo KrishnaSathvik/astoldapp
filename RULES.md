@@ -388,6 +388,13 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
   actually leaves the editor, and **`purgeEmptyDrafts()`** at the next launch, for one stranded by a
   termination. An empty draft briefly reaching disk is the accepted cost — cleanup is a housekeeping
   promise, and never losing content the user created is a correctness one.
+- **Persistence and presentation are separate questions.** An effectively empty note may exist in the
+  store while an editor owns it; it MUST NEVER be a user-visible row or mark — not on Home, not in
+  Search, not in the calendar's day list or its dots. Every place that turns notes into rows goes
+  through the shared `userVisibleNotes` / `Note.isUserVisible` rule, which is defined in terms of the
+  editor's own `isEmptyDraft` so the timeline and the editor can never disagree about what counts as
+  a note. Home used to render the draft as a zero-height row and its separator survived as a stray
+  line under `Today` (2026-08-20). Remove the invisible row; do NOT hide legitimate separators.
 
 ### Navigation
 

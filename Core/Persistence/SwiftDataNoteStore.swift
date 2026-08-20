@@ -78,7 +78,10 @@ final class SwiftDataNoteStore: NoteStore {
                      SortDescriptor(\.id, order: .reverse)]
         )
         descriptor.fetchLimit = limit
-        return try context.fetch(descriptor)
+        // Browse reads never hand back a draft an open editor still owns (`NoteVisibility`). The
+        // filter runs after the limit, so a page can come back one short while such a draft exists —
+        // harmless, because the cursor is a date rather than a count, and there is at most one.
+        return userVisibleNotes(try context.fetch(descriptor))
     }
 
     func notes(on day: Date) throws -> [Note] {
@@ -91,7 +94,7 @@ final class SwiftDataNoteStore: NoteStore {
             sortBy: [SortDescriptor(\.createdAt, order: .reverse),
                      SortDescriptor(\.id, order: .reverse)]
         )
-        return try context.fetch(descriptor)
+        return userVisibleNotes(try context.fetch(descriptor))
     }
 
     func noteDays(in month: Date) throws -> Set<Date> {
@@ -102,7 +105,9 @@ final class SwiftDataNoteStore: NoteStore {
                 $0.deletedAt == nil && $0.createdAt >= start && $0.createdAt < end
             }
         )
-        let notes = try context.fetch(descriptor)
+        // A day earns its dot from a note the reader can actually open — an empty draft held by an
+        // open editor must not light one up (`NoteVisibility`).
+        let notes = userVisibleNotes(try context.fetch(descriptor))
         return Set(notes.map { calendar.startOfDay(for: $0.createdAt) })
     }
 

@@ -157,9 +157,17 @@ struct BodyTextView: UIViewRepresentable {
         if tv.isEditable != isEditable { tv.isEditable = isEditable }
 
         // Focus is driven from the editor; guard on the current responder state so this never loops.
+        //
+        // Taking it waits for the navigation transition to finish. A new note sets `isFocused` as it
+        // opens, and a keyboard raised while the editor is still sliding in slides in *with* it —
+        // see `NotePageView.afterNavigationTransition`. Nothing waits when no transition is running,
+        // so tapping into an existing note and coming back from a recording are unaffected.
         if isEditable, isFocused, !tv.isFirstResponder {
             DispatchQueue.main.async {
-                if isFocused, isEditable, !tv.isFirstResponder { tv.becomeFirstResponder() }
+                guard isFocused, isEditable, !tv.isFirstResponder else { return }
+                page.afterNavigationTransition {
+                    if isFocused, isEditable, !tv.isFirstResponder { tv.becomeFirstResponder() }
+                }
             }
         } else if (!isFocused || !isEditable), tv.isFirstResponder {
             DispatchQueue.main.async {
