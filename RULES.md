@@ -357,6 +357,16 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
 
 - On exit, if normalized title is empty AND body is empty/whitespace AND no transcription is pending →
   remove the draft. Do NOT clean user spacing inside a non-empty body.
+- **A temporary scene transition MUST NEVER invalidate a draft an open editor still owns.**
+  Backgrounding, resigning active, a permission alert, or any other interruption may *save* the
+  current state — including an empty draft — but MUST NOT discard it. Discarding a draft mid-session
+  used to delete it and commit the deletion, and a committed SwiftData deletion cannot be undone by
+  re-inserting the same model: everything the user typed or spoke afterwards was then lost silently
+  while the editor went on displaying it.
+- Removing an abandoned empty draft belongs to exactly two places: **`finish()`**, when the user
+  actually leaves the editor, and **`purgeEmptyDrafts()`** at the next launch, for one stranded by a
+  termination. An empty draft briefly reaching disk is the accepted cost — cleanup is a housekeeping
+  promise, and never losing content the user created is a correctness one.
 
 ### Navigation
 

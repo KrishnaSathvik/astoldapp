@@ -76,41 +76,76 @@ struct EmptyDraftDurabilityTests {
         try context.fetch(FetchDescriptor<Note>(predicate: #Predicate { $0.deletedAt == nil }))
     }
 
-    @Test func backgroundingAnUntouchedDraftWritesNothing() throws {
+    /// A temporary scene transition must never invalidate a draft the editor still owns.
+    ///
+    /// This used to assert the opposite — that backgrounding an untouched draft wrote nothing,
+    /// implemented by deleting it from the context. The deletion was *committed*, and re-inserting
+    /// the same model afterwards did not bring it back, so anything the user wrote next was lost
+    /// silently while the editor went on showing it. Keeping the draft is the weaker cleanup
+    /// promise and the stronger correctness one; `finish()` and the launch sweep still remove it.
+    @Test func backgroundingKeepsAnUntouchedDraftUsable() throws {
         let context = try makeContext()
         let note = Note(); context.insert(note)
         let model = EditorModel(note: note, context: context)
 
         model.flush()                       // what scenePhase != .active does
-        try context.save()                  // anything else that saves must not resurrect it
 
-        #expect(try liveNotes(context).isEmpty)
+        #expect(try liveNotes(context).count == 1)
     }
 
-    @Test func backgroundingAMarkerOnlyDraftWritesNothing() throws {
+    @Test func typingAfterBackgroundingAnEmptyDraftPersists() throws {
         let context = try makeContext()
         let note = Note(); context.insert(note)
         let model = EditorModel(note: note, context: context)
 
-        model.body = "- "                   // structure with no words is still empty
-        model.flush()
-        try context.save()
-
-        #expect(try liveNotes(context).isEmpty)
-    }
-
-    @Test func typingAfterADiscardedDraftStillPersists() throws {
-        let context = try makeContext()
-        let note = Note(); context.insert(note)
-        let model = EditorModel(note: note, context: context)
-
-        model.flush()                       // backgrounded while empty → discarded
+        model.flush()                       // backgrounded while still empty
         model.body = "back and writing"     // …then the user returns and types
         model.flush()
 
         let notes = try liveNotes(context)
         #expect(notes.count == 1)
         #expect(notes.first?.body == "back and writing")
+    }
+
+    /// A voice transcript is the same story: it lands after the interruption, into the same note.
+    @Test func aTranscriptAfterBackgroundingAnEmptyDraftPersists() throws {
+        let context = try makeContext()
+        let note = Note(); context.insert(note)
+        let model = EditorModel(note: note, context: context)
+
+        model.flush()                       // the microphone permission alert resigns active
+        model.insertVoiceTranscript("what I said out loud", atUTF16: 0)
+        model.finish()
+
+        let notes = try liveNotes(context)
+        #expect(notes.count == 1)
+        #expect(notes.first?.body.contains("what I said out loud") == true)
+    }
+
+    /// Repeated scene churn must not duplicate the note or leave a second copy behind.
+    @Test func repeatedBackgroundingDoesNotDuplicateTheDraft() throws {
+        let context = try makeContext()
+        let note = Note(); context.insert(note)
+        let model = EditorModel(note: note, context: context)
+
+        for _ in 0..<5 { model.flush() }
+        model.body = "written after all that churn"
+        for _ in 0..<5 { model.flush() }
+
+        #expect(try liveNotes(context).count == 1)
+    }
+
+    /// Leaving is still the moment a marker-only draft counts as abandoned: structure with no words
+    /// is not content.
+    @Test func leavingAMarkerOnlyDraftRemovesIt() throws {
+        let context = try makeContext()
+        let note = Note(); context.insert(note)
+        let model = EditorModel(note: note, context: context)
+
+        model.body = "- "                   // structure with no words is still empty
+        model.finish()
+
+        #expect(try liveNotes(context).isEmpty)
     }
 
     @Test func emptyingAnExistingNoteKeepsTheUsersDeletion() throws {

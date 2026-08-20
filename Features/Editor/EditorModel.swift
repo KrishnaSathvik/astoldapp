@@ -6,33 +6,24 @@ import SwiftData
 @Observable @MainActor
 final class EditorModel {
     let note: Note
-    private let context: ModelContext
     private let store: NoteStore
     private var saveTask: Task<Void, Never>?
-    /// True once this draft has been discarded from the context for being empty. It is not on disk,
-    /// and it is put back the moment the user types again.
+    /// True once the draft has been discarded on the way out, so a late autosave cannot write it back.
     private var isDiscarded = false
-    /// Whether this note has ever been written to disk. A draft that never reached disk can be
-    /// discarded and re-inserted freely; one that did cannot (SwiftData does not restore a saved
-    /// model that was deleted), so it is left for `finish()` or the launch sweep instead.
-    private var hasReachedDisk: Bool
 
     init(note: Note, context: ModelContext, store: NoteStore? = nil) {
         self.note = note
-        self.context = context
         self.store = store ?? SwiftDataNoteStore(context: context)
-        // An existing note arrives already persisted; a fresh draft does not.
-        self.hasReachedDisk = !note.isEmptyDraft
     }
 
     var title: String {
         get { note.title ?? "" }
-        set { restoreIfDiscarded(); note.title = newValue; scheduleSave() }
+        set { note.title = newValue; scheduleSave() }
     }
 
     var body: String {
         get { note.body }
-        set { restoreIfDiscarded(); note.body = newValue; scheduleSave() }
+        set { note.body = newValue; scheduleSave() }
     }
 
     /// Normalizes tolerated marker spellings before the note is written. Parsing accepts `- [X] `
@@ -60,7 +51,6 @@ final class EditorModel {
     @discardableResult
     func insertVoiceTranscript(_ transcript: String, atUTF16 offset: Int) -> Int {
         let (newBody, cursor) = VoiceStructureParser.apply(transcript, into: note.body, atUTF16: offset)
-        restoreIfDiscarded()
         note.body = newBody
         flush()
         return cursor
@@ -68,20 +58,20 @@ final class EditorModel {
 
     /// Persist current content (normalizing the title). Bumps updatedAt, never createdAt.
     ///
-    /// A new empty draft is never *written*: a session that ends right here — backgrounded and then
-    /// terminated by iOS — must leave nothing behind (RULES.md §1, §4), so it is dropped from the
-    /// context instead. A note that already reached disk and has since been emptied is written as
-    /// empty, so the user's own deletion sticks; it cannot be deleted here without stranding the
-    /// open editor on a model SwiftData will not restore, so `finish()` removes it when the user
-    /// leaves, and `purgeEmptyDrafts` at the next launch removes it if they never come back.
+    /// **A flush never discards.** Backgrounding, an interruption, or a permission alert is a
+    /// temporary scene transition, not abandonment — the editor still owns this note, and the user
+    /// may be about to type into it or have a transcript land in it. Discarding here used to delete
+    /// the draft *and commit the deletion*, after which re-inserting the same model did not bring it
+    /// back: the editor went on showing the content while the timeline no longer had the note at
+    /// all. That is silent data loss, and it cost nothing to write an empty draft instead.
+    ///
+    /// So an empty draft is simply saved like any other state. `finish()` discards it when the user
+    /// actually leaves the editor, and `purgeEmptyDrafts` at the next launch clears one stranded by a
+    /// termination — which is exactly what RULES.md §4 asks for ("on exit").
     func flush() {
-        guard !note.isEmptyDraft else {
-            if hasReachedDisk { try? store.save(note) } else { discard() }
-            return
-        }
+        guard !isDiscarded else { return }
         canonicalizeBody()
         try? store.save(note)
-        hasReachedDisk = true
     }
 
     /// Drops a queued autosave without running it — for a note that is being deleted.
@@ -90,7 +80,8 @@ final class EditorModel {
         saveTask = nil
     }
 
-    /// Call when leaving the editor: flush, or discard the note if it is an empty draft.
+    /// Call when leaving the editor: the one moment an empty draft is genuinely abandoned, and so
+    /// the only place it is discarded (RULES.md §4, "on exit").
     func finish() {
         saveTask?.cancel()
         if note.isEmptyDraft {
@@ -98,22 +89,16 @@ final class EditorModel {
         } else {
             canonicalizeBody()
             try? store.save(note)
-            hasReachedDisk = true
         }
     }
 
-    /// Drops an empty draft from the context so it never reaches disk. Safe to call repeatedly.
+    /// Removes the abandoned empty draft. Reached only from `finish()`, once the editor is done with
+    /// the note — nothing resurrects it afterwards, because a committed SwiftData deletion cannot be
+    /// undone by re-inserting the same model instance. Safe to call repeatedly.
     private func discard() {
         guard !isDiscarded else { return }
-        try? store.discardIfEmpty(note)
         isDiscarded = true
-    }
-
-    /// Puts a discarded draft back the moment the user writes into it again. Only ever reached by a
-    /// draft that never touched disk, which SwiftData re-inserts cleanly.
-    private func restoreIfDiscarded() {
-        guard isDiscarded else { return }
-        context.insert(note)
-        isDiscarded = false
+        saveTask?.cancel()
+        try? store.discardIfEmpty(note)
     }
 }
