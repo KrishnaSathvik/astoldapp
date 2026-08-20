@@ -65,6 +65,16 @@ struct BodyTextView: UIViewRepresentable {
             }
         }
 
+        // Body, headings, and list markers are all resolved from the current text size at styling
+        // time, and styling otherwise only runs on an edit — so an editor sitting open while the
+        // reader changes their text size in Settings would keep the old size until the next keystroke.
+        tv.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
+            [weak coordinator = context.coordinator] (view: UITextView, _: UITraitCollection) in
+            coordinator?.restyle(view)
+            // The gutter markers are drawn, not laid out, so they need the redraw asked for explicitly.
+            view.setNeedsDisplay()
+        }
+
         context.coordinator.bind(actions, to: tv)
         return tv
     }
@@ -105,6 +115,34 @@ struct BodyTextView: UIViewRepresentable {
             let selection = tv.selectedRange
             StructuredTextStyler.apply(to: tv.textStorage, textColor: UIColor(Color.ds.textPrimary))
             tv.selectedRange = selection
+            syncTypingAttributes(tv)
+        }
+
+        /// Keeps the text view's `typingAttributes` describing the line the caret is actually on.
+        ///
+        /// This is what puts the caret in the right place the *instant* a writer leaves a list, rather
+        /// than one keystroke later. An empty last line has no characters, so nothing in the text
+        /// storage can describe it — TextKit lays out that final fragment from the typing attributes
+        /// instead. Leave them describing the line before it and Return on an empty bullet produced a
+        /// correct document with a visibly wrong caret: the marker was gone, the line was a paragraph,
+        /// and the caret still sat at the list indent until a character arrived to give the line
+        /// attributes of its own.
+        ///
+        /// Cheap and idempotent, so it runs after every restyle and every selection change. UIKit
+        /// resets typing attributes itself when the selection moves, which is why re-deriving them is
+        /// the fix rather than setting them once.
+        func syncTypingAttributes(_ tv: UITextView) {
+            // Never mid-composition: replacing typing attributes under an IME (Telugu/Hindi and other
+            // marked text) is the same hazard restyling is, for the same reason.
+            guard tv.markedTextRange == nil else { return }
+            let doc = MarkupDocument(tv.text)
+            let index = doc.lineIndex(containingSource: tv.selectedRange.location)
+            guard index < doc.lines.count else { return }
+            tv.typingAttributes = StructuredTextStyle.attributes(
+                for: doc.lines[index].kind,
+                isFirstLine: index == 0,
+                textColor: UIColor(Color.ds.textPrimary)
+            )
         }
 
         /// Applies a structural edit through the text view's own edit primitive, so the undo manager
@@ -241,6 +279,9 @@ struct BodyTextView: UIViewRepresentable {
                     if snapped != tv.selectedRange { tv.selectedRange = snapped }
                 }
             }
+            // The caret can reach an empty last line without any text change at all — by tapping, or by
+            // opening a note that already ends in one — so this cannot live in `restyle` alone.
+            syncTypingAttributes(tv)
             if parent.selectedRange != tv.selectedRange { parent.selectedRange = tv.selectedRange }
         }
 
@@ -298,6 +339,7 @@ final class StructuredTextView: UITextView {
         let storage = NSTextStorage()
         let layoutManager = StructuredLayoutManager()
         layoutManager.accentColor = UIColor(Color.ds.accent)
+        layoutManager.markerColor = UIColor(Color.ds.textSecondary)
         storage.addLayoutManager(layoutManager)
         let container = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         container.widthTracksTextView = true

@@ -7,9 +7,16 @@ import Foundation
 //
 // Vocabulary: new paragraph · new line · heading · subheading · bullet list · numbered list · checklist ·
 // next item · end list.
+//
+// Nine *actions*, each with a small closed set of spellings (added 2026-08-19, RULES.md §2). Speech is
+// not a keyboard: a writer who means "start a bullet list" says "start bullet list" about as often as
+// "bullet list", and having the first one land in the note as literal text is a failure of the parser,
+// not of the writer. Every accepted alias is still an explicit instruction — the set is fixed, closed,
+// and listed below, and nothing here infers structure from ordinary speech.
 
 enum VoiceStructureParser {
-    private enum Command {
+    /// The nine actions. Aliases multiply the *spellings*, never this list.
+    enum Command: CaseIterable {
         case newParagraph, newLine, heading, subheading, bulletList, numberedList, checklist, nextItem, endList
     }
 
@@ -18,31 +25,48 @@ enum VoiceStructureParser {
         case command(Command)
     }
 
-    /// The spoken vocabulary in *teaching* order, for the writing-help sheet. `phrases` below is
-    /// ordered by match precedence, which is not an order to show anyone. `WritingHelpTests` pins this
-    /// list to `recognizedPhrases`, so help can never advertise a command the parser does not accept
-    /// (or quietly omit one it does).
+    /// The spoken vocabulary in *teaching* order, for the writing-help sheet: one phrasing per action,
+    /// which is what a person can actually learn. `phrases` below is ordered by match precedence, which
+    /// is not an order to show anyone, and accepts several spellings of each of these.
+    /// `WritingHelpTests` pins this list to `recognizedPhrases`, so help can never advertise a command
+    /// the parser does not accept (or quietly omit an action it does).
     static let vocabulary = [
         "New paragraph", "New line", "Heading", "Subheading",
         "Bullet list", "Numbered list", "Checklist", "Next item", "End list",
     ]
 
-    /// Every phrase the matcher actually recognizes. Exposed so the help sheet is checked against the
-    /// real parser rather than against a copy of its contents.
-    static var recognizedPhrases: Set<String> { Set(phrases.map(\.text)) }
+    /// Every spelling the matcher recognizes, and the action each performs. Exposed so the help sheet is
+    /// checked against the real parser rather than against a copy of its contents.
+    static var recognizedPhrases: [String: Command] {
+        Dictionary(uniqueKeysWithValues: phrases.map { ($0.text, $0.command) })
+    }
 
-    // Longer phrases first so "numbered list"/"subheading" win over any shorter prefix. `inline` marks a
-    // command that may be followed immediately by its content (only "next item"); the rest are standalone
-    // and require a following terminator (or end of transcript).
+    // Longest first, so a phrase is never beaten to the match by a shorter one it contains
+    // ("subheading" over "heading", "start numbered list" over "numbered list"). `inline` marks a
+    // command that may be followed immediately by its content (only the next-item ones); the rest are
+    // standalone and require a following terminator (or end of transcript).
+    //
+    // The aliases are deliberate and closed. Each one is a phrase whose only plausible reading is the
+    // instruction — someone dictating prose does not utter "start numbered list." as a sentence — and
+    // each still has to clear the same boundary tests as the canonical wording. "Normal paragraph"
+    // leaves a list for the same reason the Style menu's row is called Paragraph: it is the name of the
+    // thing you are going back to.
     private static let phrases: [(text: String, command: Command, inline: Bool)] = [
+        ("start numbered list", .numberedList, false),
+        ("start bullet list", .bulletList, false),
+        ("normal paragraph", .endList, false),
+        ("start checklist", .checklist, false),
+        ("bulleted list", .bulletList, false),
         ("numbered list", .numberedList, false),
-        ("bullet list", .bulletList, false),
         ("new paragraph", .newParagraph, false),
+        ("bullet list", .bulletList, false),
         ("subheading", .subheading, false),
-        ("new line", .newLine, false),
         ("next item", .nextItem, true),
-        ("end list", .endList, false),
+        ("stop list", .endList, false),
         ("checklist", .checklist, false),
+        ("new item", .nextItem, true),
+        ("end list", .endList, false),
+        ("new line", .newLine, false),
         ("heading", .heading, false),
     ]
 
@@ -85,7 +109,7 @@ enum VoiceStructureParser {
                     }
                 case .endList:
                     inList = nil; pendingKind = .paragraph
-                    (text, caret) = insertRaw("\n", into: text, at: caret)
+                    (text, caret) = leaveStructure(text, at: caret)
                 }
             case .content(let content):
                 if let kind = pendingKind {
@@ -186,6 +210,23 @@ enum VoiceStructureParser {
     }
 
     // MARK: Text helpers (UTF-16)
+
+    /// Leaves the current structure for a normal paragraph — the spoken counterpart of pressing Return
+    /// on an empty item, and deliberately the *same* operation underneath.
+    ///
+    /// The empty-item case is the one that used to go wrong. "Bullet list. Milk. Next item. End list."
+    /// left the caret on an item holding nothing but its marker, and adding a newline there stranded
+    /// that marker as an orphan bullet the speaker never asked for. Taking the marker instead ends the
+    /// list exactly where the speaker ended it.
+    private static func leaveStructure(_ text: String, at caret: Int) -> (String, Int) {
+        let line = MarkupDocument(text).line(containingSource: caret)
+        if line.kind != .paragraph, line.contentLength == 0,
+           let result = DocumentAction.handleReturn(text: text,
+                                                    selection: NSRange(location: caret, length: 0)) {
+            return (result.text, result.selection.location)
+        }
+        return insertRaw("\n", into: text, at: caret)
+    }
 
     private static func insertRaw(_ string: String, into text: String, at caret: Int) -> (String, Int) {
         let newText = (text as NSString).replacingCharacters(in: NSRange(location: caret, length: 0), with: string)

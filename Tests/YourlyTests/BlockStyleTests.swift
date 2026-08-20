@@ -15,7 +15,7 @@ struct BlockStyleTests {
     /// Six, and the six the product locked (RULES.md §7). A seventh arriving here is the moment the
     /// contextual control starts becoming the formatting ribbon the rules refuse.
     @Test func offersExactlySixStructures() {
-        #expect(BlockStyle.allCases == [.normal, .heading, .subheading, .bullet, .numbered, .checklist])
+        #expect(BlockStyle.allCases == [.paragraph, .heading, .subheading, .bullet, .numbered, .checklist])
     }
 
     /// Inline formatting is a different category and stays out of V1: no style may name one.
@@ -29,13 +29,26 @@ struct BlockStyleTests {
         }
     }
 
+    /// Title case, which is Apple's wording for these rows and the convention the whole menu now keeps
+    /// (2026-08-20). One sentence-cased row among five title-cased ones reads as a typo in exactly the
+    /// row someone was trying to improve, which is how "Bulleted List" nearly shipped beside
+    /// "Numbered list".
+    @Test func everyMenuLabelIsTitleCase() {
+        for style in BlockStyle.allCases {
+            for word in style.name.split(separator: " ") {
+                #expect(word.first?.isUppercase == true,
+                        "“\(style.name)” is not title case — “\(word)” starts lowercase")
+            }
+        }
+    }
+
     @Test func everyStyleRoundTripsThroughTheKindItApplies() {
         for style in BlockStyle.allCases {
             #expect(BlockStyle(style.kind) == style)
         }
     }
 
-    /// A style names a structure, not a line's state: item 4 and item 1 are both Numbered list, and a
+    /// A style names a structure, not a line's state: item 4 and item 1 are both Numbered List, and a
     /// ticked box is still Checklist. Otherwise the menu could never check the current row.
     @Test func perLineStateDoesNotChangeWhichStyleALineIs() {
         #expect(BlockStyle(.numbered(4)) == .numbered)
@@ -48,7 +61,7 @@ struct BlockStyleTests {
 
     @Test func currentStyleIsTheStyleOfTheLineUnderTheCaret() {
         #expect(BlockStyle.current(in: "# Alaska", selection: NSRange(location: 3, length: 0)) == .heading)
-        #expect(BlockStyle.current(in: "plain", selection: NSRange(location: 0, length: 0)) == .normal)
+        #expect(BlockStyle.current(in: "plain", selection: NSRange(location: 0, length: 0)) == .paragraph)
         #expect(BlockStyle.current(in: "- [x] done", selection: NSRange(location: 8, length: 0)) == .checklist)
     }
 

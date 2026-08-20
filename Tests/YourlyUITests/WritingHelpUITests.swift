@@ -120,7 +120,7 @@ final class WritingHelpUITests: XCTestCase {
         tap(app.buttons["New note"], "New note")
         tap(app.buttons["Style"], "Style")
 
-        for name in ["Normal", "Heading", "Subheading", "Bullet list", "Numbered list", "Checklist"] {
+        for name in ["Paragraph", "Heading", "Subheading", "Bulleted List", "Numbered List", "Checklist"] {
             XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 8),
                           "the Style menu is missing \(name)")
         }
@@ -142,7 +142,7 @@ final class WritingHelpUITests: XCTestCase {
         let heading = app.buttons["Heading"]
         XCTAssertTrue(heading.waitForExistence(timeout: 8), "the Style menu did not open")
         XCTAssertTrue(heading.isSelected, "the current block should be checked")
-        XCTAssertFalse(app.buttons["Normal"].isSelected, "only the current block should be checked")
+        XCTAssertFalse(app.buttons["Paragraph"].isSelected, "only the current block should be checked")
     }
 
     /// The reference the `?` used to hold, one tap deeper. Losing the keyboard to a sheet costs
@@ -155,7 +155,7 @@ final class WritingHelpUITests: XCTestCase {
 
         XCTAssertTrue(app.navigationBars["Writing in As Told"].waitForExistence(timeout: 8),
                       "the writing-help sheet did not open from the Style menu")
-        for name in ["Heading", "Subheading", "Bullet list", "Numbered list", "Checklist"] {
+        for name in ["Heading", "Subheading", "Bulleted List", "Numbered List", "Checklist"] {
             XCTAssertTrue(app.staticTexts[name].exists, "typing reference is missing \(name)")
         }
         for command in ["New paragraph", "New line", "Heading", "Subheading", "Bullet list",

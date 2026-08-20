@@ -418,10 +418,10 @@ both the keyboard and the selection being styled.
 
 ```
 Style
-  Normal
+  Paragraph
   Heading
-✓ Bullet list
-  Numbered list
+✓ Bulleted List
+  Numbered List
   Checklist
   ─────────────
   Writing help…
@@ -429,6 +429,11 @@ Style
 
 - The current block is checked. A selection spanning two different structures checks nothing.
 - Picking a structure converts every line the selection touches, in one undo step.
+- **Paragraph** is the explicit way out of a list, alongside the fast one (Return on an empty item).
+  Either way the caret is drawn at the paragraph inset immediately, before anything else is typed.
+- Rows are **title case**, Apple's wording for these ("Bulleted List", not "Bullet list"). The label
+  is not the voice command: you still *say* "bullet list" (RULES.md §1). Every surface reads the label
+  from `BlockStyle.name`, so the menu and the writing-help sheet cannot disagree.
 - Six structures and the help row. Nothing else joins it — inline formatting (bold, italic, colors,
   alignment) is full rich text and stays on the do-not-build list (RULES.md §7).
 
@@ -442,6 +447,7 @@ visible bullet, number, and checkbox are drawn in a 28pt left gutter.
 | Heading (`# `) | `.title2` semibold |
 | Subheading (`## `) | `.headline` — body size, heavier |
 | Body, list items | `.body` |
+| Bullet / number / checkbox marker | `.body` — the line's own font, `TextSecondary` |
 
 - Size carries *heading*, weight carries *subheading*. Two large sizes two points apart at the same
   weight read as one structure, which makes the choice between them meaningless.
@@ -449,6 +455,26 @@ visible bullet, number, and checkbox are drawn in a 28pt left gutter.
   tracks Dynamic Type), never on the first line. A section break has to be visible as a break.
 - Drawn gutter markers align to the text **baseline**, not to the middle of the line fragment — the
   fragment carries the paragraph's line spacing underneath the text, so a centred marker rides low.
+- **A marker is one colour: `TextSecondary`.** Bullet, number, and the outline of an unticked box all
+  use the semantic secondary token — quieter than the sentence, never faint. No custom alphas: the
+  number was drawn at 70% of the body colour and the empty box at 55%, which put the box at 3.75:1 on
+  Light canvas, below the 4.5:1 §6 requires of every glyph, and 5.7:1 in Dark. Secondary is 6.3:1
+  Light / 8.5:1 Dark. A ticked box is the only marker drawn in `Accent` — the tick is a *state*, and
+  it is the one thing in the gutter worth looking at.
+- **Weak markers read as small markers.** The complaint that list type "looks smaller" than prose was
+  measured and is false — a list line is the same 17pt body (see below). What was actually wrong was
+  contrast. Fix a faint marker with colour; **never** by enlarging it independently of the line, which
+  breaks the one-definition rule below and desynchronises the gutter from Dynamic Type.
+- **List items are body text.** A bullet, numbered, or checklist line uses exactly the paragraph font,
+  line height, and Dynamic Type scaling — only the gutter marker differs, and it is drawn in the same
+  font as the line beside it. There is one definition of a line's type,
+  `StructuredTextStyle.attributes(for:)`, and the styler, the typing attributes, and the drawn marker
+  all read it. A second copy is how list rows end up a size smaller than the prose around them.
+- **An empty line is styled through its terminating newline, and the empty *last* line through the
+  text view's typing attributes.** An empty line has no characters to carry attributes; the final one
+  has no newline either, so TextKit lays it out from `typingAttributes`. Leaving those describing the
+  previous line is what once left the caret sitting in the list gutter after a writer had left the
+  list — a correct document, drawn wrong. Guarded by `Tests/YourlyTests/StructuredCaretTests.swift`.
 - Marker glyphs are hidden with **zero advancement**, never by being nulled. A null glyph is ignored
   during layout, which collapses any line holding nothing but its marker — the line Return creates,
   and the line the Style menu styles on a blank row. Guarded by `Tests/YourlyTests/StructuredLayoutTests.swift`.

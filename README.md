@@ -38,10 +38,18 @@ These decisions should be treated as product constraints unless intentionally ch
   reachable three equivalent ways: the contextual `Aa` **Style** menu, a typed marker, or a spoken
   command (menu added 2026-08-19; the rule previously read "never by a control"). One contextual
   toolbar item, shown only while the body has the caret — a persistent formatting ribbon and inline
-  rich text both stay forbidden.
+  rich text both stay forbidden. The menu's plain-text row is **Paragraph** (renamed from `Normal`
+  2026-08-19): it is the writer's explicit way *out* of a list, alongside pressing Return on an empty
+  item, and either way the caret moves to the paragraph inset immediately. Rows are title case, and
+  the bullet row is **Bulleted List** (2026-08-20) — the *spoken* command is still "bullet list", and
+  a menu label and a spoken phrase are deliberately allowed to differ (RULES.md §1).
 - Voice and typing are two input methods for the same note.
 - Voice transcript becomes ordinary editable text.
 - V1 voice target: English, Telugu, Hindi, Telugu+English, Hindi+English.
+- Voice structure is **nine actions**, each accepting a small closed set of spellings (aliases added
+  2026-08-19 — `start bullet list`, `bulleted list`, `start numbered list`, `start checklist`,
+  `new item`, `stop list`, `normal paragraph`). More spellings, never more actions; structure is still
+  never inferred from ordinary speech.
 - Voice: **preserve the words, format the speech** (refined 2026-08-18). Natural capitalization,
   punctuation, sentence boundaries, and paragraph breaks are allowed; translating, summarizing,
   rewriting, paraphrasing, or grammar-correcting the user's words is not.

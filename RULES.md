@@ -64,9 +64,19 @@ These are treated as fixed product constraints unless intentionally changed.
   around it MUST stay contextual or collapsible, never a persistent formatting ribbon; structure MUST
   NOT visually dominate writing, and the app MUST still read as a page. The Style menu is exactly one
   toolbar item, shown only while the **body** has the caret, and offers exactly six structures —
-  Normal / Heading / Subheading / Bullet list / Numbered list / Checklist — plus the writing-help
-  reference. Inline formatting (bold, italic, underline, colors, alignment, font size) MUST NOT join
-  it: that is full rich text, which stays on the §7 do-not-build list.
+  Paragraph / Heading / Subheading / Bulleted List / Numbered List / Checklist — plus the writing-help
+  reference. (`Normal` renamed to **Paragraph** 2026-08-19: the row is the writer's explicit way *out*
+  of a list, the counterpart to Return on an empty item, and "Style → Paragraph" says that where
+  "Style → Normal" read as a preference. Title-cased and `Bullet list` → **Bulleted List** 2026-08-20,
+  to Apple's own wording for these rows.)
+- **A menu label and a spoken phrase are allowed to differ, and MUST NOT be collapsed into one
+  string** (added 2026-08-20). The Style menu says **Bulleted List**; the voice parser hears
+  `bullet list`. A label is read at a glance and a phrase is said out loud, and forcing one string to
+  serve both makes one of them wrong. The menu label MUST come from `BlockStyle.name` and the spoken
+  form from `VoiceStructureParser.phrases`; every surface that shows either MUST read it from that
+  source rather than repeating the literal, so the two can never drift by accident. Inline formatting (bold, italic, underline, colors,
+  alignment, font size) MUST NOT join it: that is full rich text, which stays on the §7
+  do-not-build list.
 - Voice and typing are two input methods for the **same** note — not two note types.
 - A voice transcript MUST become ordinary, editable text.
 - V1 voice target languages: English, Telugu, Hindi, Telugu+English, Hindi+English.
@@ -175,9 +185,20 @@ contracts apply. They are roadmap: MUST NOT be marketed until shipped (see §7).
 - "Preserve the words. Format the speech." extends to **"Structure the words."** Voice may *structure*
   the user's words when they explicitly ask; it MUST NEVER *replace* them. Everything in the forbidden
   list above (translate / summarize / rewrite / paraphrase / grammar-fix / re-vocabulary) stays forbidden.
-- The command vocabulary is **small, fixed, and deterministic**: `new paragraph`, `new line`, `heading`,
-  `subheading`, `bullet list`, `numbered list`, `checklist`, `next item`, `end list`. MUST NOT grow into
-  dozens of commands, and MUST NOT use a generative model to *infer* what formatting the user "probably" wanted.
+- The command vocabulary is **small, fixed, and deterministic**: nine *actions* — `new paragraph`,
+  `new line`, `heading`, `subheading`, `bullet list`, `numbered list`, `checklist`, `next item`,
+  `end list`. MUST NOT grow into dozens of commands, and MUST NOT use a generative model to *infer*
+  what formatting the user "probably" wanted.
+- Each action MAY accept a **small, closed, listed set of spellings** (added 2026-08-19): `start bullet
+  list` / `bulleted list`, `start numbered list`, `start checklist`, `new item`, `stop list` /
+  `normal paragraph`. This multiplies *spellings*, never actions — speech is not a keyboard, and a
+  writer who says "start bullet list" meant the command, not the words. Every alias MUST clear exactly
+  the same boundary tests as the canonical wording, and the set MUST stay enumerated in
+  `VoiceStructureParser.phrases`. Help teaches **one** phrasing per action; the aliases are accepted,
+  not advertised.
+- **Leaving a structure is an action, not a newline.** `end list` (and its spellings) MUST do what
+  Return on an empty item does: if the current item holds nothing but its marker, the marker goes and
+  the line becomes a paragraph. It MUST NOT strand an empty marker behind the writer.
 - **Safety rule:** when it is uncertain whether a phrase is a command or literal content, **preserve the
   spoken words** and take no action. Recognize a command only when it appears as a clearly isolated phrase,
   at a sentence/utterance boundary, using exact supported wording, in a context where the action is valid.
@@ -564,12 +585,20 @@ Implemented and covered by tests. Behavior locked as described:
   storage (§5). Markers are **visually hidden at the glyph layer, never removed** from the source.
 - **Return** continues a list and exits an empty item; **Backspace** at line start demotes the block to
   a paragraph; the **checkbox gutter** toggles a checklist item.
+- **Leaving a structure MUST move the caret immediately**, before any further input. The document being
+  correct is not enough: the caret MUST be *drawn* at the paragraph inset the instant the marker is
+  removed, by Return, by Backspace, or by Style → Paragraph. A caret that only corrects itself once a
+  character is typed is a bug, and is pinned by caret-geometry tests rather than by text assertions.
+- **List content is body text.** Bullet, numbered, and checklist lines MUST use exactly the paragraph
+  font, line height, and Dynamic Type scaling; only the gutter marker differs, and it scales with the
+  body font it sits beside. Caption/footnote typography MUST NOT be used for list rows or markers.
 - **Structured copy/paste** carries the source markers; **undo/redo** stays native and exact.
 
 #### Shipped in V1 — Milestone B, voice structure commands
 
-- Vocabulary, exactly nine: **new paragraph · new line · heading · subheading · bullet list ·
-  numbered list · checklist · next item · end list**.
+- Vocabulary, exactly nine **actions**: **new paragraph · new line · heading · subheading · bullet
+  list · numbered list · checklist · next item · end list**, each accepting the closed set of
+  spellings listed in §2.
 - Recognition is a **deterministic client-side parser**, not a model. Structure is applied **only on an
   explicit command**; anything uncertain stays literal text. This is the §2 contract in the editor:
   ordinary speech that merely *sounds* structured MUST NOT become a list.

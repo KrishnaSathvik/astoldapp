@@ -24,6 +24,40 @@ final class StructuredEditorUITests: XCTestCase {
         XCTAssertEqual(field.value as? String, "- Milk\n- Eggs\nDone")
     }
 
+    /// Exiting is one behavior, so it has to hold for all three list kinds and not just for bullets:
+    /// Return on an item that holds nothing but its marker takes the marker and leaves a paragraph.
+    ///
+    /// The caret's *drawn position* after this is asserted in `StructuredCaretTests`, against a real
+    /// laid-out text view — XCUITest can see the document but has no way to see a caret, and this exact
+    /// behavior was once correct here while being visibly wrong on screen.
+    func testReturnOnAnEmptyItemExitsEveryListKind() {
+        for (typed, expected) in [("- Milk\n\nAfter", "- Milk\nAfter"),
+                                  ("1. One\n\nAfter", "1. One\nAfter"),
+                                  ("- [ ] Task\n\nAfter", "- [ ] Task\nAfter")] {
+            let app = launchedEditor()
+            let field = body(app)
+            field.tap()
+            field.typeText(typed)
+            XCTAssertEqual(field.value as? String, expected,
+                           "Return on an empty item did not exit the list for \(typed)")
+            app.terminate()
+        }
+    }
+
+    /// The explicit way out, for a writer who never discovers the fast one: Style → Paragraph demotes
+    /// the line under the caret straight back to prose.
+    func testStyleParagraphLeavesAList() {
+        let app = launchedEditor()
+        let field = body(app)
+        field.tap()
+        field.typeText("- Milk")
+        XCTAssertEqual(field.value as? String, "- Milk")
+
+        applyStyle("Paragraph", in: app)
+        let left = expectation(for: NSPredicate(format: "value == %@", "Milk"), evaluatedWith: field)
+        wait(for: [left], timeout: 5)
+    }
+
     /// Tapping a checklist item's checkbox toggles the underlying marker. Typed as the first line so
     /// the checkbox sits at a predictable position (top-left gutter of the body).
     func testTappingCheckboxToggles() {
@@ -106,7 +140,7 @@ final class StructuredEditorUITests: XCTestCase {
         XCTAssertEqual(field.value as? String, "Milk\nEggs\nBread")
 
         tapMenuItem("Select All", in: app, longPressing: field)
-        applyStyle("Bullet list", in: app)
+        applyStyle("Bulleted List", in: app)
 
         let converted = expectation(for: NSPredicate(format: "value == %@", "- Milk\n- Eggs\n- Bread"),
                                     evaluatedWith: field)
@@ -121,7 +155,7 @@ final class StructuredEditorUITests: XCTestCase {
         field.typeText("One\nTwo\nThree")
 
         tapMenuItem("Select All", in: app, longPressing: field)
-        applyStyle("Numbered list", in: app)
+        applyStyle("Numbered List", in: app)
 
         let converted = expectation(for: NSPredicate(format: "value == %@", "1. One\n2. Two\n3. Three"),
                                     evaluatedWith: field)
@@ -137,7 +171,7 @@ final class StructuredEditorUITests: XCTestCase {
         field.typeText("Milk\nEggs\nBread")
 
         tapMenuItem("Select All", in: app, longPressing: field)
-        applyStyle("Bullet list", in: app)
+        applyStyle("Bulleted List", in: app)
         let converted = expectation(for: NSPredicate(format: "value == %@", "- Milk\n- Eggs\n- Bread"),
                                     evaluatedWith: field)
         wait(for: [converted], timeout: 5)
@@ -157,7 +191,7 @@ final class StructuredEditorUITests: XCTestCase {
         field.typeText("1. One\nTwo\n\nThree")
         XCTAssertEqual(field.value as? String, "1. One\n2. Two\nThree")
 
-        applyStyle("Numbered list", in: app)
+        applyStyle("Numbered List", in: app)
         let continued = expectation(for: NSPredicate(format: "value == %@", "1. One\n2. Two\n3. Three"),
                                     evaluatedWith: field)
         wait(for: [continued], timeout: 5)

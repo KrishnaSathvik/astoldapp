@@ -12,7 +12,7 @@ import Foundation
 /// A structure a writer can choose by name. Nothing else joins this list: bold, italic, colors, and
 /// alignment are inline rich text, which RULES.md §7 puts on the do-not-build list.
 enum BlockStyle: String, CaseIterable, Identifiable, Equatable {
-    case normal
+    case paragraph
     case heading
     case subheading
     case bullet
@@ -23,13 +23,23 @@ enum BlockStyle: String, CaseIterable, Identifiable, Equatable {
 
     /// The menu label. Matches the names the writing-help reference already uses, so the same
     /// structure is never called two different things in two surfaces.
+    ///
+    /// Title case, and the menu's own wording — not the spoken one. The Style menu says **Bulleted
+    /// List**; the voice parser still hears "bullet list" (RULES.md §2). A label read at a glance and
+    /// a phrase said out loud are different jobs, and forcing one string to do both is what made the
+    /// row read as a variable name (renamed 2026-08-20).
+    ///
+    /// "Paragraph" rather than "Normal" (renamed 2026-08-19). The row is not only a description of
+    /// unstyled text — it is the writer's explicit way *out* of a list, the deliberate counterpart to
+    /// pressing Return on an empty item. "Style → Paragraph" says what that does; "Style → Normal"
+    /// reads as a preference, and left leaving a list looking like something only the keyboard could do.
     var name: String {
         switch self {
-        case .normal: return "Normal"
+        case .paragraph: return "Paragraph"
         case .heading: return "Heading"
         case .subheading: return "Subheading"
-        case .bullet: return "Bullet list"
-        case .numbered: return "Numbered list"
+        case .bullet: return "Bulleted List"
+        case .numbered: return "Numbered List"
         case .checklist: return "Checklist"
         }
     }
@@ -39,7 +49,7 @@ enum BlockStyle: String, CaseIterable, Identifiable, Equatable {
     /// preserves an existing tick, because only it can see the lines around the selection.
     var kind: BlockKind {
         switch self {
-        case .normal: return .paragraph
+        case .paragraph: return .paragraph
         case .heading: return .heading
         case .subheading: return .subheading
         case .bullet: return .bullet
@@ -49,10 +59,10 @@ enum BlockStyle: String, CaseIterable, Identifiable, Equatable {
     }
 
     /// The style a line of this kind is showing — the inverse of `kind`, discarding the per-line
-    /// state. `4.` and `1.` are both Numbered list; a ticked and an unticked box are both Checklist.
+    /// state. `4.` and `1.` are both Numbered List; a ticked and an unticked box are both Checklist.
     init(_ kind: BlockKind) {
         switch kind {
-        case .paragraph: self = .normal
+        case .paragraph: self = .paragraph
         case .heading: self = .heading
         case .subheading: self = .subheading
         case .bullet: self = .bullet

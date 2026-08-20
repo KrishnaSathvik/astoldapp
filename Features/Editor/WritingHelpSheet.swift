@@ -1,8 +1,12 @@
 import SwiftUI
 
-/// The writing reference, reached from the Style menu's "Writing help…" row. Two columns of syntax and
-/// the rule that governs them — and deliberately **no actions**: nothing here applies a heading or
-/// ticks a box.
+/// The writing reference, reached from the Style menu's "Writing help…" row — and deliberately with
+/// **no actions**: nothing here applies a heading or ticks a box.
+///
+/// Ordered behavior-first (2026-08-19): what each structure is, how to reach it by tapping or saying
+/// it, and what Return does inside it — then speech, then typed markers last, under the honest name
+/// "Keyboard shortcuts". It opened with the marker table until the Style menu shipped, which put
+/// syntax in front of a reader who now never has to learn any.
 ///
 /// It reached the editor as a standalone `?` until 2026-08-19, when the Style menu absorbed it: two
 /// pieces of contextual chrome where the design allows one, and the menu is the surface people
@@ -22,10 +26,21 @@ struct WritingHelpSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: DSSpacing.s6) {
-                    section("Type") {
-                        ForEach(WritingHelp.typingMarkers) { marker in
-                            row(leading: marker.marker, trailing: marker.name, isCode: true)
+                    // What the structures *do* comes first. A writer who reads only this section can
+                    // make every structure the app has, by tapping, and knows how to get out again —
+                    // which is more than the old opening table of markers ever taught.
+                    section("Shape your note") {
+                        VStack(alignment: .leading, spacing: DSSpacing.s4) {
+                            ForEach(WritingHelp.structures) { structure in
+                                structureRow(structure)
+                            }
                         }
+                    }
+                    section("Leaving a list") {
+                        Text(WritingHelp.leavingAList)
+                            .font(.ds.editorBody)
+                            .foregroundStyle(Color.ds.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     // Examples first: a whole utterance shows how the commands sit inside speech,
                     // which the bare vocabulary underneath cannot.
@@ -50,6 +65,12 @@ struct WritingHelpSheet: View {
                             row(leading: "“\(command)”", trailing: nil, isCode: false)
                         }
                     }
+                    // Last, and named as a shortcut rather than as the syntax: nothing above needed it.
+                    section("Keyboard shortcuts") {
+                        ForEach(WritingHelp.typingMarkers) { marker in
+                            row(leading: marker.marker, trailing: marker.name, isCode: true)
+                        }
+                    }
                     Text(WritingHelp.structurePromise)
                         .font(.ds.caption)
                         .foregroundStyle(Color.ds.textSecondary)
@@ -71,6 +92,29 @@ struct WritingHelpSheet: View {
                 }
             }
         }
+    }
+
+    /// One structure: its name, the two ways to ask for it, and what Return does inside it.
+    @ViewBuilder
+    private func structureRow(_ structure: WritingHelp.Structure) -> some View {
+        VStack(alignment: .leading, spacing: DSSpacing.s1) {
+            Text(structure.name)
+                .font(.ds.editorBody)
+                .foregroundStyle(Color.ds.textPrimary)
+            Text("\(structure.tapPath), or say “\(structure.spoken).”")
+                .font(.ds.caption)
+                .foregroundStyle(Color.ds.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let behavior = structure.behavior {
+                Text(behavior)
+                    .font(.ds.caption)
+                    .foregroundStyle(Color.ds.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Read as one description, not four unrelated fragments.
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -109,7 +153,7 @@ struct WritingHelpSheet: View {
                 }
             }
         }
-        // Read as one phrase — "hyphen space, Bullet list" — instead of two unrelated fragments.
+        // Read as one phrase — "hyphen space, Bulleted List" — instead of two unrelated fragments.
         .accessibilityElement(children: .combine)
     }
 

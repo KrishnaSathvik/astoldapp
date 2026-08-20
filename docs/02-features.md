@@ -621,8 +621,11 @@ Anything else is inserted verbatim. Ordinary speech that merely sounds structure
 eggs, and bread"* — stays one sentence, because inferring a list would be deciding the words meant
 something the speaker did not say.
 
-- Small, fixed, deterministic vocabulary: `new paragraph`, `new line`, `heading`, `subheading`,
-  `bullet list`, `numbered list`, `checklist`, `next item`, `end list`.
+- Small, fixed, deterministic vocabulary: nine *actions* — `new paragraph`, `new line`, `heading`,
+  `subheading`, `bullet list`, `numbered list`, `checklist`, `next item`, `end list` — each accepting
+  the closed alias set in `RULES.md` §2 (`start bullet list`, `bulleted list`, `start numbered list`,
+  `start checklist`, `new item`, `stop list`, `normal paragraph`). `end list` leaves the structure the
+  way Return on an empty item does, taking a marker-only item with it rather than stranding it.
 - Conservative parser (`RULES.md` §2 "Structure the words"): recognize a command only as a clearly
   isolated phrase at an utterance boundary using exact wording; **when uncertain, preserve the spoken words**.
 - No generative inference of formatting. *Touch chooses where; voice chooses what* — no hands-free
@@ -693,8 +696,11 @@ discover that As Told has structure. Promoted into V1 on 2026-08-19 (`RULES.md` 
 `Features/Editor/BodyTextView.swift`):
 
 - One contextual **`Aa`** toolbar item (SF Symbol `textformat`, accessibility label "Style")
-  offering exactly: Normal · Heading · Subheading · Bullet list · Numbered list · Checklist, then a
-  divider, then **Writing help…**. It routes through the existing `setBlockKind` primitive — no second
+  offering exactly: Paragraph · Heading · Subheading · Bulleted List · Numbered List · Checklist, then
+  a divider, then **Writing help…**. (`Normal` → **Paragraph**, 2026-08-19 — it is the explicit way out
+  of a list, so it is named after what you are going back to. Title case and `Bullet list` →
+  **Bulleted List**, 2026-08-20 — Apple's wording for these rows. The *spoken* command stays
+  "bullet list": a label and a phrase are different jobs, RULES.md §1.) It routes through the existing `setBlockKind` primitive — no second
   formatting path.
 - Present only while the **body** has the caret. Not while reading, and not while the title is being
   edited — a title has no block structure, so styling one means nothing.

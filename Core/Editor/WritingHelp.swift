@@ -15,6 +15,48 @@ import Foundation
 /// `VoiceStructureParser.vocabulary` — so help cannot drift from behavior. Change a marker and this
 /// sheet changes with it; add a voice phrase without teaching it and `WritingHelpTests` fails.
 enum WritingHelp {
+    /// A structure, described the way a writer meets it: what it is called, how to reach it by tapping,
+    /// how to ask for it aloud, and what the keyboard then does inside it.
+    ///
+    /// Behavior first, syntax later (restructured 2026-08-19). Help used to open with `# `, `## `,
+    /// `- ` — which taught a writer that structure in As Told is something you spell. Now that the
+    /// Style menu exists, the markers are a shortcut for people who want one, and what actually needs
+    /// teaching is that Return continues a list and Return on an empty item ends it. Nobody guesses
+    /// that from a table of punctuation.
+    struct Structure: Identifiable, Equatable {
+        let style: BlockStyle
+        /// Said aloud. Pinned to `VoiceStructureParser` by `WritingHelpTests`.
+        let spoken: String
+        /// What the keyboard does inside this structure, when that is worth saying.
+        let behavior: String?
+
+        var id: String { style.rawValue }
+        var name: String { style.name }
+        /// The path through the menu, built from the menu's own label so the two cannot drift.
+        var tapPath: String { "Style → \(style.name)" }
+    }
+
+    /// The five structures, in the order a writer meets them: the shape of the page, then lists.
+    /// `paragraph` is deliberately absent — it is what you already have, and it appears below as the
+    /// way *out* of a list, which is the only time anyone goes looking for it.
+    static let structures: [Structure] = [
+        Structure(style: .heading, spoken: "Heading", behavior: nil),
+        Structure(style: .subheading, spoken: "Subheading", behavior: nil),
+        Structure(style: .bullet, spoken: "Bullet list",
+                  behavior: "Return starts the next item. Return again on an empty item finishes the list."),
+        Structure(style: .numbered, spoken: "Numbered list",
+                  behavior: "The numbers continue on their own."),
+        Structure(style: .checklist, spoken: "Checklist",
+                  behavior: "Tap a box to tick that item off."),
+    ]
+
+    /// The two ways out, named together because this is the thing people get stuck on. The fast one is
+    /// the keyboard; the explicit one is the menu, and it is spelled out because a writer who did not
+    /// find the first one needs to know there is a second.
+    static var leavingAList: String {
+        "Press Return on an empty item — or choose \(BlockStyle.paragraph.name) from the Style menu."
+    }
+
     struct Marker: Identifiable, Equatable {
         /// The literal characters to type, trailing space included — the space is part of the marker
         /// and a reader who omits it gets plain text, so it must be shown.
@@ -23,13 +65,14 @@ enum WritingHelp {
         var id: String { marker }
     }
 
-    /// What to type, in the order a writer meets it: structure of the page, then lists.
+    /// What to type. Kept, demoted: a shortcut for writers who go looking for one, never the first
+    /// thing the sheet says. `- ` is faster than the menu once you know it and unguessable before.
     static let typingMarkers: [Marker] = [
-        Marker(marker: BlockKind.heading.marker, name: "Heading"),
-        Marker(marker: BlockKind.subheading.marker, name: "Subheading"),
-        Marker(marker: BlockKind.bullet.marker, name: "Bullet list"),
-        Marker(marker: BlockKind.numbered(1).marker, name: "Numbered list"),
-        Marker(marker: BlockKind.checklist(checked: false).marker, name: "Checklist"),
+        Marker(marker: BlockKind.heading.marker, name: BlockStyle.heading.name),
+        Marker(marker: BlockKind.subheading.marker, name: BlockStyle.subheading.name),
+        Marker(marker: BlockKind.bullet.marker, name: BlockStyle.bullet.name),
+        Marker(marker: BlockKind.numbered(1).marker, name: BlockStyle.numbered.name),
+        Marker(marker: BlockKind.checklist(checked: false).marker, name: BlockStyle.checklist.name),
     ]
 
     struct VoiceExample: Identifiable, Equatable {

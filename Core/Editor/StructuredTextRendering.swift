@@ -19,6 +19,21 @@ enum StructuredTextStyle {
 
     static func bodyFont() -> UIFont { UIFont.preferredFont(forTextStyle: .body) }
 
+    /// The font a line of this kind is set in.
+    ///
+    /// Exhaustive on purpose, with no `default:` case. Bullet, numbered, and checklist lines are
+    /// **body text** — the same face, size, and Dynamic Type scaling as an ordinary paragraph, because
+    /// a list item is a sentence the writer wrote, not an annotation on one. Only heading and
+    /// subheading depart from body type, and a seventh kind arriving here has to say which it is
+    /// rather than inheriting a silent fallthrough.
+    static func font(for kind: BlockKind) -> UIFont {
+        switch kind {
+        case .heading: return headingFont()
+        case .subheading: return subheadingFont()
+        case .paragraph, .bullet, .numbered, .checklist: return bodyFont()
+        }
+    }
+
     static func headingFont() -> UIFont { scaled(.title2, weight: .semibold) }
 
     /// Body size, heavier weight. Deliberately *not* a second large size: at `.title3` a subheading
@@ -52,6 +67,24 @@ enum StructuredTextStyle {
         case .paragraph, .heading, .subheading: return false
         }
     }
+
+    /// Every attribute a line of this kind carries. One definition, used by both the styler (which
+    /// writes it into the text storage) and the text view's `typingAttributes` (which is the only
+    /// thing that can describe an *empty last line*, because it has no characters to hold attributes).
+    /// Two nearly-identical copies of this is exactly how the caret ends up styled as one kind of line
+    /// while the text around it is another.
+    static func attributes(for kind: BlockKind, isFirstLine: Bool,
+                           textColor: UIColor) -> [NSAttributedString.Key: Any] {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = lineSpacing
+        // Never on the first line, which has the page edge above it rather than a paragraph.
+        if !isFirstLine { paragraph.paragraphSpacingBefore = spacingBefore(kind) }
+        if isList(kind) {
+            paragraph.firstLineHeadIndent = listIndent
+            paragraph.headIndent = listIndent
+        }
+        return [.font: font(for: kind), .paragraphStyle: paragraph, .foregroundColor: textColor]
+    }
 }
 
 /// Applies fonts, paragraph indentation, and the hidden-marker attribute to a text storage, driven by
@@ -67,26 +100,19 @@ enum StructuredTextStyler {
         storage.removeAttribute(.astHiddenMarker, range: full)
 
         for (index, line) in doc.lines.enumerated() {
-            let paragraph = NSMutableParagraphStyle()
-            paragraph.lineSpacing = StructuredTextStyle.lineSpacing
-            if index > 0 {
-                paragraph.paragraphSpacingBefore = StructuredTextStyle.spacingBefore(line.kind)
-            }
-            if StructuredTextStyle.isList(line.kind) {
-                paragraph.firstLineHeadIndent = StructuredTextStyle.listIndent
-                paragraph.headIndent = StructuredTextStyle.listIndent
-            }
-
-            let font: UIFont
-            switch line.kind {
-            case .heading: font = StructuredTextStyle.headingFont()
-            case .subheading: font = StructuredTextStyle.subheadingFont()
-            default: font = StructuredTextStyle.bodyFont()
-            }
+            // The line's own characters *plus its terminating newline*. A newline belongs to the
+            // paragraph it ends, and including it is what lets an **empty** line be styled at all: an
+            // empty line's only character is that newline, so styling just `sourceRange` (which is
+            // zero-length there) writes nothing and the line silently keeps whatever paragraph style
+            // the character had in its previous life — the list indent it was just demoted out of.
+            let lineEnd = line.sourceRange.location + line.sourceRange.length
+            let styled = NSRange(location: line.sourceRange.location,
+                                 length: line.sourceRange.length + (lineEnd < full.length ? 1 : 0))
 
             storage.addAttributes(
-                [.font: font, .paragraphStyle: paragraph, .foregroundColor: textColor],
-                range: line.sourceRange
+                StructuredTextStyle.attributes(for: line.kind, isFirstLine: index == 0,
+                                               textColor: textColor),
+                range: styled
             )
 
             if line.markerLength > 0 {
@@ -102,6 +128,18 @@ enum StructuredTextStyler {
 final class StructuredLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
     /// Accent used to fill a checked checkbox; set by the view so it matches the design system.
     var accentColor: UIColor = .label
+
+    /// The colour of a gutter marker — bullet, number, and the outline of an *unticked* box. Set by
+    /// the view to the design system's secondary text token.
+    ///
+    /// One semantic colour, not three custom alphas (2026-08-20). The number used to be drawn at 70%
+    /// of the body colour and the empty box at 55%, which is fainter than any text in the app: an
+    /// unticked box landed at 3.75:1 on Light canvas, below the 4.5:1 the design system requires of
+    /// every other glyph. That faintness is what made the markers *read* as too small — measurement
+    /// showed the type beside them is the same 17pt body as the prose, so the fix is contrast, never
+    /// geometry. Secondary takes the box to 6.3:1 Light / 8.5:1 Dark; the bullet comes *down* from
+    /// full body colour to join them, because a marker is not the sentence.
+    var markerColor: UIColor = .secondaryLabel
 
     override init() {
         super.init()
@@ -192,20 +230,22 @@ final class StructuredLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             // low by half the leading. `location(forGlyphAt:)` is relative to the fragment origin and
             // its y is the baseline, so this stays correct at every Dynamic Type size.
             let baselineY = origin.y + fragment.minY + location(forGlyphAt: glyphIndex).y
-            let color = (storage.attribute(.foregroundColor, at: anchorChar, effectiveRange: nil) as? UIColor) ?? .label
-            drawMarker(for: line.kind, x: origin.x, baselineY: baselineY, color: color)
+            drawMarker(for: line.kind, x: origin.x, baselineY: baselineY)
         }
     }
 
-    private func drawMarker(for kind: BlockKind, x: CGFloat, baselineY: CGFloat, color: UIColor) {
-        let font = StructuredTextStyle.bodyFont()
+    private func drawMarker(for kind: BlockKind, x: CGFloat, baselineY: CGFloat) {
+        // The *line's own* font, from the one definition the text is set in, so the bullet, the number
+        // and the checkbox scale with the item beside them at every Dynamic Type size rather than
+        // tracking a second, separately-declared idea of body size.
+        let font = StructuredTextStyle.font(for: kind)
         switch kind {
         case .bullet:
-            drawText("•", font: font, color: color, x: x, baselineY: baselineY)
+            drawText("•", font: font, color: markerColor, x: x, baselineY: baselineY)
         case .numbered(let n):
-            drawText("\(n).", font: font, color: color.withAlphaComponent(0.7), x: x, baselineY: baselineY)
+            drawText("\(n).", font: font, color: markerColor, x: x, baselineY: baselineY)
         case .checklist(let checked):
-            drawCheckbox(checked: checked, color: color, x: x, baselineY: baselineY, font: font)
+            drawCheckbox(checked: checked, x: x, baselineY: baselineY, font: font)
         case .paragraph, .heading, .subheading:
             break
         }
@@ -218,11 +258,11 @@ final class StructuredLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         (string as NSString).draw(at: point, withAttributes: attributes)
     }
 
-    private func drawCheckbox(checked: Bool, color: UIColor, x: CGFloat, baselineY: CGFloat, font: UIFont) {
+    private func drawCheckbox(checked: Bool, x: CGFloat, baselineY: CGFloat, font: UIFont) {
         let name = checked ? "checkmark.square.fill" : "square"
         let config = UIImage.SymbolConfiguration(font: font)
         guard let image = UIImage(systemName: name, withConfiguration: config)?
-            .withTintColor(checked ? accentColor : color.withAlphaComponent(0.55), renderingMode: .alwaysOriginal)
+            .withTintColor(checked ? accentColor : markerColor, renderingMode: .alwaysOriginal)
         else { return }
         // Centred on the cap height rather than the fragment: a box optically sits with the letters
         // beside it, not with the leading underneath them.
