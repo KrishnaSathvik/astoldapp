@@ -152,19 +152,35 @@ Centered app mark and/or app name.
 4. short explanation
 5. Continue
 
-### Suggested copy
+### Copy
 
 **Write it. Say it. Keep it.**
 
 A quiet place for anything you want to put into words.
 
-Write it, say it, shape it your way.
+Exactly these two lines. The earlier third line ("Write it, say it, shape it your way.") restated the
+tagline and is gone — the tagline already says it, and repeating it is what made the screen read as a
+placeholder.
 
 ### Layout
 
-- generous top and side whitespace
-- one primary button near safe lower region
-- no permission controls
+Three blocks: brand, message, action.
+
+- Brand: feather at 76 pt + serif wordmark (`AppMark(markSize: 76)`).
+- Message: 24 pt below the brand block, 12 pt between its two lines, capped at 240 pt wide so the
+  supporting sentence breaks over two even lines rather than a ragged three.
+- Action: one primary button, pinned by `safeAreaInset(edge: .bottom)` — which also lifts the optical
+  centre of the brand + message above the centre of the screen. 24 pt side and vertical padding,
+  54 pt tall, `DSRadius.large`. Built with `Spacer()`s, never hard-coded vertical offsets, so it
+  holds from SE to Max.
+- Side margin 24 pt (wider than Home's 20 pt — this screen is a card, not a list).
+- The filled button's label is `Color.ds.onAccent`, **not** `.white`: the Dark Mode accent (`#8AA9BE`)
+  is light enough that white on it lands at 2.5:1 and reads as a *disabled* control. `onAccent` takes
+  the same fill to 7.6:1 (8.8:1 in Light).
+- Press feedback is a 0.98 scale, not the system label fade — on a filled button that fade also reads
+  as switched off.
+- No permission controls, and no navigation chrome: Welcome is a bare root view in `AppRootView`,
+  never pushed, so there is no back affordance.
 
 ---
 
