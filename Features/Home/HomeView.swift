@@ -20,39 +20,49 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottom) {
-                Color.ds.canvas.ignoresSafeArea()
-                if isSearching {
-                    SearchResultsView(query: searchQuery) { editingNote = $0 }
-                } else {
-                    content
-                    if deletion.pending != nil {
-                        UndoBanner { deletion.undo(in: context) }
-                            .padding(.bottom, DSSpacing.s4)
-                    }
+            // Home's own screen owns Home's chrome. `.searchable` and the profile / calendar /
+            // compose controls live *inside* it rather than on the view that also declares the
+            // stack's destinations — otherwise they read as chrome belonging to the stack, and a
+            // pushed editor spent the whole transition with Home's search field still anchored to
+            // the bottom of it and Home's glass controls floating over its content.
+            homeScreen
+                .navigationDestination(item: $editingNote) { note in
+                    // Deleting a note happens on the timeline, by swiping it. The editor deliberately
+                    // carries no delete of its own — see RULES.md §4.
+                    EditorView(note: note, onClose: { editingNote = nil })
+                }
+                .navigationDestination(isPresented: $showingCalendar) {
+                    CalendarPage()
+                }
+                .navigationDestination(isPresented: $showingProfile) {
+                    ProfileView(lock: lock)
+                }
+        }
+    }
+
+    private var homeScreen: some View {
+        ZStack(alignment: .bottom) {
+            Color.ds.canvas.ignoresSafeArea()
+            if isSearching {
+                SearchResultsView(query: searchQuery) { editingNote = $0 }
+            } else {
+                content
+                if deletion.pending != nil {
+                    UndoBanner { deletion.undo(in: context) }
+                        .padding(.bottom, DSSpacing.s4)
                 }
             }
-            .searchable(text: $searchQuery, prompt: "Search notes")
-            #if DEBUG
-            .task {
-                if let q = DebugLaunch.presetSearch { searchQuery = q }
-                if DebugLaunch.openCalendar { showingCalendar = true }
-                if DebugLaunch.openSettings { showingProfile = true }
-            }
-            #endif
-            .animation(DSMotion.standard, value: deletion.pending != nil)
-            .navigationDestination(item: $editingNote) { note in
-                // Deleting a note happens on the timeline, by swiping it. The editor deliberately
-                // carries no delete of its own — see RULES.md §4.
-                EditorView(note: note, onClose: { editingNote = nil })
-            }
-            .navigationDestination(isPresented: $showingCalendar) {
-                CalendarPage()
-            }
-            .navigationDestination(isPresented: $showingProfile) {
-                ProfileView(lock: lock)
-            }
-            .toolbar {
+        }
+        .searchable(text: $searchQuery, prompt: "Search notes")
+        #if DEBUG
+        .task {
+            if let q = DebugLaunch.presetSearch { searchQuery = q }
+            if DebugLaunch.openCalendar { showingCalendar = true }
+            if DebugLaunch.openSettings { showingProfile = true }
+        }
+        #endif
+        .animation(DSMotion.standard, value: deletion.pending != nil)
+        .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { showingProfile = true } label: {
                         if let profileInitial {
@@ -82,7 +92,6 @@ struct HomeView: View {
                     }
                     .accessibilityLabel("New note")
                 }
-            }
         }
     }
 
