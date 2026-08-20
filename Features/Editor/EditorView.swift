@@ -18,7 +18,9 @@ struct EditorView: View {
     @State private var voice: VoiceCaptureModel?
     @State private var bodySelection = NSRange(location: 0, length: 0)
     @State private var bodyFocused = false
-    @FocusState private var titleFocused: Bool
+    /// Two-way title focus. Plain `@State`, not `@FocusState`: the title field is UIKit now that
+    /// it scrolls with the body (`NotePageView`), so focus crosses the same binding the body's does.
+    @State private var titleFocused = false
     @State private var capturedInsertOffset = 0
     /// Whether the body had the caret when recording started — decides whether the keyboard comes
     /// back after the transcript lands.
@@ -144,43 +146,28 @@ struct EditorView: View {
         .sheet(isPresented: $showsWritingHelp) { WritingHelpSheet() }
     }
 
+    /// The whole note is one page and it scrolls as one: date, title, and body live inside a single
+    /// scroll view (`NotePageView`). They used to be stacked here, with only the body scrolling, so a
+    /// long note ran on underneath a date and title pinned to the top of the screen and was clipped
+    /// mid-line against them. The placeholder went in with them for the same reason — it belongs at
+    /// the first line of the body, and only the page knows where that is.
+    ///
+    /// One line, and nothing else, under an empty note. The marker cheat-sheet that used to live
+    /// there went with the arrival of the Style menu: teaching syntax before the first word is asking
+    /// a writer to learn something in order to start writing (RULES.md §7).
     @ViewBuilder private func editor(_ model: EditorModel) -> some View {
-        VStack(alignment: .leading, spacing: DSSpacing.s3) {
-            Text(dateText)
-                .font(.ds.dateLabel)
-                .foregroundStyle(Color.ds.textTertiary)
-
-            TextField("Title", text: Binding(get: { model.title }, set: { model.title = $0 }))
-                .font(.ds.editorTitle)
-                .foregroundStyle(Color.ds.textPrimary)
-                .focused($titleFocused)
-                .submitLabel(.done)
-                .onSubmit { titleFocused = false; bodyFocused = true }
-                .disabled(isCapturing)
-
-            BodyTextView(
-                text: Binding(get: { model.body }, set: { model.body = $0 }),
-                selectedRange: $bodySelection,
-                isFocused: $bodyFocused,
-                isEditable: !isCapturing,   // recording/transcription owns the anchor
-                actions: bodyActions
-            )
-            .overlay(alignment: .topLeading) {
-                if model.body.isEmpty {
-                    // One line, and nothing else. The empty note used to carry a marker cheat-sheet,
-                    // which was the only way to discover structure before the Style menu existed;
-                    // now that structure is a button away, teaching syntax before the first word is
-                    // asking a writer to learn something to start writing.
-                    Text("Start writing…")
-                        .font(.ds.editorBody)
-                        .foregroundStyle(Color.ds.textTertiary)
-                        .padding(.top, 6)
-                        .allowsHitTesting(false)
-                        .accessibilityIdentifier("Body placeholder")
-                }
-            }
-        }
-        .frame(maxHeight: .infinity, alignment: .top)
+        BodyTextView(
+            text: Binding(get: { model.body }, set: { model.body = $0 }),
+            selectedRange: $bodySelection,
+            isFocused: $bodyFocused,
+            isEditable: !isCapturing,   // recording/transcription owns the anchor
+            actions: bodyActions,
+            dateText: dateText,
+            title: Binding(get: { model.title }, set: { model.title = $0 }),
+            titleFocused: $titleFocused,
+            bodyPlaceholder: "Start writing…"
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .overlay(alignment: .bottom) { voiceLayer(model) }
         .padding(.horizontal, DSSpacing.screenH)
         .padding(.top, DSSpacing.s4)

@@ -398,6 +398,17 @@ leaves by scrolling the body interactively or by navigating Back. There is no co
 all: autosave already saved, and a button that ends editing teaches people that not pressing it
 loses work — which is exactly what happened before it was removed (2026-08-19).
 
+### Scrolling
+
+The note is one page and it scrolls as one. Date, title, and body live inside a single scroll view
+(`NotePageView`), so the date and title scroll away with the text instead of staying pinned to the top
+of the screen. Nothing in the editor shows a scroll indicator — a note is a page that flows, not a
+document with a measuring stick down its side.
+
+Both were fixed on 2026-08-20. Before it, the body was the only thing that scrolled: a long note ran
+on underneath a fixed date and title and was clipped mid-line against them, and the body drew UIKit's
+default scrollbar while every other surface in the app hides one.
+
 ### Title
 
 Placeholder: `Title`

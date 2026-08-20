@@ -42,6 +42,14 @@ enum StructuredTextStyle {
     /// "subheading", and the ladder reads 22-semibold / 17-semibold / 17-regular.
     static func subheadingFont() -> UIFont { UIFont.preferredFont(forTextStyle: .headline) }
 
+    /// The page chrome above the first line — the note's title and its creation date.
+    ///
+    /// `UIFont` twins of the SwiftUI tokens `.ds.editorTitle` and `.ds.dateLabel`: same text styles,
+    /// same weights, same Dynamic Type scaling. They live here because the date and title moved into
+    /// UIKit when they became part of the body's scroll (docs/03-design-system.md §12, `NotePageView`).
+    static func editorTitleFont() -> UIFont { scaled(.title2, weight: .semibold) }
+    static func dateLabelFont() -> UIFont { scaled(.caption1, weight: .semibold) }
+
     /// Space above a heading. A heading is a section break, and heavier type alone does not read as
     /// one when it is jammed against the paragraph above it. Derived from the body line height so it
     /// tracks Dynamic Type, and never applied to the first line, which has the page edge above it.

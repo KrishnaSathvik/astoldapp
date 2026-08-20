@@ -37,9 +37,25 @@ struct BodyTextView: UIViewRepresentable {
     /// Filled in with a way to run a document action against this text view — see `BodyEditorActions`.
     var actions: BodyEditorActions? = nil
 
+    // MARK: The rest of the page
+    //
+    // The date and the title are inputs to *this* view rather than siblings above it in the editor's
+    // stack, because they scroll with the body — see `NotePageView`. They are plain `Binding`s (not
+    // `@Binding`) so the pure-logic tests can keep building a `BodyTextView` with the five arguments
+    // they care about.
+
+    /// The note's creation date, already formatted. Empty hides the line.
+    var dateText: String = ""
+    /// The optional note title.
+    var title: Binding<String> = .constant("")
+    /// Two-way keyboard focus for the title, exactly as `isFocused` is for the body.
+    var titleFocused: Binding<Bool> = .constant(false)
+    /// Shown while the body is empty. Empty means "no placeholder".
+    var bodyPlaceholder: String = ""
+
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    func makeUIView(context: Context) -> UITextView {
+    func makeUIView(context: Context) -> NotePageView {
         let tv = StructuredTextView.make()
         tv.delegate = context.coordinator
         tv.backgroundColor = .clear
@@ -49,6 +65,10 @@ struct BodyTextView: UIViewRepresentable {
         tv.textContainerInset = UIEdgeInsets(top: 6, left: 0, bottom: 24, right: 0)
         tv.keyboardDismissMode = .interactive
         tv.alwaysBounceVertical = true
+        // Quiet editorial: no visible scrollbar, here as everywhere else in the app. A long note
+        // is a page that flows, not a document with a measuring stick down its side.
+        tv.showsVerticalScrollIndicator = false
+        tv.showsHorizontalScrollIndicator = false
         tv.text = text
         context.coordinator.restyle(tv)
 
@@ -76,11 +96,34 @@ struct BodyTextView: UIViewRepresentable {
         }
 
         context.coordinator.bind(actions, to: tv)
-        return tv
+
+        let page = NotePageView(textView: tv)
+        page.dateText = dateText
+        page.placeholderText = bodyPlaceholder
+        let field = page.header.titleField
+        field.delegate = context.coordinator
+        field.text = title.wrappedValue
+        field.isEnabled = isEditable
+        field.addTarget(context.coordinator,
+                        action: #selector(Coordinator.titleChanged(_:)),
+                        for: .editingChanged)
+        page.refreshPlaceholder()
+        context.coordinator.page = page
+        return page
     }
 
-    func updateUIView(_ tv: UITextView, context: Context) {
+    /// Fill whatever the editor offers. The page has no size of its own to report — it is a scroll
+    /// view and a header — and left to Auto Layout an unconstrained `UIView` measures to nothing.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: NotePageView, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func updateUIView(_ page: NotePageView, context: Context) {
         context.coordinator.parent = self
+        let tv = page.textView
+        page.dateText = dateText
+        page.placeholderText = bodyPlaceholder
+        updateTitle(page.header.titleField, context: context)
 
         if tv.text != text {
             // A voice transcript (or SwiftUI handing us a different note) is a document mutation too:
@@ -100,11 +143,35 @@ struct BodyTextView: UIViewRepresentable {
                 if !isFocused || !isEditable, tv.isFirstResponder { tv.resignFirstResponder() }
             }
         }
+
+        page.refreshPlaceholder()
     }
 
-    final class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
+    /// The title half of `updateUIView`: value, enabled state, and the same two-way focus dance the
+    /// body does one method up.
+    private func updateTitle(_ field: UITextField, context: Context) {
+        if field.text != title.wrappedValue { field.text = title.wrappedValue }
+        if field.isEnabled != isEditable { field.isEnabled = isEditable }
+
+        let wantsFocus = titleFocused.wrappedValue
+        if isEditable, wantsFocus, !field.isFirstResponder {
+            DispatchQueue.main.async {
+                if wantsFocus, !field.isFirstResponder { field.becomeFirstResponder() }
+            }
+        } else if (!wantsFocus || !isEditable), field.isFirstResponder {
+            DispatchQueue.main.async {
+                if !wantsFocus || !field.isEnabled, field.isFirstResponder { field.resignFirstResponder() }
+            }
+        }
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate, UITextFieldDelegate, UIGestureRecognizerDelegate {
         var parent: BodyTextView
         var checkboxTap: UITapGestureRecognizer?
+        /// The page this coordinator's text view lives on, when there is one. Weak because the page
+        /// owns the text view that owns this delegate. `nil` in the unit tests, which drive a bare
+        /// text view with no chrome around it.
+        weak var page: NotePageView?
         /// True while a structural edit is being applied, so our own `replace` never re-enters the
         /// Return/Backspace handling that produced it.
         private var isApplyingEdit = false
@@ -264,6 +331,9 @@ struct BodyTextView: UIViewRepresentable {
             // other IME) can disrupt the composing session. Styling runs once composition commits.
             if tv.markedTextRange == nil { restyle(tv) }
             syncBindings(tv)
+            // Straight off the text view rather than waiting for the binding to come back around, so
+            // the first keystroke takes the placeholder with it.
+            page?.refreshPlaceholder()
         }
 
         func textViewDidChangeSelection(_ tv: UITextView) {
@@ -291,6 +361,37 @@ struct BodyTextView: UIViewRepresentable {
 
         func textViewDidEndEditing(_ tv: UITextView) {
             if parent.isFocused { parent.isFocused = false }
+        }
+
+        // MARK: The page scrolling as one
+
+        /// The date and the title ride the body's scroll. `UIScrollViewDelegate` is part of
+        /// `UITextViewDelegate`, so the text view already reports its offset here — and it reports it
+        /// during its own layout pass, which is what keeps the header locked to the words.
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            page?.syncChromeToScroll()
+        }
+
+        // MARK: Title
+
+        @objc func titleChanged(_ field: UITextField) {
+            let value = field.text ?? ""
+            if parent.title.wrappedValue != value { parent.title.wrappedValue = value }
+        }
+
+        func textFieldDidBeginEditing(_ field: UITextField) {
+            if !parent.titleFocused.wrappedValue { parent.titleFocused.wrappedValue = true }
+        }
+
+        func textFieldDidEndEditing(_ field: UITextField) {
+            if parent.titleFocused.wrappedValue { parent.titleFocused.wrappedValue = false }
+        }
+
+        /// Done on the title hands the caret to the body — the note's title is one line, and the next
+        /// thing the writer wants is the note.
+        func textFieldShouldReturn(_ field: UITextField) -> Bool {
+            page?.textView.becomeFirstResponder()
+            return false
         }
 
         // MARK: Checkbox tapping
