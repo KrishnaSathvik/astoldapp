@@ -588,7 +588,7 @@ them (`RULES.md` §4).
 |---|---|
 | As Told → another app | the page as it reads: `Shopping`, `• Eggs`, `☐ Call Ravi`, `☑ Done`, `1. one` |
 | As Told → As Told | the raw source, via a private pasteboard type (`com.astold.structured-text`) |
-| another app → As Told | plain text, exactly as pasted |
+| another app → As Told | the structure that app *states* — heading, list, checklist, table — and otherwise the plain text, exactly as pasted |
 
 - Copying a visibly complete list item copies the item: the selection expands over that line's hidden
   marker, and cutting takes the marker with it rather than leaving an orphan.
@@ -598,12 +598,99 @@ them (`RULES.md` §4).
   mid-line, where it would read as literal text.
 - Home and search previews render the same visible text, never the markers.
 
+**Pasting in from another app** (`Core/Editor/RichPasteImport.swift`, `RichPasteHTML.swift`,
+`RichPasteMarkdown.swift`, `RichPasteDocument.swift`). Each reader translates its own format into one
+shared `ImportedBlock` list — heading, subheading, paragraph, bullet, numbered, checklist, table — and
+`RichPasteDocument` turns that into canonical As Told source. The table case exists only for the length
+of a paste and is never a block As Told stores. A clipboard
+usually carries the same content several times over, and the plain-text flavor is the one that has already
+had the structure stripped out of it. The flavors are read richest-first, and the first that states
+structure As Told already has wins:
+
+| Order | Flavor | What is taken from it |
+|---|---|---|
+| 1 | `com.astold.structured-text` | the exact source — As Told → As Told is unchanged |
+| 2 | `public.html` | `<h1>` → Heading, `<h2>`…`<h6>` → Subheading, `<ul>`/`<ol>` → Bulleted/Numbered, a list item with a checkbox → Checklist, `<table>` → its cells |
+| 3 | `public.rtf` / flat RTFD | list structure, from the attributed string's own `NSTextList` |
+| 4 | a declared Markdown type | `#` → Heading, `##`…`######` → Subheading, `-`/`1.` → Bulleted/Numbered, `- [ ]` → Checklist, a pipe table → its cells (`RichPasteMarkdown`) |
+| 5 | plain text | the text, pasted exactly as it arrived |
+
+- **A list item is a list item however it is wrapped.** Google Docs, Notion, and GitHub all write
+  `<li><p>…</p></li>` or `<li><div>…</div></li>`. The block element inside the item ends a *line*, not
+  the item, so the bullet, number, or checkbox survives it. (Until 2026-08-20 it did not: the nested
+  block reset the item's kind, which flattened those lists — and, for an `<ol>` or a task list, could
+  leave the whole document with no stated structure at all and drop it to plain text.)
+- **Markdown is read only when the pasteboard says it is Markdown** (`net.daringfireball.markdown`,
+  `public.markdown`, `text/markdown`). A declared format states its structure exactly as HTML does.
+  Text that merely *looks* like Markdown is text and reaches step 5 untouched — `**Overview**` in a
+  plain-text clipboard stays those characters, and `- Jacket` is not read as a bullet by this reader.
+  Markup for styling As Told does not have loses the markup and keeps every word: `**bold**` → `bold`,
+  `[Major Marine](https://…)` → `Major Marine`. The address goes with the styling; writing it into the
+  note would be adding text the source never showed.
+- **Structure is translated, never inferred.** An `<h2>` becomes a Subheading because the source said it
+  was a heading. A plain-text clipboard reaches step 5 untouched: nothing in the text is read as structure,
+  and a short line is not a title. Rich text is treated the same way — a heading in RTF is only larger,
+  bolder type, and type size is not a statement about structure, so nothing reads one from it.
+- **Accepted limitation — line-leading markers in pasted plain text.** External plain text is inserted
+  character-for-character. Because As Told's canonical source syntax recognizes line-leading structure
+  markers such as `# `, `- `, `1. `, and `- [ ] `, those sequences may render as structure after paste.
+  As Told does not otherwise infer structure from plain text. Telling "typed as a marker" from "pasted as
+  text" would take escaping or per-line metadata in `body` — a storage redesign, deliberately not attempted
+  for V1 (`RULES.md` §4). The same limitation applies inside preserved literal text: a line of a `<pre>`
+  block or a fenced Markdown block that itself begins `# ` or `- ` renders as that structure. Its
+  characters are unchanged, and no zero-width marker or invisible metadata is invented to beat the
+  renderer. Note the narrower claim this makes: plain text is inserted verbatim and receives
+  *no rich-clipboard structure inference*, which is not the same as "plain text never becomes structure".
+- **Every word is preserved.** Nothing is corrected, reordered, reworded, or summarized (`RULES.md` §2).
+  Inline styling As Told does not have — bold, italic, links — loses the styling and keeps its text. A
+  block drawn entirely in bold is **not** read as a heading: large bold type is not a heading (`RULES.md`
+  §4), and As Told keeps the words and drops the weight.
+- **A checkbox glyph inside a declared list is a checkbox.** `<li>☐ Passport</li>`, and the same line
+  under an `NSTextList` whose marker format is a box or a check, import as real Checklist items — the
+  markup states the list, so the glyph in front of the words is that item's marker, exactly as `•` is.
+  The identical glyph in a paragraph, in a heading, or anywhere in plain text is a character the writer
+  typed and stays one. (Rich text used to reduce `☐`/`☑` to a bullet, discarding the one thing worth
+  keeping; fixed 2026-08-20.)
+- **This adds no formatting capability.** It only lets paste reach the structures the editor already ships.
+- **Tables are not redesigned, but they are written down readably.** A table is not a structure As Told
+  can edit, and building a table editor before release would be a new feature, not a better paste
+  (`RULES.md` §7). Every cell and every row survives, in source order; how they are written depends on
+  what still reads on a phone (`RichPasteDocument`):
+
+  | The table | What the note gets |
+  |---|---|
+  | one column | the cells, one per line — there is no grid to draw |
+  | up to three columns, short cells | the row as it was: `Park \| Day` |
+  | four or more columns, or cells longer than 60 characters | one record per row, each cell on its own line under the column heading the source gave it (`Day 2` / `Park: Kenai Fjords` / `Overnight: Anchorage`), records separated by a blank line |
+
+  The record form is the only one that moves anything, and it moves *layout*: a cell's text and the
+  heading above it are both the source's, printed in the source's order. An eight-column itinerary is
+  unreadable as a row on a 390-point screen, and a `| --- | --- |` rule is punctuation for a renderer
+  As Told does not have.
+- HTML that carries no structure at all is *declined*, and the system's own plain-text paste runs — the
+  shortest path is also the most faithful one.
+- The HTML is read by a small tag-level parser rather than `NSAttributedString(documentType: .html)`:
+  that importer needs WebKit and the main thread, and it resolves headings down to font sizes, which
+  would leave us inferring structure from type size — exactly what must not happen.
+
+**Diagnosing a bad paste on a device.** A debug build launched with `-logPasteFlavors` prints, on every
+paste, which pasteboard types the source offered, tag and flavor counts for the HTML and Markdown it
+carried, what each reader made of it, and which flavor won. Counts only — never a character of the
+content (`RULES.md` §3). It exists to answer the one question a screenshot cannot: when an assistant's
+answer pastes badly, *which representation did As Told actually get?*
+
 ### Acceptance
 
 - A user can write a 2,000+ word draft comfortably, and a bullet list / numbered list / checklist, in one
   note, without a mode switch — and Home/Editor still feel minimal.
-- Copying a checklist into Messages pastes `☐ Call Ravi`; copying it back into As Told restores a real
-  checklist item.
+- Copying a checklist into Messages pastes `☐ Call Ravi`. As Told → As Told keeps the checklist exactly,
+  through the private pasteboard type; a rich source that states the list around the glyph (HTML `<li>`,
+  an `NSTextList`) imports it as a real checklist item. Copying the line back out of a **plain-text**
+  app inserts those characters verbatim and is not guaranteed to restore checklist structure — plain
+  text is never read for structure (`RULES.md` §4).
+- Pasting a page of headings, bullets, and a table from a browser or a chat app lands as headings, real
+  bullets, and the table's cells — with not one word of it changed. Pasting the same content as plain
+  text lands exactly as plain text.
 
 ## Milestone B — Voice structure commands — **shipped in V1**
 

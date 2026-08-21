@@ -69,12 +69,7 @@ enum StructuredTextStyle {
         return UIFont(descriptor: descriptor, size: 0)
     }
 
-    static func isList(_ kind: BlockKind) -> Bool {
-        switch kind {
-        case .bullet, .numbered, .checklist: return true
-        case .paragraph, .heading, .subheading: return false
-        }
-    }
+    static func isList(_ kind: BlockKind) -> Bool { kind.isList }
 
     /// Every attribute a line of this kind carries. One definition, used by both the styler (which
     /// writes it into the text storage) and the text view's `typingAttributes` (which is the only

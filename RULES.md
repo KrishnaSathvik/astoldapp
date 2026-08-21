@@ -357,6 +357,27 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
   not in the editor, not in Home/search previews, not to VoiceOver, and not in anything copied out of the
   app. Copy/cut MUST give other apps the page as it reads (`• Eggs`, `☐ Call Ravi`); the raw source may
   travel only in a **private** pasteboard representation, so an As Told → As Told paste keeps its structure.
+- **Paste MUST NOT rewrite the pasted words, and MUST NOT infer structure from a clipboard that does not
+  state any.** Structure may be *translated* from what the clipboard states outright — an HTML heading
+  becomes a Heading, a list item becomes a list item, a checkbox becomes a Checklist item — and never
+  deduced: a short line is not a title, and large bold type is not a heading. External plain text MUST be
+  inserted character-for-character. Styling As Told does not have (bold, italic, links) loses the styling
+  and keeps every character of its text. See `docs/02-features.md` (Milestone A).
+  - **What counts as *stated* (clarified 2026-08-20; the rule above is unchanged).** A format the
+    clipboard names — `public.html`, `public.rtf`, a declared Markdown type — states its own structure,
+    and MAY be translated. `public.plain-text` names no format, states no structure, and MUST NOT be read
+    for any, however much of it resembles Markdown. Inside a list the source itself declared, a leading
+    checkbox glyph (`☐`, `☑`) is that item's marker, the same way `•` is, and MAY be read as the Checklist
+    item it draws; the identical glyph in a paragraph, in a heading, or anywhere in plain text is a
+    character the writer typed and MUST stay one. A list item MUST keep its structure through whatever
+    element wraps its words (`<li><p>…</p></li>`).
+  - **Accepted limitation (V1).** Because the canonical source syntax recognizes line-leading markers
+    (`# `, `- `, `1. `, `- [ ] `), a pasted line that begins with one renders as that structure. The
+    characters are unchanged and nothing else is inferred — the note reads as it was pasted, in the one
+    respect the storage format cannot tell "typed as a marker" from "pasted as text". This applies equally
+    inside preserved literal text — a `<pre>` block, a fenced Markdown block. Fixing it would mean escaping
+    or per-line metadata in `body`, which is a storage redesign and MUST NOT be attempted for V1; inventing
+    zero-width characters or invisible metadata to beat the renderer is not a smaller version of it.
 
 **Reading vs editing (one screen, no mode toggle):**
 

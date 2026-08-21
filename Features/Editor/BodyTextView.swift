@@ -499,21 +499,21 @@ final class StructuredTextView: UITextView {
     }
 
     override func paste(_ sender: Any?) {
-        let pasteboard = UIPasteboard.general
-        guard pasteboard.contains(pasteboardTypes: [StructuredTextExport.pasteboardType]),
-              let data = pasteboard.data(forPasteboardType: StructuredTextExport.pasteboardType),
-              let structured = String(data: data, encoding: .utf8), !structured.isEmpty
+        // The pasteboard carries the same content in several flavors; the richest one that states
+        // structure As Told already supports wins, and a clipboard that states none falls through to
+        // the system's own plain-text paste, exactly as before (`RichPasteImport`).
+        #if DEBUG
+        RichPasteImport.logFlavors(of: .general)
+        #endif
+        guard let structured = RichPasteImport.source(from: .general), !structured.isEmpty,
+              let coordinator = delegate as? BodyTextView.Coordinator
         else {
-            // Anything from another app is exactly what it looks like: plain text.
             super.paste(sender)
             return
         }
 
         let edit = DocumentAction.pasteEdit(structured, text: text, selection: selectedRange)
-        guard let coordinator = delegate as? BodyTextView.Coordinator, coordinator.apply(edit, to: self) else {
-            super.paste(sender)
-            return
-        }
+        if !coordinator.apply(edit, to: self) { super.paste(sender) }
     }
 
     /// Writes what the reader sees for other apps, plus the raw source under a private type for As Told.
