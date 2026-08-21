@@ -42,6 +42,10 @@ targets:
       path: App/Info.plist
       properties:
         TranscribeBaseURL: "https://as-told-relay.fly.dev"   # Fly relay (transcription-service/DEPLOY.md)
+        # Export compliance. The app uses only exempt cryptography: HTTPS to the relay, CryptoKit's
+        # SHA-256 over the App Attest challenge, and DeviceCheck. Declaring it here answers the
+        # question once instead of on every App Store Connect upload.
+        ITSAppUsesNonExemptEncryption: false
         # XcodeGen otherwise bakes literal defaults here, which would shadow the project-level
         # MARKETING_VERSION / CURRENT_PROJECT_VERSION.
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
