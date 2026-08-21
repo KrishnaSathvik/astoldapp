@@ -1,12 +1,21 @@
 # Deploying the relay
 
-> **Currently OFFLINE.** `as-told-relay` is scaled to **0 machines** (19 Aug 2026). The hostname
-> `https://as-told-relay.fly.dev` resolves but nothing answers — both `/health` and
-> `/v1/transcriptions` time out. This is deliberate: the app is unreleased, and the relay had been
-> running with `APP_ATTEST_REQUIRED=false`, which let anonymous callers reach paid OpenAI inference.
+> **Verify the live state before any release operation — this document does not record it.** A runtime
+> snapshot written here goes stale within days and then misleads the next operator, so the relay's
+> current condition is something you measure, never something you read. Before acting, confirm all
+> four: `/health` answers, the machine count is **exactly one**, App Attest is **enforced**, and the
+> secrets are **deployed rather than staged**. The commands are in *Confirm the machine actually got
+> this configuration* below; the unattested probe in *Verify immediately after the deploy* is the one
+> that proves enforcement rather than assuming it.
+>
+> **The relay must run as exactly one machine** for as long as the App Attest challenge store and the
+> rate limiter remain process-local. Both live in memory: a second machine multiplies the rate limit by
+> the machine count and fails any request whose challenge was issued by the other one. Scaling out
+> requires a shared store (Redis) first — see stage 3 and `RULES.md` §8.
 >
 > **Do not run `fly deploy` to test one component.** `min_machines_running = 1` means any deploy
-> recreates the machine. Prepare the whole secured configuration offline, then bring it back **once**.
+> recreates the machine. Prepare the whole secured configuration first, then apply it in a **single**
+> deploy — batch every pending change (secrets, `[env]`, limits) into that one release.
 >
 > **`fly scale count 1` is not a bring-up.** It clones the last *release*, not this `fly.toml`, and on
 > this app that release predates the hardening — so it silently restores the unprotected endpoint
@@ -17,10 +26,9 @@
 > first request (measured: 6.3 s, and the request still reached OpenAI). `fly scale count 0` is what
 > actually closes it.
 
-The original staged rollout (open endpoint first, attestation second) is superseded. Because the
-relay is already offline and the app is not released, there is nothing to be gained by resurrecting
-an unauthenticated service. Deploy the secured configuration in one step, then verify on a **real
-iPhone** — the Simulator cannot attest.
+The original staged rollout (open endpoint first, attestation second) is superseded. There is nothing
+to be gained by running an unauthenticated paid endpoint at any point, so the secured configuration is
+deployed in one step and then verified on a **real iPhone** — the Simulator cannot attest.
 
 ## Prerequisites
 
