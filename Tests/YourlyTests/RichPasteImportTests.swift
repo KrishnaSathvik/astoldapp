@@ -151,27 +151,31 @@ struct RichPasteHTMLFidelityTests {
     }
 }
 
-/// A table is not a structure As Told can edit (RULES.md §7). What it becomes is one decision, made in
-/// `RichPasteDocument`: narrow tables stay rows, and a table too wide for a phone becomes one record per
-/// row, each cell under the column heading the source gave it. Every cell survives either way.
+/// A table stays a table. Imports canonicalize to Markdown pipe rows in `body` — ordinary text, no new
+/// model — and `TableBlock` reads them back as the grid (RULES.md §7, amended 2026-08-21). This
+/// replaced the row-record fallback, which kept every cell and lost the only thing a table asserts:
+/// that these values belong to each other.
 struct RichPasteHTMLTableTests {
 
-    @Test func aNarrowTableKeepsItsCellsAndRowOrder() {
+    @Test func aTableKeepsItsCellsAndRowOrder() {
         let html = """
         <table><thead><tr><th>Idea</th><th>Why It Could Work</th></tr></thead>
         <tbody><tr><td>Remote Job Hunting OS</td><td>High demand</td></tr>
         <tr><td>Creator Systems Pack</td><td>Creator economy growing</td></tr></tbody></table>
         """
         #expect(RichPasteHTML.source(from: html) == """
-        Idea | Why It Could Work
-        Remote Job Hunting OS | High demand
-        Creator Systems Pack | Creator economy growing
+        | Idea | Why It Could Work |
+        | --- | --- |
+        | Remote Job Hunting OS | High demand |
+        | Creator Systems Pack | Creator economy growing |
         """)
     }
 
-    @Test func aTableWithoutAHeaderRowReadsTheSameWay() {
+    /// A source that marked no header still gets the rule: it is what makes the block a table rather
+    /// than three lines that contain pipes, and a reader treats a first row as headings anyway.
+    @Test func aTableWithoutAHeaderRowStillGetsItsRule() {
         let html = "<table><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>"
-        #expect(RichPasteHTML.source(from: html) == "a | b\nc | d")
+        #expect(RichPasteHTML.source(from: html) == "| a | b |\n| --- | --- |\n| c | d |")
     }
 
     @Test func aTableSitsBetweenTheProseAroundIt() {
@@ -186,20 +190,20 @@ struct RichPasteHTMLTableTests {
 
     @Test func aCaptionIsKeptAsTheRowAboveItsTable() {
         let html = "<table><caption>Ideas worth trying</caption><tr><td>a</td><td>b</td></tr></table>"
-        #expect(RichPasteHTML.source(from: html) == "Ideas worth trying\na | b")
+        #expect(RichPasteHTML.source(from: html) == "| Ideas worth trying |  |\n| --- | --- |\n| a | b |")
     }
 
     @Test func aTableTheMarkupNeverClosedStillKeepsItsCells() {
-        #expect(RichPasteHTML.source(from: "<table><tr><td>a</td><td>b</td>") == "a | b")
+        #expect(RichPasteHTML.source(from: "<table><tr><td>a</td><td>b</td>") == "| a | b |\n| --- | --- |")
     }
 
     @Test func aCellKeepsItsWordsOnOneLine() {
         let html = "<table><tr><td><p>first</p><p>second</p></td><td>b</td></tr></table>"
-        #expect(RichPasteHTML.source(from: html) == "first second | b")
+        #expect(RichPasteHTML.source(from: html) == "| first second | b |\n| --- | --- |")
     }
 
-    /// The itinerary that started all this: seven columns, which no phone can show as a grid.
-    @Test func aWideTableBecomesOneRecordPerRow() {
+    /// The itinerary that started all this: seven columns, which stay seven columns.
+    @Test func aWideTableStaysAWideTable() {
         let html = """
         <table><thead><tr><th>Day</th><th>Date</th><th>Schedule</th><th>Park</th>
         <th>Travel</th><th>Overnight</th><th>Meals</th></tr></thead>
@@ -208,32 +212,13 @@ struct RichPasteHTMLTableTests {
         <tr><td>2</td><td>Sun</td><td>Kenai Fjords Full Day</td><td>Kenai Fjords</td>
         <td>5 hrs driving</td><td>Anchorage</td><td>Lunch on boat</td></tr></tbody></table>
         """
-        #expect(RichPasteHTML.source(from: html) == """
-        Day 1
-        Date: Sat
-        Schedule: Arrive & Settle
-        Park: —
-        Travel: 20 min drive
-        Overnight: Anchorage
-        Meals: Dinner out
-
-        Day 2
-        Date: Sun
-        Schedule: Kenai Fjords Full Day
-        Park: Kenai Fjords
-        Travel: 5 hrs driving
-        Overnight: Anchorage
-        Meals: Lunch on boat
-        """)
-    }
-
-    @Test func aTableOfSentencesBecomesRecordsEvenWhenItIsNarrow() {
-        let html = """
-        <table><tr><th>Park</th><th>Why</th></tr>
-        <tr><td>Kenai Fjords</td><td>\(String(repeating: "glaciers and whales ", count: 4))</td></tr></table>
-        """
-        let source = RichPasteHTML.source(from: html)
-        #expect(source?.hasPrefix("Park Kenai Fjords\nWhy: glaciers") == true)
+        let source = try! #require(RichPasteHTML.source(from: html))
+        let table = try! #require(TableBlock.tables(in: source).first)
+        #expect(table.width == 7)
+        #expect(table.header == ["Day", "Date", "Schedule", "Park", "Travel", "Overnight", "Meals"])
+        #expect(table.records.count == 2)
+        #expect(table.records[1] == ["2", "Sun", "Kenai Fjords Full Day", "Kenai Fjords",
+                                     "5 hrs driving", "Anchorage", "Lunch on boat"])
     }
 
     @Test func everyCellSurvivesWhateverFormItTakes() {
@@ -256,7 +241,7 @@ struct RichPasteDocumentTests {
     @Test func aTableAloneIsStructureEnough() {
         #expect(RichPasteDocument.canonicalSource([
             .table(ImportedTable(rows: [["a", "b"]], headerRow: nil))
-        ]) == "a | b")
+        ]) == "| a | b |\n| --- | --- |")
     }
 
     @Test func aCheckboxGlyphIsReadOnlyWhereTheSourceStatedAList() {
@@ -404,9 +389,12 @@ struct RichPasteMarkdownTests {
                 == "# Code\ndf = df.sort_values(\"amount\")\n    total = 1")
     }
 
-    @Test func aMarkdownTableUsesTheSameFallbackAsAnHTMLOne() {
+    /// A Markdown table arrives as a table and leaves as one, in the canonical spelling `TableBlock`
+    /// reads: the delimiter row is rewritten to `| --- |`, and not one cell moves.
+    @Test func aMarkdownTableStaysATable() {
         let markdown = "# T\n\n| Day | Park |\n| --- | ---- |\n| 2 | Kenai Fjords |"
-        #expect(RichPasteMarkdown.source(from: markdown) == "# T\n\nDay | Park\n2 | Kenai Fjords")
+        #expect(RichPasteMarkdown.source(from: markdown)
+                == "# T\n\n| Day | Park |\n| --- | --- |\n| 2 | Kenai Fjords |")
     }
 
     @Test func nestedItemsFlattenAndKeepEveryWord() {
@@ -425,6 +413,50 @@ struct RichPasteMarkdownTests {
 
     @Test func markdownWithoutStructureIsDeclined() {
         #expect(RichPasteMarkdown.source(from: "just a sentence") == nil)
+    }
+
+    // A table is a header row *and* the delimiter row under it. A line that merely contains a pipe is
+    // a line that contains a pipe — reading one as a table meant inventing the delimiter row As Told
+    // then wrote into the note, which is the one thing paste must never do (RULES.md §4).
+
+    @Test func aProseLineHoldingAPipeIsNotATable() {
+        let markdown = "# T\n\nOption A | Option B\n\nThat was the choice."
+        #expect(RichPasteMarkdown.source(from: markdown)
+                == "# T\n\nOption A | Option B\n\nThat was the choice.")
+    }
+
+    @Test func aPipedLineWithNoDelimiterRowNeverInventsOne() {
+        let source = RichPasteMarkdown.source(from: "# T\n\nOption A | Option B")
+        #expect(source?.contains("---") == false, "a delimiter row the source never had was written")
+    }
+
+    /// Two of them in a row are still two lines of prose — asserted against the same two lines without
+    /// the pipes, so this pins the pipe's irrelevance rather than restating how paragraphs are spaced.
+    @Test func twoProseLinesHoldingPipesReadExactlyAsProse() {
+        let piped = RichPasteMarkdown.source(from: "# T\n\nchicken | rice\nbeans | corn")
+        let plain = RichPasteMarkdown.source(from: "# T\n\nchicken and rice\nbeans and corn")
+        #expect(piped == plain?
+            .replacingOccurrences(of: "chicken and rice", with: "chicken | rice")
+            .replacingOccurrences(of: "beans and corn", with: "beans | corn"))
+    }
+
+    /// Nothing was traded away for the strictness: a pipe table without leading and trailing pipes is
+    /// still a table, because the delimiter row still says so.
+    @Test func aHeaderlessPipeTableIsStillATable() {
+        let markdown = "# T\n\nDay | Park\n--- | ---\n2 | Kenai Fjords"
+        #expect(RichPasteMarkdown.source(from: markdown)
+                == "# T\n\n| Day | Park |\n| --- | --- |\n| 2 | Kenai Fjords |")
+    }
+
+    /// And a pipe inside a list item stays inside the list item rather than promoting it to a grid.
+    @Test func aListItemHoldingAPipeIsStillAListItem() {
+        #expect(RichPasteMarkdown.source(from: "- chicken | rice\n- beans") == "- chicken | rice\n- beans")
+    }
+
+    /// A clipboard whose only "structure" was a pipe states no structure at all, so it is declined and
+    /// the system's own plain-text paste runs.
+    @Test func aPipeAloneIsNotStructureEnough() {
+        #expect(RichPasteMarkdown.source(from: "Option A | Option B") == nil)
     }
 }
 

@@ -34,15 +34,26 @@ These decisions should be treated as product constraints unless intentionally ch
 - Home does not show note creation times.
 - Editor shows the note date, not a prominent time.
 - Notes autosave.
-- No visible formatting toolbar. Structure — heading / subheading / bullet / numbered / checklist — is
-  reachable three equivalent ways: the contextual `Aa` **Style** menu, a typed marker, or a spoken
-  command (menu added 2026-08-19; the rule previously read "never by a control"). One contextual
-  toolbar item, shown only while the body has the caret — a persistent formatting ribbon and inline
-  rich text both stay forbidden. The menu's plain-text row is **Paragraph** (renamed from `Normal`
+- Writing controls live in **one floating toolbar above the keyboard** — `Aa` · `•` · `1.` · `☑` and
+  the microphone — not in the navigation bar and never in a bar across the top of the page
+  (`WritingToolbar`, **changed 2026-08-20**). Structure — heading / subheading / bullet / numbered /
+  checklist — stays reachable three equivalent ways: tapping it there, a typed marker, or a spoken
+  command (a control was added 2026-08-19, when the rule had read "never by a control"; it moved out of
+  the header 2026-08-20, when the rule had read "a keyboard-accessory row of style buttons IS the
+  forbidden bar"). Both reversals had one cause: a capability people cannot find is a capability the
+  app does not have. The toolbar is contextual — absent while reading, absent while the title has the
+  caret, and replaced by the recording panel while recording — and it carries **no new capability**:
+  the same six structures, through the same `DocumentAction` primitive. Inline rich text (bold,
+  italic, colors, alignment) stays forbidden, on this bar as everywhere else. The menu's plain-text row is **Paragraph** (renamed from `Normal`
   2026-08-19): it is the writer's explicit way *out* of a list, alongside pressing Return on an empty
   item, and either way the caret moves to the paragraph inset immediately. Rows are title case, and
   the bullet row is **Bulleted List** (2026-08-20) — the *spoken* command is still "bullet list", and
   a menu label and a spoken phrase are deliberately allowed to differ (RULES.md §1).
+- **Tables are import-and-display only** (added 2026-08-21). A pasted table is kept as canonical pipe
+  rows in `body`, styled as a table in the note, and openable full-screen with real columns and
+  VoiceOver. There is no way to create or graphically edit one: no toolbar button, no row/column
+  controls, no spreadsheet behavior, and voice never makes a table. Editing a table means editing its
+  text. (`tables` was on the do-not-build list until this date; it now reads *table editing*.)
 - Voice and typing are two input methods for the same note.
 - Voice transcript becomes ordinary editable text.
 - V1 voice target: English, Telugu, Hindi, Telugu+English, Hindi+English.
@@ -63,6 +74,11 @@ These decisions should be treated as product constraints unless intentionally ch
 - Appearance is user-selectable in Profile → Settings → Theme: Light, Dark, or Use device settings (default). (The original spec locked system-only; the picker was added intentionally.)
 - SF Symbols for system icons; no emoji-as-interface.
 - No folders, tags, streaks, prompts, AI summaries, chat-with-notes, reminders, collaboration, or export in V1.
+- **Reminders are a guarded post-1.0 exception** (decided 2026-08-20, unbuilt). Still excluded from V1
+  as above. After 1.0, a note may offer a **one-time local reminder** when the writer explicitly asks
+  for one in their own words, typed or spoken — note-level, confirmation-only, on-device, and never a
+  task manager. Checklists gain no task semantics. See `RULES.md` §7 and `docs/02-features.md`
+  (Milestone D).
 - SwiftUI native-first implementation.
 - Local note storage using SwiftData.
 - Transcription API key never ships inside the iOS application.

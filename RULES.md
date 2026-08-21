@@ -55,17 +55,23 @@ These are treated as fixed product constraints unless intentionally changed.
   that ends editing implies that not pressing it loses work, which is the belief autosave exists to
   make false. Removed 2026-08-19 after a user lost a note to exactly that belief. The keyboard leaves
   by scrolling the body interactively or by navigating Back; **Back always saves.**
-- MUST NOT show a visible formatting toolbar. Light structure — headings / subheadings / bullet /
-  numbered / checklist — **shipped in V1** (§7) and is created three equivalent ways: choosing it in
-  the contextual **Style** menu, typing its marker, or speaking its command. All three route through
+- Writing controls live in **one contextual floating toolbar above the keyboard** (`WritingToolbar`),
+  never in a bar across the top of the writing area. Light structure — headings / subheadings / bullet /
+  numbered / checklist — **shipped in V1** (§7) and is created three equivalent ways: tapping it in
+  the writing toolbar, typing its marker, or speaking its command. All three route through
   the one `DocumentAction.setBlockKind` primitive; there is never a second formatting system.
-  (Changed 2026-08-19 from "never by a control" — a control was the whole point of the change; the
-  ban is on a *persistent ribbon*, not on structure being reachable by tapping.) Any affordance
-  around it MUST stay contextual or collapsible, never a persistent formatting ribbon; structure MUST
-  NOT visually dominate writing, and the app MUST still read as a page. The Style menu is exactly one
-  toolbar item, shown only while the **body** has the caret, and offers exactly six structures —
+  (Changed 2026-08-19 from "never by a control" — a control was the whole point of the change. Changed
+  again 2026-08-20: the ban on a keyboard-accessory row is **lifted**, and the toolbar it forbade is
+  what ships. The reason is the one that produced the control in the first place — `Aa` in the
+  navigation bar put the commonest act in the app three steps away, at the opposite end of the screen
+  from the writer's hands, and a capability nobody finds is a capability that does not exist. What the
+  ban protected was never the *placement*; it was the vocabulary, and the vocabulary is unchanged.)
+  The toolbar MUST stay contextual: it appears only while the **body** has the caret, shows only the
+  microphone while reading, and is absent entirely while the title has the keyboard. Structure MUST
+  NOT visually dominate writing, and the app MUST still read as a page. It offers exactly six structures —
   Paragraph / Heading / Subheading / Bulleted List / Numbered List / Checklist — plus the writing-help
-  reference. (`Normal` renamed to **Paragraph** 2026-08-19: the row is the writer's explicit way *out*
+  reference — three of them (Bulleted List, Numbered List, Checklist) as one-tap buttons and the rest
+  behind `Aa`. Nothing else joins it. (`Normal` renamed to **Paragraph** 2026-08-19: the row is the writer's explicit way *out*
   of a list, the counterpart to Return on an empty item, and "Style → Paragraph" says that where
   "Style → Normal" read as a preference. Title-cased and `Bullet list` → **Bulleted List** 2026-08-20,
   to Apple's own wording for these rows.)
@@ -338,11 +344,16 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
   the editor previously held a `Delete Note` overflow. An overflow in the editor is how share /
   export / duplicate / word count / pin arrive, and those are all on the do-not-build list (§7) —
   removing the menu removes the door.)
-- Forbidden default UI: Save button, `Done`, overflow menu, formatting bar, standalone checklist
-  button, attachment row, AI button, word count, prominent timestamp, toolbar occupying writing
-  width. The Style menu is not a formatting bar: one item, contextual, and its options live behind a
-  tap rather than on the page. A keyboard-accessory row of style buttons (`H1 H2 • 1. ☑`) IS the
-  forbidden bar and MUST NOT ship.
+- Forbidden default UI: Save button, `Done`, overflow menu, attachment row, AI button, word count,
+  prominent timestamp, and any bar that occupies the writing width or sits above the note's text.
+  - **The writing toolbar is not that bar** (amended 2026-08-20; this list previously forbade a
+    "formatting bar", a "standalone checklist button", and named `H1 H2 • 1. ☑` as the forbidden
+    keyboard-accessory row). What ships is a floating island below the note, above the keyboard,
+    holding `Aa` · `•` · `1.` · `☑` · microphone — the six structures the editor already has, plus
+    voice. It takes no width from the page, it is never present while reading or while the title has
+    the caret, and it adds not one capability the app did not already ship.
+  - What the list still forbids is **inline** formatting reaching this bar or any other: bold, italic,
+    underline, colors, alignment, font size (§7). A bar with room on it is not an argument for them.
 - Title placeholder `Title`; body placeholder `Start writing…` and nothing else. No visible
   box/border on either. (The empty note carried a marker cheat-sheet until 2026-08-19; it went with
   the arrival of the Style menu — teaching syntax before the first word was the price of having no
@@ -355,7 +366,14 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
   registration and leaves the stack describing text that no longer exists.
 - Structure markers (`# `, `- `, `- [ ] `, …) are an internal encoding and MUST NOT be visible anywhere:
   not in the editor, not in Home/search previews, not to VoiceOver, and not in anything copied out of the
-  app. Copy/cut MUST give other apps the page as it reads (`• Eggs`, `☐ Call Ravi`); the raw source may
+  app. **The caret MUST NOT be allowed to sit in front of a hidden marker either** (added 2026-08-21):
+  a marker is not a place, and a caret parked at a line start let the next keystroke insert ahead of it,
+  which put the marker mid-line where it stopped being hidden and became words. A table's pipe source is
+  covered by the same rule on every surface that shows a note *as text* — Home, search, VoiceOver — and
+  by the documented exception on the pasteboard, where copy still yields the source.
+- **VoiceOver MUST be told what a marker draws, not left with the words alone** (added 2026-08-21). A
+  ticked and an unticked box that read identically are state carried by a mark and nothing else, which
+  the accessibility rules in §4 forbid. Copy/cut MUST give other apps the page as it reads (`• Eggs`, `☐ Call Ravi`); the raw source may
   travel only in a **private** pasteboard representation, so an As Told → As Told paste keeps its structure.
 - **Paste MUST NOT rewrite the pasted words, and MUST NOT infer structure from a clipboard that does not
   state any.** Structure may be *translated* from what the clipboard states outright — an HTML heading
@@ -459,6 +477,9 @@ decorative animation that slows capture.
 
 - All text scales with Dynamic Type; controls MUST NOT clip or overlap at accessibility sizes.
 - Every icon action has a clear VoiceOver label (`New note`, `Start recording`, `Open calendar`, …).
+- A control VoiceOver can **describe** must be one it can **operate**. Where the only way in is a
+  touch on a region of the screen — a checkbox in the body of a note — expose an accessibility action
+  that makes the *same* edit, so the two paths cannot drift (added 2026-08-21).
 - Review contrast in both themes. Primary touch targets ≥ ~44×44 pt.
 - MUST NOT communicate state by color alone (e.g. a calendar dot needs an accessible label/trait).
 - Testing matrix per major screen: Light, Dark, Light+large type, Dark+large type, Reduce Motion, VoiceOver.
@@ -582,16 +603,46 @@ Source: `docs/01-product-requirements.md` §6, `docs/02-features.md` (Later sect
 
 accounts · Sign in with Apple · folders · tags · pinning · favorites · full rich text (font pickers,
 text/background colors, arbitrary block types) · Markdown UI · images · attachments · scanning ·
-handwriting · databases · tables · kanban · nested workspaces · collaboration · comments · share
+handwriting · databases · table **editing** · kanban · nested workspaces · collaboration · comments · share
 extension · widgets · watchOS app · reminders · notifications · journaling prompts · mood tracking ·
 streaks · productivity analytics · AI summaries · AI rewriting · AI chat · semantic search · cloud note
 storage · iCloud sync · export · audio archive.
+
+**Tables — the one narrow exception (amended 2026-08-21).** This list read `tables`, flatly. It now
+reads *table editing*, because those are two different products:
+
+- **Allowed: import and display.** A table pasted from another app is preserved as canonical Markdown
+  pipe rows inside `body` — ordinary text, no new model, no migration (RULES.md §5) — and *rendered*, so
+  it reads as a table. This adds no way to *make* a table; it stops As Told from destroying one it was
+  handed. A table asserts that these values belong to each other, and the row-record fallback it
+  replaces kept every word while discarding that claim, which is the entire content of a table.
+- **Two presentations, decided by who is looking (amended 2026-08-21).**
+  - **Reading** — a real table view (`TableCardView`): a heading row, content-aware column widths, quiet
+    horizontal separators, wrapping cells, no vertical rules and no spreadsheet grid. Not one pipe, and
+    no delimiter row, may reach the screen. A table too wide to read on a phone shows a compact preview
+    (the first columns and rows, and a line saying how much more there is) that opens the full-screen
+    reader. **How a note stores a table is implementation, and a reader MUST NOT have to decode it.**
+  - **Writing** — the canonical source, exactly as typed. A table being edited is text being edited, and
+    the caret has to be somewhere the writer can see it. The note returns to its tables the moment the
+    body gives up the keyboard.
+  - The presentation MUST NOT be a re-spacing of the source: hiding some characters and repositioning
+    others (invisible tab stops for the pipes, a drawn hairline over the delimiter row) was tried and
+    rejected on 2026-08-21 — it leaked stray pipes, banded backgrounds, and space-aligned columns, and
+    the caret could land inside what looked like a rendered table.
+- **Still forbidden: everything that makes it a spreadsheet.** No Table button on the writing toolbar,
+  no graphical creation, no row/column insertion or deletion UI, no resizing, merged cells, sorting, or
+  formulas, no cell-by-cell keyboard navigation, and voice MUST NOT create tables. Editing a table
+  means editing its text, like every other line in the note.
+- **The reader reads.** It MUST NOT gain an edit mode. The moment a cell can be typed into on that
+  screen, this exception has become the feature it was written to exclude.
 
 > _(The manual theme selector was previously excluded but has been added — see §1. "checklists" was
 > previously listed here as permanently excluded; reclassified 2026-08-18 as a guarded milestone, and
 > **shipping in V1 as of 2026-08-19** — see "Adopted direction" below. Still not a task-management
 > system. "Markdown UI" above means a Markdown **toolbar or preview mode**, which remains excluded; the
-> typed marker syntax that produces a heading or a list is the shipped editor, not a Markdown UI.)_
+> typed marker syntax that produces a heading or a list is the shipped editor, not a Markdown UI.
+> "reminders" and "notifications" stay excluded **from V1** and are reclassified 2026-08-20 from
+> permanently excluded to a guarded **post-V1** direction — see "Post-V1 — note reminders" below.)_
 
 ### Adopted direction — sequenced and guarded
 
@@ -651,9 +702,15 @@ operation underneath.
 - **A menu, not a sheet**, and that is a behavioral requirement rather than a preference: a sheet
   resigns first responder, so the keyboard would drop and the selection being styled would have to be
   restored afterwards. The menu leaves the keyboard and the live selection intact.
-- **It MUST NOT become a persistent ribbon.** A keyboard-accessory row of style buttons is the forbidden
-  bar, not an alternative to it. The control disappears with the keyboard, and never appears while
-  reading.
+- **It became the writing toolbar** (2026-08-20), and this bullet used to say the opposite: "a
+  keyboard-accessory row of style buttons is the forbidden bar, not an alternative to it." That was
+  written before the control had been lived with. In use, `Aa` in the navigation bar meant *tap Aa →
+  read a menu → find Bulleted List* for the thing writers do most, with the control as far from the
+  keyboard as the screen allows. The row now ships, floating above the keyboard, with the three list
+  structures as direct buttons and Heading / Subheading / Paragraph behind `Aa`. It MUST stay
+  contextual — gone while reading, gone while the title has the caret, replaced by the recording panel
+  while recording — and it MUST NOT grow a scroll, a second row, or an overflow: what does not fit is
+  what does not belong.
 - **Applying a style acts on every line the selection touches, as one undo step.** Four lines becoming a
   checklist is one thing the writer did and MUST undo as one.
 - **Nothing else joins this control.** Inline formatting — bold, italic, underline, highlight, colors,
@@ -666,9 +723,50 @@ operation underneath.
   control.
 - **A checklist is content, not a task manager.** It means "write several things and tick them off." It
   MUST NOT bring due dates, deadlines, overdue states, priorities, recurrence, calendar scheduling, task
-  inboxes, or notifications. A Todoist/Notion clone stays on the do-not-build list.
+  inboxes, or notifications. A Todoist/Notion clone stays on the do-not-build list. This prohibition is
+  **unchanged** by the post-V1 note-reminder direction below: a reminder attaches to a **note**, never to
+  a checklist item, and no checklist item ever becomes schedulable.
 - **Keep at Top** (surfacing an active draft/checklist above the chronological timeline) is evaluated
   *only after* structured writing exists — and is not a folders/favorites/workspace system.
+
+#### Post-V1 — note reminders (decided 2026-08-20, NOT built)
+
+Reminders and notifications are excluded outright above. Reclassified 2026-08-20 from *permanently
+excluded* to a **guarded post-V1 direction**: a note may remind you. This records a product decision,
+not work in progress. Nothing here is built, and none of it may start before §8 is green.
+
+- **Note-level only.** As Told MAY detect explicit future reminder intent in ordinary note text and
+  offer a **one-time local notification** that links back to the note. A reminder belongs to the
+  **note**; the checklist rule above is untouched and still binding.
+- **Suggest, never act.** Detection MAY suggest. It MUST NOT schedule. A reminder exists only after
+  explicit confirmation, and the note text MUST NOT be rewritten, annotated, or given hidden reminder
+  markers — `body` stays a single plain `String` (§5).
+- **Local and deterministic.** Detection runs on device with no model call. A reminder-shaped sentence
+  MUST NOT cause any note text to leave the device (§3).
+- **One pipeline.** Detection runs against the resulting note text, so equivalent text produces
+  equivalent behavior whether it was typed or spoken — the convergence rule voice structure already
+  follows (§2). Paste MUST NOT proactively trigger detection.
+- **Permission on use.** Notification authorization is requested only when the user confirms their
+  **first** reminder — never at Welcome, never at launch, never on merely typing one (§4 core rule 4).
+- **No task system.** MUST NOT introduce a reminders tab or dashboard, a task inbox, projects,
+  priorities, completion state, overdue state, recurrence, snooze, or calendar sync.
+- **No permanent editor chrome.** The Editor's element list (§4) is unchanged. A suggestion is
+  **ephemeral and contextual** and goes away once answered; a standing reminder chip or a permanent
+  keyboard-accessory row is the forbidden bar (§1), not a smaller version of it.
+
+Preconditions — each is real work against the shipped architecture, not a bolt-on:
+
+- **Schema.** A `Reminder` model requires `NoteSchemaV2` and a real `MigrationStage`
+  (`Models/NoteSchema.swift` declares V1 with no stages). Prefer a plain `noteID: UUID` over a
+  SwiftData relationship unless the relationship earns itself.
+- **Deletion.** Note deletion is a reversible ~4-second soft delete (§5,
+  `Core/Persistence/NoteDeletion.swift`). Deleting a note MUST **suspend** its notifications and Undo
+  MUST restore them; only the final purge deletes reminder records. Still **no confirmation dialog** (§4).
+- **Empty drafts.** A note with an active reminder MUST NOT be eligible for the automatic empty-draft
+  purge (§4, `Note.isEmptyDraft`). A confirmed reminder MUST NOT be able to lose its note silently.
+- **Navigation.** Opening a note from a notification needs an externally addressable destination that
+  survives the lock flow; Home's navigation is local `@State` today. The pending destination MUST be
+  held until authentication succeeds — a notification MUST NEVER bypass the app lock (§3).
 
 ### Marketing must lag implementation
 
@@ -733,10 +831,14 @@ Source: `docs/01-product-requirements.md` §15, `docs/07-build-plan.md` (Definit
   Calendar → Delete/Undo → Profile → Face ID.
 - No user-facing surface says `Yourly`: UI copy, accessibility labels, display name, App Store
   listing, website, and support content all read **As Told**.
-- The verification suite in `docs/07-build-plan.md` ("Verification suite") is green at its stated
-  baseline — 380 unit, 41 UI, 84 relay, clean typecheck, Release build succeeds. (Was written as
-  "305 unit, 33 UI"; the unit figure was already stale at 345 before the Style menu landed, so the
-  number had drifted from the suite it was supposed to guard. Measured, not estimated, 2026-08-19.)
+- The verification suite in `docs/07-build-plan.md` ("Verification suite") is green at **at least the
+  current committed baseline**, with a clean typecheck and a succeeding Release build. As of this
+  checkpoint that baseline is **625 unit, 59 UI, 84 relay** (measured, not estimated, 2026-08-21).
+  If additional tests are committed later, **the higher committed count becomes authoritative and this
+  line MUST be updated** — a run that passes only the number written here while the suite has grown
+  past it is a failure, not a pass. This line has gone stale three times ("305 unit, 33 UI", then
+  "380 unit, 41 UI" while the suite was already at 474/53), each time leaving the gate guarding fewer
+  tests than existed; re-measure rather than trusting it.
   The UI suite flakes
   as a whole-suite run, so a UI failure MUST be reproduced with `-only-testing:` on the single test
   before it is treated as a regression — and MUST NOT be waved off as flake without that check.

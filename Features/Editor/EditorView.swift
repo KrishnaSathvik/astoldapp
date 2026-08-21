@@ -1,7 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// Plain-text editor: date, optional title, body. No Save, no formatting toolbar (RULES.md §4).
+/// Plain-text editor: date, optional title, body. No Save button; the writing controls live in one
+/// floating toolbar above the keyboard rather than in the header (`WritingToolbar`, RULES.md §1, §7).
 ///
 /// Two intentions, one screen (product behavior matrix):
 ///  - **New note** — opens ready to capture: the body takes focus and the keyboard rises.
@@ -34,6 +35,9 @@ struct EditorView: View {
     /// away from the view — see `WritingEducation`.
     @State private var education = WritingEducation()
     @State private var showsWritingHelp = false
+    /// The table the reader is open on. A tap while *reading* the note puts one here; editing the
+    /// note's text is unaffected, because the tap that opens this never fires while writing.
+    @State private var openedTable: TableBlock?
     /// The way the Style menu reaches the body text view — see `BodyEditorActions`.
     @State private var bodyActions = BodyEditorActions()
 
@@ -52,24 +56,6 @@ struct EditorView: View {
     }
 
 
-    /// Drives the Style menu: reads the selection's current style so the menu can check it, and
-    /// applies a chosen one through the body's shared `DocumentAction` path.
-    ///
-    /// The getter is `nil` when the selection spans two different styles, which is what leaves the
-    /// menu with nothing checked. The setter refuses a no-op, because re-applying the style a line
-    /// already has would still be a text edit and would still cost the writer an undo step.
-    private var styleSelection: Binding<BlockStyle?> {
-        Binding(
-            get: { model.map { BlockStyle.current(in: $0.body, selection: bodySelection) } ?? nil },
-            set: { chosen in
-                guard let chosen,
-                      chosen != model.flatMap({ BlockStyle.current(in: $0.body, selection: bodySelection) })
-                else { return }
-                bodyActions.apply(chosen)
-            }
-        )
-    }
-
     var body: some View {
         ZStack {
             Color.ds.canvas.ignoresSafeArea()
@@ -87,6 +73,10 @@ struct EditorView: View {
                 if note.isEmptyDraft { bodyFocused = true }
             }
             #if DEBUG
+            if DebugLaunch.caretAtEnd {
+                bodySelection = NSRange(location: (note.body as NSString).length, length: 0)
+                bodyFocused = true
+            }
             if DebugLaunch.autoStartVoice, let model {
                 startVoice(model)
                 Task { try? await Task.sleep(for: .seconds(1.5)); voice?.done() }
@@ -119,36 +109,11 @@ struct EditorView: View {
                 }
                 .accessibilityLabel("Back to notes")
             }
-            // The Style control (docs/02-features.md Milestone B2). One contextual button, shown only
-            // while the *body* has the caret — styling a title is meaningless, and a control that
-            // survived into the reading state would be the persistent ribbon RULES.md §1 refuses.
-            //
-            // A menu, not a sheet, and that is a behavioral requirement rather than a taste: a sheet
-            // resigns first responder, so the keyboard would drop and the selection the style applies
-            // to would have to be restored afterwards. A menu leaves both alone, which is what lets a
-            // writer keep the four lines they selected and just pick a style.
-            if bodyFocused {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Picker("Style", selection: styleSelection) {
-                            ForEach(BlockStyle.allCases) { style in
-                                Text(style.name).tag(Optional(style))
-                            }
-                        }
-                        .pickerStyle(.inline)
-                        Divider()
-                        // The old standalone `?` folded in: reference material one tap deeper, where
-                        // losing the keyboard to a sheet costs nothing because nothing is being applied.
-                        Button("Writing help…") { showsWritingHelp = true }
-                    } label: {
-                        Image(systemName: "textformat")
-                            .foregroundStyle(Color.ds.accent)
-                    }
-                    .accessibilityLabel("Style")
-                }
-            }
         }
         .sheet(isPresented: $showsWritingHelp) { WritingHelpSheet() }
+        .fullScreenCover(item: $openedTable) { table in
+            TableReaderView(table: table) { openedTable = nil }
+        }
     }
 
     /// The whole note is one page and it scrolls as one: date, title, and body live inside a single
@@ -171,34 +136,61 @@ struct EditorView: View {
             dateText: dateText,
             title: Binding(get: { model.title }, set: { model.title = $0 }),
             titleFocused: $titleFocused,
+            openTable: { openedTable = $0 },
+            titleEditingEnded: { model.endTitleEditing() },
             bodyPlaceholder: "Start writing…"
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .overlay(alignment: .bottom) { voiceLayer(model) }
+        // `safeAreaInset`, not `overlay`. The bar has to *take* the room it occupies, not float over
+        // it: as an overlay the text view still believed it owned the whole screen down to the
+        // keyboard, so UIKit lifted the line being typed to a "visible" position that was in fact
+        // behind the bar, and a long note was written into a strip the writer could not see. The
+        // height comes from the bar itself — measured by SwiftUI, never a constant — so it stays right
+        // at every Dynamic Type size, in the recording state, and with the keyboard up or down.
+        .safeAreaInset(edge: .bottom, spacing: 0) { writingLayer(model) }
         .padding(.horizontal, DSSpacing.screenH)
         .padding(.top, DSSpacing.s4)
         .animation(DSMotion.fast, value: isEditing)
     }
 
-    @ViewBuilder private func voiceLayer(_ model: EditorModel) -> some View {
+    /// Everything a writer does to the note, in one place, directly above the keyboard: its structure
+    /// and its voice (RULES.md §1 and §7, amended 2026-08-20). The navigation bar keeps what belongs to
+    /// navigation and to the note's identity — Back, and above the body, the date and title — so the
+    /// top of the screen reads as the page rather than as a control panel.
+    ///
+    /// While recording, the bar *is* the recording panel: the same island, in its other state. Voice is
+    /// not a mode the editor enters, it is the other way to write, and it should not look like a
+    /// different screen arriving.
+    @ViewBuilder private func writingLayer(_ model: EditorModel) -> some View {
         if let voice {
             RecordingPanel(model: voice) { endVoice() }
-                .padding(.bottom, DSSpacing.s4)
-        } else {
+                .padding(.vertical, DSSpacing.s4)
+        } else if WritingToolbar.Mode.resolve(bodyFocused: bodyFocused,
+                                              titleFocused: titleFocused) != .hidden
+                    || education.showsVoiceStructureTip {
+            // Nothing shown means nothing reserved: while the *title* has the keyboard there is no bar,
+            // and the body below it must not be inset for a bar that is not there.
             VStack(spacing: DSSpacing.s3) {
-                // Sits above the microphone that just produced the transcript, after the capture UI
-                // has gone — never stacked on the consent sheet, because it is only reachable once a
+                // Sits above the toolbar that produced the transcript, after the capture UI has gone —
+                // never stacked on the consent sheet, because it is only reachable once a
                 // transcription has actually succeeded.
                 if education.showsVoiceStructureTip {
                     VoiceStructureTip { education.dismissVoiceStructureTip() }
                 }
-                HStack {
-                    Spacer()
-                    VoiceButton(action: { startVoice(model) }, appendsToEnd: !bodyFocused)
-                }
+                WritingToolbar(
+                    mode: .resolve(bodyFocused: bodyFocused, titleFocused: titleFocused),
+                    current: BlockStyle.current(in: model.body, selection: bodySelection),
+                    appendsToEnd: !bodyFocused,
+                    onStyle: { bodyActions.apply($0) },
+                    onWritingHelp: { showsWritingHelp = true },
+                    onVoice: { startVoice(model) }
+                )
             }
+            .padding(.top, DSSpacing.s4)
             .padding(.bottom, DSSpacing.s4)
             .animation(DSMotion.fast, value: education.showsVoiceStructureTip)
+            .animation(DSMotion.fast, value: bodyFocused)
+            .animation(DSMotion.fast, value: titleFocused)
         }
     }
 

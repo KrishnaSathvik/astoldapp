@@ -113,9 +113,12 @@ struct HomeView: View {
     }
 
     private func newNote() {
+        EditorTrace.open("new note")
         let note = Note()
         context.insert(note)
+        EditorTrace.mark("draft created")
         editingNote = note
+        EditorTrace.mark("navigation requested")
     }
 
 }

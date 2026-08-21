@@ -164,6 +164,17 @@ struct DocumentActionChecklistTests {
         #expect(r?.text == "- [ ] a")
     }
 
+    /// The caret a toggle reports is never inside the hidden marker, even when the caller asked from
+    /// the line's start. The editor's own callers pass a caret of their own, but the primitive must not
+    /// hand back the one offset a caret may never occupy.
+    @Test func theReportedCaretIsNeverInsideTheMarker() {
+        let r = DocumentAction.toggleChecklistEdit(text: "- [ ] a", sourceOffset: 0)
+        #expect(r?.selection == NSRange(location: 6, length: 0))
+
+        let second = DocumentAction.toggleChecklistEdit(text: "- [ ] a\n- [ ] b", sourceOffset: 8)
+        #expect(second?.selection == NSRange(location: 14, length: 0))
+    }
+
     @Test func togglingNonChecklistReturnsNil() {
         #expect(DocumentAction.toggleChecklist(text: "- a", sourceOffset: 0) == nil)
         #expect(DocumentAction.toggleChecklist(text: "plain", sourceOffset: 0) == nil)

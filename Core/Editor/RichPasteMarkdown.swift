@@ -48,21 +48,27 @@ enum RichPasteMarkdown {
                 continue
             }
 
-            if isTableDelimiter(raw), case .table(var table)? = blocks.last,
-               table.rows.count == 1, table.headerRow == nil {
-                table.headerRow = 0
-                blocks[blocks.count - 1] = .table(table)
-                continue
-            }
             if let cells = tableRow(raw) {
+                // Already inside a table: every pipe row under the delimiter is one of its rows.
                 if case .table(var table)? = blocks.last {
                     table.rows.append(cells)
                     blocks[blocks.count - 1] = .table(table)
-                } else {
-                    blocks.append(.table(ImportedTable(rows: [cells], headerRow: nil)))
+                    previousWasListItem = false
+                    continue
                 }
-                previousWasListItem = false
-                continue
+                // A table *opens* where Markdown says one opens: a header row with the delimiter row
+                // directly under it. Without that rule any line holding a pipe became a grid — and
+                // then `RichPasteDocument` wrote the delimiter row into the note, so `Option A |
+                // Option B` came back as a two-cell table with a rule the writer never typed. Paste
+                // translates the structure a source states and deduces none (RULES.md §4), and one
+                // pipe states nothing. A line that opens no table is not consumed here: it falls
+                // through and is read as the prose, heading, or list item it is.
+                if let next = lines.first, isTableDelimiter(next) {
+                    lines = lines.dropFirst()
+                    blocks.append(.table(ImportedTable(rows: [cells], headerRow: 0)))
+                    previousWasListItem = false
+                    continue
+                }
             }
 
             let line = Substring(raw)

@@ -158,3 +158,155 @@ struct DocumentActionPasteEditTests {
         #expect(edit.string == "world")
     }
 }
+
+// What a *reading* surface gets. A note page draws its tables (`TableCardView`); everywhere else that
+// shows a note as text — a Home row, a search result, VoiceOver — was handed the canonical source, so
+// `| Day | Date | Schedule |` and the `| --- |` rule under it turned up on screen and in the ear. The
+// pipes are how the table is stored, and storage is not something a reader decodes (RULES.md §4).
+//
+// The pasteboard is deliberately *not* changed by any of this: copying a table still yields its source,
+// which is the documented contract (docs/02-features.md).
+
+private let tableNote = """
+Costs so far.
+
+| Expense | 2 people |
+| --- | --- |
+| 9 nights lodging | $2,400-$3,600 |
+| Rental car | $1,500-$2,000 |
+
+Still need to book.
+"""
+
+struct StructuredTextPreviewTests {
+
+    @Test func aTableReadsAsItsCellsRatherThanItsPipes() {
+        let preview = StructuredTextExport.previewText(tableNote)
+        #expect(!preview.contains("|"), "the table's pipes reached a reading surface")
+        #expect(!preview.contains("---"), "the delimiter row reached a reading surface")
+    }
+
+    @Test func everyCellSurvivesThePreview() {
+        let preview = StructuredTextExport.previewText(tableNote)
+        for cell in ["Expense", "2 people", "9 nights lodging", "$2,400-$3,600",
+                     "Rental car", "$1,500-$2,000"] {
+            #expect(preview.contains(cell), "\(cell) was dropped from the preview")
+        }
+    }
+
+    @Test func theProseAroundATableIsUntouched() {
+        let preview = StructuredTextExport.previewText(tableNote)
+        #expect(preview.hasPrefix("Costs so far."))
+        #expect(preview.hasSuffix("Still need to book."))
+    }
+
+    @Test func listsStillShowTheMarkersTheReaderSees() {
+        #expect(StructuredTextExport.previewText("# Shopping\n- Eggs\n- [ ] Call Ravi\n- [x] Done")
+                == "Shopping\n• Eggs\n☐ Call Ravi\n☑ Done")
+    }
+
+    @Test func aNoteWithoutATableIsExactlyItsVisibleText() {
+        let source = "# Head\n- One\n1. Two\nplain"
+        #expect(StructuredTextExport.previewText(source) == StructuredTextExport.plainText(source))
+    }
+
+    /// A row of the note that merely contains a pipe is not a table and keeps its characters.
+    @Test func proseHoldingAPipeKeepsIt() {
+        #expect(StructuredTextExport.previewText("chicken | rice") == "chicken | rice")
+    }
+
+    /// The pasteboard keeps the source. Copying a table out is documented to yield exactly that, and
+    /// this fix must not have quietly changed what leaves the app.
+    @Test func copyingATableStillYieldsItsSource() {
+        #expect(StructuredTextExport.plainText(tableNote).contains("| --- | --- |"))
+    }
+}
+
+/// What VoiceOver is told. The value used to be the note with every marker *removed*, so a ticked and
+/// an unticked box read identically and a bullet read as a paragraph — state carried by a drawn glyph
+/// and nothing else, which docs/03-design-system.md forbids.
+struct StructuredTextSpokenTests {
+
+    @Test func aBulletIsAnnouncedAsOne() {
+        #expect(StructuredTextExport.spokenText("- Eggs") == "Bullet, Eggs")
+    }
+
+    @Test func anUncheckedItemIsDistinguishableFromACheckedOne() {
+        #expect(StructuredTextExport.spokenText("- [ ] Call Ravi") == "Unchecked, Call Ravi")
+        #expect(StructuredTextExport.spokenText("- [x] Book hotel") == "Checked, Book hotel")
+    }
+
+    @Test func aNumberedItemKeepsItsOrdinal() {
+        #expect(StructuredTextExport.spokenText("1. one\n2. two") == "1. one\n2. two")
+    }
+
+    @Test func proseAndHeadingsAreSpokenAsTheirWords() {
+        #expect(StructuredTextExport.spokenText("# Head\n## Sub\nplain") == "Head\nSub\nplain")
+    }
+
+    @Test func noSourceMarkerIsEverSpoken() {
+        let spoken = StructuredTextExport.spokenText("# Head\n- One\n1. Two\n- [ ] Three\n- [x] Four")
+        for marker in ["# ", "## ", "- ", "- [ ] ", "- [x] "] {
+            #expect(!spoken.contains(marker), "VoiceOver would read the source marker \(marker.debugDescription)")
+        }
+    }
+
+    @Test func aTableIsSpokenAsItsCellsAndNeverItsPipes() {
+        let spoken = StructuredTextExport.spokenText(tableNote)
+        #expect(!spoken.contains("|"))
+        #expect(!spoken.contains("---"))
+        #expect(spoken.contains("9 nights lodging"))
+        #expect(spoken.contains("$2,400-$3,600"))
+    }
+}
+
+/// What Home and Search hand VoiceOver.
+///
+/// Both rows draw a note as text and both labelled themselves with `previewText` — the spelling
+/// written for the eye — so a reader who could not see the page was given `☐ Call Ravi`: the state of
+/// the item carried by a drawn mark and nothing else, which RULES.md §4 forbids. The glyphs stay on
+/// screen; the words go to the ear.
+struct SpokenRowTests {
+
+    @Test func aChecklistIsSpokenAsItsState() {
+        let row = StructuredTextExport.spokenRow(title: nil, body: "- [ ] Call Ravi\n- [x] Book hotel")
+        #expect(row == "Unchecked, Call Ravi\nChecked, Book hotel")
+    }
+
+    /// The eye keeps the glyphs. Both spellings exist because both audiences do.
+    @Test func theVisiblePreviewIsUnchanged() {
+        let body = "- [ ] Call Ravi"
+        #expect(StructuredTextExport.previewText(body) == "☐ Call Ravi")
+        #expect(StructuredTextExport.spokenRow(title: nil, body: body) == "Unchecked, Call Ravi")
+    }
+
+    @Test func noRowEverSpeaksAGlyphOrAMarker() {
+        let row = StructuredTextExport.spokenRow(title: "Trip",
+                                                 body: "# Packing\n- Socks\n1. Passport\n- [x] Charger")
+        for glyph in ["☐", "☑", "•", "- [", "# "] {
+            #expect(!row.contains(glyph), "a row spoke \(glyph): \(row)")
+        }
+    }
+
+    @Test func theTitleLeadsWhenThereIsOne() {
+        #expect(StructuredTextExport.spokenRow(title: "Trip", body: "- Socks") == "Trip. Bullet, Socks")
+    }
+
+    /// A note that is nothing but a title says the title, not "Trip. ".
+    @Test func aTitleWithoutABodyStandsAlone() {
+        #expect(StructuredTextExport.spokenRow(title: "Trip", body: "") == "Trip")
+    }
+
+    /// Leading blank lines go, exactly as they do on screen — otherwise a note that opens with a
+    /// newline announces an empty first line before it says anything.
+    @Test func leadingBlankLinesAreDropped() {
+        #expect(StructuredTextExport.spokenRow(title: nil, body: "\n\n- Socks") == "Bullet, Socks")
+    }
+
+    /// The pipes never reach the ear either — the half of this that was already fixed, kept fixed.
+    @Test func aTableIsSpokenAsItsCells() {
+        let row = StructuredTextExport.spokenRow(title: nil, body: "| Day | Park |\n| --- | --- |\n| 1 | Kenai |")
+        #expect(!row.contains("|"))
+        #expect(row.contains("Kenai"))
+    }
+}

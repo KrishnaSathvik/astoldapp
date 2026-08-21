@@ -14,6 +14,14 @@ enum DebugLaunch {
     static var openSampleEditor: Bool { args.contains("-openSampleEditor") }
     /// Seeds a single note exercising every structure type — for verifying live-styled rendering.
     static var seedStructuredDemo: Bool { args.contains("-seedStructuredDemo") }
+    /// Seeds a note holding a pasted table — for verifying how a table reads on the page.
+    static var seedTableDemo: Bool { args.contains("-seedTableDemo") }
+    /// Seeds one note far longer than a screen — for verifying that the writing toolbar never covers
+    /// the line being written. Pair with `-openSeededNote -caretAtEnd`.
+    static var seedLongNote: Bool { args.contains("-seedLongNote") }
+    /// Opens the note with the body focused and the caret on its last line, which is the state the
+    /// floating toolbar has to stay out of the way of.
+    static var caretAtEnd: Bool { args.contains("-caretAtEnd") }
     /// Seeds a single spoken, code-switched note — for the multilingual voice screenshot.
     static var seedVoiceDemo: Bool { args.contains("-seedVoiceDemo") }
     /// Opens the newest seeded note in the editor — the *existing note* (reading) path.
@@ -49,6 +57,53 @@ enum DebugLaunch {
                 Rest of the days రోడ్డు మీద ఉంటాం — that way we actually see something.
                 """
                 context.insert(Note(title: "Alaska trip idea", body: body))
+                try? context.save()
+            }
+            return
+        }
+
+        if seedLongNote {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let paragraphs = (1...14).map {
+                    "Line \($0) of a long note that keeps going and going so the page has to scroll well past one screen."
+                }
+                let body = paragraphs.joined(separator: "\n\n") + "\n\nthen build the actual day-by-day itinerary only after we've loc"
+                context.insert(Note(title: "Alaska planning", body: body))
+                try? context.save()
+            }
+            return
+        }
+
+        if seedTableDemo {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let body = """
+                Pasted from the trip plan.
+
+                | Day | Date | Schedule | Park | Travel | Overnight | Meals |
+                | --- | --- | --- | --- | --- | --- | --- |
+                | 1 | Sat | Arrive & settle | — | 20 min | Anchorage | Dinner out |
+                | 2 | Sun | Kenai Fjords cruise | Kenai Fjords | 5 hrs | Seward | Packed lunch |
+                | 3 | Mon | Recovery day | — | 2 hrs | Anchorage | Groceries |
+
+                Costs so far.
+
+                | Expense | 2 people |
+                | --- | --- |
+                | 9 nights lodging | $2,400-$3,600 |
+                | Rental car | $1,500-$2,000 |
+                | Kenai Fjords cruise | $525-$625 |
+                | Estimated total | $6,425-$9,275 |
+
+                Still need to book the flight.
+
+                One more paragraph so the page scrolls past a table and the card has to travel with the
+                words rather than stay where it was first drawn.
+
+                And another, for the same reason.
+                """
+                context.insert(Note(title: "Alaska itinerary", body: body))
                 try? context.save()
             }
             return

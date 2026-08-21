@@ -395,9 +395,12 @@ enum DocumentAction {
     static func toggleChecklistEdit(text: String, sourceOffset: Int) -> TextEdit? {
         let line = MarkupDocument(text).line(containingSource: sourceOffset)
         guard case .checklist(let checked) = line.kind else { return nil }
+        // Never inside the hidden marker, even when the caller asked from the line's start. Both
+        // editor callers pass a caret of their own and never read this, but a primitive that hands
+        // back the one offset the editor guarantees a caret never occupies is a trap for the next one.
         return TextEdit(range: NSRange(location: line.sourceRange.location, length: line.markerLength),
                         string: BlockKind.checklist(checked: !checked).marker,
-                        selection: NSRange(location: sourceOffset, length: 0))
+                        selection: NSRange(location: max(sourceOffset, line.contentStart), length: 0))
     }
 
     /// Return: continues a list/checklist, exits an empty list item, otherwise `nil` (default behavior).

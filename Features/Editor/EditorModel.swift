@@ -21,6 +21,17 @@ final class EditorModel {
         set { note.title = newValue; scheduleSave() }
     }
 
+    /// The writer has left the title field. This is the one moment its value may be tidied: a title of
+    /// nothing but spaces becomes no title at all (RULES.md §5), and anything else is kept exactly as
+    /// typed. Doing this *during* editing is what used to swallow every space (see `storedTitle`).
+    func endTitleEditing() {
+        let stored = storedTitle(note.title)
+        if note.title != stored {
+            note.title = stored
+            scheduleSave()
+        }
+    }
+
     var body: String {
         get { note.body }
         set { note.body = newValue; scheduleSave() }
@@ -87,6 +98,7 @@ final class EditorModel {
         if note.isEmptyDraft {
             discard()
         } else {
+            note.title = storedTitle(note.title)
             canonicalizeBody()
             try? store.save(note)
         }

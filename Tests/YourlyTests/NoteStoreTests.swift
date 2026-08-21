@@ -54,11 +54,25 @@ struct NoteStoreTests {
         #expect(try store.recent(limit: 40, before: nil).count == 1)
     }
 
-    @Test func saveNormalizesTitle() throws {
+    /// The store writes the note down; it does not edit it. An autosave lands 400 ms after a
+    /// keystroke — mid-word, mid-space — so a store that normalized on its way past was rewriting a
+    /// title while it was still being typed. `EditorModel.endTitleEditing` and `finish()` do that
+    /// tidying now, at the only moment there is nothing left to interrupt (changed 2026-08-20).
+    @Test func saveKeepsTheTitleExactlyAsTheWriterLeftIt() throws {
+        let store = try makeStore()
+        let n = try store.createDraft(); n.body = "b"; n.title = "Alaska "
+        try store.save(n)
+        #expect(n.title == "Alaska ")
+    }
+
+    @Test func aWhitespaceOnlyTitleStillCountsAsNoTitle() throws {
         let store = try makeStore()
         let n = try store.createDraft(); n.body = "b"; n.title = "   "
         try store.save(n)
-        #expect(n.title == nil)
+        // Untouched in storage, and still not a title anywhere it is read or judged.
+        #expect(n.title == "   ")
+        #expect(normalizedTitle(n.title) == nil)
+        #expect(storedTitle(n.title) == nil)
     }
 }
 

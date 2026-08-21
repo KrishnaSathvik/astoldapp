@@ -304,3 +304,23 @@ struct BlockStyleTests {
         #expect(viaEdit.selection == whole.selection)
     }
 }
+
+/// Where the caret is decides what the writing toolbar shows — and the title is the case that matters,
+/// because structure does not apply to a title and voice does not write into one.
+struct WritingToolbarModeTests {
+
+    @Test func theBodyHavingTheCaretShowsTheWritingControls() {
+        #expect(WritingToolbar.Mode.resolve(bodyFocused: true, titleFocused: false) == .writing)
+    }
+
+    @Test func readingOffersOnlyTheMicrophone() {
+        #expect(WritingToolbar.Mode.resolve(bodyFocused: false, titleFocused: false) == .voiceOnly)
+    }
+
+    @Test func theTitleHidesTheBarEntirely() {
+        #expect(WritingToolbar.Mode.resolve(bodyFocused: false, titleFocused: true) == .hidden)
+        // Focus crossing from title to body can report both for one runloop turn; the title still wins,
+        // so the bar never flickers into view over a title being typed.
+        #expect(WritingToolbar.Mode.resolve(bodyFocused: true, titleFocused: true) == .hidden)
+    }
+}

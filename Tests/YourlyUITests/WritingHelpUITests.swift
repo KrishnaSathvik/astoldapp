@@ -115,12 +115,20 @@ final class WritingHelpUITests: XCTestCase {
 
     // MARK: The menu
 
-    func testStyleMenuOffersTheSixStructuresAndNothingElse() {
+    /// The six structures, and nothing else, reachable from the writing toolbar. Three of them are now
+    /// buttons on the bar itself and three live behind `Aa` (moved 2026-08-20); what matters to the
+    /// rule is the vocabulary, which is unchanged.
+    func testTheToolbarOffersTheSixStructuresAndNothingElse() {
         let app = launchedApp()
         tap(app.buttons["New note"], "New note")
-        tap(app.buttons["Style"], "Style")
 
-        for name in ["Paragraph", "Heading", "Subheading", "Bulleted List", "Numbered List", "Checklist"] {
+        for name in ["Bulleted List", "Numbered List", "Checklist"] {
+            XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 8),
+                          "the writing toolbar is missing \(name)")
+        }
+
+        tap(app.buttons["Style"], "Style")
+        for name in ["Paragraph", "Heading", "Subheading"] {
             XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 8),
                           "the Style menu is missing \(name)")
         }

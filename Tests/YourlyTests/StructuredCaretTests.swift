@@ -137,3 +137,93 @@ struct StructuredCaretTests {
         #expect(Caret.rect(heading).height == Caret.rect(plain).height)
     }
 }
+
+// Where the caret is *allowed to be*.
+//
+// A hidden marker is not a place. `textViewDidChangeSelection` snapped a caret that landed strictly
+// inside one, but a caret at the marker's own first character — the line start — was left alone, and
+// that is exactly where UIKit puts it: a tap anywhere in the 28-point list gutter resolves to the
+// line start, and so does moving one character right from the end of the line above. Typing there
+// inserted in front of the marker, which turned "- Eggs" into the literal text "X- Eggs": the bullet
+// gone and an internal marker on screen, which RULES.md §4 forbids outright.
+
+@MainActor
+struct StructuredCaretGuardTests {
+
+    /// The line start of a structured line is inside its marker, and the caret may not stay there.
+    @Test(arguments: ["Intro\n- Eggs", "Intro\n1. Eggs", "Intro\n- [ ] Eggs", "- Eggs\n- Milk"])
+    func aCaretAtAStructuredLineStartSnapsPastTheMarker(source: String) {
+        let doc = MarkupDocument(source)
+        let line = doc.lines[doc.lines.count - 1]
+        let (tv, coordinator) = Caret.editor(source, caret: line.contentStart)
+
+        tv.selectedRange = NSRange(location: line.sourceRange.location, length: 0)
+        coordinator.textViewDidChangeSelection(tv)
+
+        #expect(tv.selectedRange.location == line.contentStart,
+                "the caret is sitting in front of a hidden marker")
+    }
+
+    /// The gesture that puts it there: a tap in the list gutter, which is where a writer aims when
+    /// they mean to add a word at the front of an item.
+    @Test(arguments: [CGFloat(0), 2, 10, 20, 27])
+    func aTapInTheListGutterLeavesTheCaretAfterTheMarker(x: CGFloat) {
+        let source = "Intro\n- Eggs"
+        let (tv, coordinator) = Caret.editor(source, caret: 0)
+        let line = MarkupDocument(source).lines[1]
+
+        let glyph = tv.layoutManager.glyphIndexForCharacter(at: line.sourceRange.location)
+        let fragment = tv.layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        let position = tv.closestPosition(to: CGPoint(x: x, y: fragment.midY))!
+        tv.selectedRange = NSRange(location: tv.offset(from: tv.beginningOfDocument, to: position), length: 0)
+        coordinator.textViewDidChangeSelection(tv)
+
+        #expect(tv.selectedRange.location == line.contentStart)
+    }
+
+    /// A selection that *starts* at a line start means "this whole line", marker included — copying a
+    /// complete item depends on it (`StructuredTextExport.copyRange`). Only a caret is snapped.
+    @Test func aSelectionStartingAtALineStartKeepsItsMarker() {
+        let source = "Intro\n- Eggs"
+        let (tv, coordinator) = Caret.editor(source, caret: 0)
+
+        tv.selectedRange = NSRange(location: 6, length: 6)
+        coordinator.textViewDidChangeSelection(tv)
+
+        #expect(tv.selectedRange == NSRange(location: 6, length: 6))
+    }
+
+    /// And the second lock, for the ways text arrives without a caret ever being drawn — a drag and
+    /// drop into the gutter, dictation, an autocorrect replacement. An insertion aimed in front of a
+    /// marker happens after it instead, and the item keeps its structure.
+    @Test(arguments: [("Intro\n- Eggs", "Intro\n- XEggs"),
+                      ("Intro\n1. Eggs", "Intro\n1. XEggs"),
+                      ("Intro\n- [ ] Eggs", "Intro\n- [ ] XEggs")])
+    func textAimedInFrontOfAMarkerLandsInsideTheItem(source: String, expected: String) {
+        let (tv, coordinator) = Caret.editor(source, caret: 0)
+        let line = MarkupDocument(source).lines[1]
+
+        let handled = coordinator.textView(
+            tv,
+            shouldChangeTextIn: NSRange(location: line.sourceRange.location, length: 0),
+            replacementText: "X"
+        )
+
+        #expect(handled == false, "the insertion should have been redirected, not let through")
+        #expect(tv.text == expected)
+        #expect(MarkupDocument(tv.text).lines[1].kind == line.kind, "the item lost its structure")
+    }
+
+    /// The ordinary case still goes through UIKit untouched: nothing about typing inside an item
+    /// changes, and one keystroke stays one of UIKit's own coalesced undo steps.
+    @Test func typingInsideAnItemIsStillTheTextViewsOwnEdit() {
+        let source = "Intro\n- Eggs"
+        let (tv, coordinator) = Caret.editor(source, caret: 8)
+
+        let handled = coordinator.textView(tv, shouldChangeTextIn: NSRange(location: 8, length: 0),
+                                           replacementText: "X")
+
+        #expect(handled == true)
+        #expect(tv.text == source, "the text view had not applied the edit yet")
+    }
+}

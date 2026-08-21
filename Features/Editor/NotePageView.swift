@@ -147,12 +147,21 @@ final class NotePageView: UIView {
         placeholderLabel.isHidden = placeholderText.isEmpty || !textView.text.isEmpty
     }
 
+    /// The container width the text was last styled for. Table columns are measured against the width
+    /// the page actually has, and the first styling pass runs before this view has been laid out — so
+    /// without this, a table was measured against a width of zero and never got its columns.
+    private var styledWidth: CGFloat = 0
+
+    /// Debug tracing marks the first layout pass only: the cold one is the question, and a page that
+    /// lays out sixty times a second would drown the timeline it is meant to explain.
+    private var hasLaidOut = false
+
     override func layoutSubviews() {
         super.layoutSubviews()
         textView.frame = bounds
 
         let width = bounds.width
-        let headerHeight = header.height(forWidth: width)
+        let headerHeight = EditorTrace.measure("first header measurement") { header.height(forWidth: width) }
         let bodyTop = headerHeight + NotePageHeaderView.gap + Self.bodyTopInset
         // Guarded: assigning the inset invalidates layout, so writing it unconditionally would loop.
         if textView.textContainerInset.top != bodyTop {
@@ -160,10 +169,20 @@ final class NotePageView: UIView {
         }
 
         header.frame = CGRect(x: 0, y: 0, width: width, height: headerHeight)
+        if !hasLaidOut { hasLaidOut = true; EditorTrace.mark("first page layout") }
+        let containerWidth = textView.textContainer.size.width
+        if abs(containerWidth - styledWidth) > 0.5 {
+            styledWidth = containerWidth
+            (textView.delegate as? BodyTextView.Coordinator)?.restyle(textView)
+        }
         placeholderLabel.frame = CGRect(
             x: 0, y: bodyTop, width: width,
             height: ceil(placeholderLabel.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
         )
+        // Table cards sit over the space their source lines reserved, and that space moves whenever the
+        // header's height does — a longer title, a larger text size — so their positions settle here,
+        // in the same pass as the words they belong to.
+        (textView.delegate as? BodyTextView.Coordinator)?.tableCards.position(in: textView)
         syncChromeToScroll()
     }
 
@@ -214,9 +233,10 @@ final class NotePageView: UIView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        if window != nil { EditorTrace.mark("didMoveToWindow") }
         guard window != nil, let work = pendingArrival else { return }
         pendingArrival = nil
-        afterNavigationTransition(work)
+        afterNavigationTransition({ EditorTrace.mark("navigation transition complete"); work() })
     }
 
     /// The view controller presenting this page — the SwiftUI host. `transitionCoordinator` resolves

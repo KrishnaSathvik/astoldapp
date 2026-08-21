@@ -13,8 +13,10 @@ final class SwiftDataNoteStore: NoteStore {
         return note
     }
 
+    /// Saves what the note currently holds. It does **not** normalize the title: an autosave lands
+    /// mid-sentence, 400 ms after a keystroke, and a store that edits the words on its way past is a
+    /// store that types for the user. `EditorModel` normalizes when the edit ends instead.
     func save(_ note: Note) throws {
-        note.title = normalizedTitle(note.title)
         note.updatedAt = .now
         if context.hasChanges { try context.save() }
     }

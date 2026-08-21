@@ -172,3 +172,49 @@ struct StructuredEditorUndoTests {
         #expect(harness.source == "Intro.")
     }
 }
+
+/// The claim the Cmd-Z UI test makes, asserted where no keystroke has to be delivered to make it.
+///
+/// `testUndoingAMultiLineConversionTakesOneStep` drives undo through XCUITest's `typeKey`, whose HID
+/// delivery this project has repeatedly measured as unreliable — so when it goes red it cannot tell a
+/// broken editor from a dropped keystroke. This suite settles the product half of that question: the
+/// toolbar's own action, one undo, exactly the text that was there before.
+@MainActor
+struct MultiLineConversionUndoTests {
+
+    private func converted(to style: BlockStyle) -> StructuredEditorUndoTests.Harness {
+        let harness = StructuredEditorUndoTests.Harness("Milk\nEggs\nBread", caret: 0)
+        harness.textView.selectedRange = NSRange(location: 0, length: (harness.source as NSString).length)
+        let actions = BodyEditorActions()
+        harness.coordinator.bind(actions, to: harness.textView)
+        actions.apply(style)
+        return harness
+    }
+
+    @Test(arguments: [BlockStyle.bullet, .numbered, .checklist])
+    func oneTapOnTheToolbarIsExactlyOneUndoStep(style: BlockStyle) {
+        let harness = converted(to: style)
+        #expect(harness.source != "Milk\nEggs\nBread", "the conversion did not happen")
+
+        harness.undo()
+
+        #expect(harness.source == "Milk\nEggs\nBread",
+                "one undo did not restore all three lines")
+        #expect(harness.canUndo == false, "the conversion left more than one step on the stack")
+    }
+
+    @Test func redoPutsTheConversionBack() {
+        let harness = converted(to: .bullet)
+        let converted = harness.source
+        harness.undo()
+        harness.redo()
+        #expect(harness.source == converted)
+    }
+
+    @Test func theWholeSelectionSurvivesTheConversion() {
+        let harness = converted(to: .bullet)
+        #expect(harness.source == "- Milk\n- Eggs\n- Bread")
+        #expect(harness.textView.selectedRange.length > 0,
+                "a writer who picked the wrong style has to be able to pick another without reselecting")
+    }
+}

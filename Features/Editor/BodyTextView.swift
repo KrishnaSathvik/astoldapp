@@ -60,12 +60,20 @@ struct BodyTextView: UIViewRepresentable {
     var title: Binding<String> = .constant("")
     /// Two-way keyboard focus for the title, exactly as `isFocused` is for the body.
     var titleFocused: Binding<Bool> = .constant(false)
+    /// Called when a table in the note is tapped while reading — the note hands over the block, and
+    /// the editor opens the reader on it. Never while editing: a tap in a table you are writing is a
+    /// tap that places the caret, exactly as it does in any other line.
+    var openTable: (TableBlock) -> Void = { _ in }
+    /// Called when the title field gives up first responder — the only moment the title may be tidied
+    /// (`EditorModel.endTitleEditing`). Nothing touches those characters while they are being typed.
+    var titleEditingEnded: () -> Void = {}
     /// Shown while the body is empty. Empty means "no placeholder".
     var bodyPlaceholder: String = ""
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> NotePageView {
+        EditorTrace.mark("makeUIView")
         let tv = StructuredTextView.make()
         tv.delegate = context.coordinator
         tv.backgroundColor = .clear
@@ -84,7 +92,8 @@ struct BodyTextView: UIViewRepresentable {
         tv.showsVerticalScrollIndicator = false
         tv.showsHorizontalScrollIndicator = false
         tv.text = text
-        context.coordinator.restyle(tv)
+        EditorTrace.mark("text assigned (\(text.utf16.count) UTF-16)")
+        EditorTrace.measure("first restyle") { context.coordinator.restyle(tv) }
 
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         tap.delegate = context.coordinator
@@ -166,7 +175,9 @@ struct BodyTextView: UIViewRepresentable {
             DispatchQueue.main.async {
                 guard isFocused, isEditable, !tv.isFirstResponder else { return }
                 page.afterNavigationTransition {
-                    if isFocused, isEditable, !tv.isFirstResponder { tv.becomeFirstResponder() }
+                    if isFocused, isEditable, !tv.isFirstResponder {
+                        EditorTrace.measure("body becomeFirstResponder") { tv.becomeFirstResponder() }
+                    }
                 }
             }
         } else if (!isFocused || !isEditable), tv.isFirstResponder {
@@ -181,7 +192,13 @@ struct BodyTextView: UIViewRepresentable {
     /// The title half of `updateUIView`: value, enabled state, keyboard appearance, and the same
     /// two-way focus dance the body does one method up.
     private func updateTitle(_ field: UITextField, context: Context) {
-        if field.text != title.wrappedValue { field.text = title.wrappedValue }
+        // While the writer is in the field, the field's own text is the truth. Assigning `text` here
+        // would not only overwrite what they typed, it would move the caret to the end of whatever
+        // replaced it — so a model that echoed back a normalized title turned a space into a jump.
+        // Outside an edit, the model is the truth and the field follows it.
+        if !field.isFirstResponder, field.text != title.wrappedValue {
+            field.text = title.wrappedValue
+        }
         if field.isEnabled != isEditable { field.isEnabled = isEditable }
         if field.keyboardAppearance != keyboardAppearance {
             field.keyboardAppearance = keyboardAppearance
@@ -191,7 +208,9 @@ struct BodyTextView: UIViewRepresentable {
         let wantsFocus = titleFocused.wrappedValue
         if isEditable, wantsFocus, !field.isFirstResponder {
             DispatchQueue.main.async {
-                if wantsFocus, !field.isFirstResponder { field.becomeFirstResponder() }
+                if wantsFocus, !field.isFirstResponder {
+                    EditorTrace.measure("title becomeFirstResponder") { field.becomeFirstResponder() }
+                }
             }
         } else if (!wantsFocus || !isEditable), field.isFirstResponder {
             DispatchQueue.main.async {
@@ -212,12 +231,29 @@ struct BodyTextView: UIViewRepresentable {
         private var isApplyingEdit = false
         init(_ parent: BodyTextView) { self.parent = parent }
 
-        /// Re-applies structure styling (attributes only — never characters), preserving the selection.
+        /// The table cards on the page, and where they sit. Reading only — see `TableCardPresenter`.
+        let tableCards = TableCardPresenter()
+
+        /// Re-applies structure styling (attributes only — never characters), preserving the selection,
+        /// and rebuilds the table cards the new styling made room for.
+        ///
+        /// Tables are the one structure with two presentations, chosen by who is looking. A note being
+        /// **read** hides its table source and puts a real `TableCardView` over the space it reserved.
+        /// A note being **edited** shows the source, because the caret has to be somewhere the writer
+        /// can see it, and because a table is edited the way every other line in the note is — as text
+        /// (RULES.md §7, amended 2026-08-21).
         func restyle(_ tv: UITextView) {
             let selection = tv.selectedRange
-            StructuredTextStyler.apply(to: tv.textStorage, textColor: UIColor(Color.ds.textPrimary))
+            let heights = tableCards.plan(for: tv, showsCards: !tv.isFirstResponder)
+            StructuredTextStyler.apply(to: tv.textStorage,
+                                       textColor: UIColor(Color.ds.textPrimary),
+                                       secondaryColor: UIColor(Color.ds.textTertiary),
+                                       availableWidth: tv.textContainer.size.width
+                                           - tv.textContainer.lineFragmentPadding * 2,
+                                       tableCards: heights)
             tv.selectedRange = selection
             syncTypingAttributes(tv)
+            tableCards.sync(in: tv, palette: .ds)
         }
 
         /// Keeps the text view's `typingAttributes` describing the line the caret is actually on.
@@ -327,6 +363,23 @@ struct BodyTextView: UIViewRepresentable {
             // Our own structural edit is already the user's single action; let it through untouched.
             guard !isApplyingEdit else { return true }
 
+            // The second lock on "a marker is not a place" (the first is in `textViewDidChangeSelection`).
+            // Text can arrive at a range no caret was ever drawn at — a drag and drop into the gutter,
+            // dictation, an autocorrect replacement — and an insertion in front of a marker would push
+            // the marker into the middle of the line, where it stops being hidden and starts being
+            // words. It happens *after* the marker instead, and the item keeps its structure.
+            if range.length == 0, !text.isEmpty, tv.markedTextRange == nil {
+                let line = MarkupDocument(tv.text).line(containingSource: range.location)
+                if line.markerLength > 0, range.location < line.contentStart {
+                    let caret = NSRange(location: line.contentStart, length: 0)
+                    let edit = text == "\n"
+                        ? (DocumentAction.returnEdit(text: tv.text, selection: caret)
+                            ?? DocumentAction.insertEdit(text, selection: caret))
+                        : DocumentAction.insertEdit(text, selection: caret)
+                    if apply(edit, to: tv) { return false }
+                }
+            }
+
             // Return: continue/exit lists via the shared operation.
             if text == "\n" {
                 if let edit = DocumentAction.returnEdit(text: tv.text, selection: range), apply(edit, to: tv) {
@@ -373,13 +426,22 @@ struct BodyTextView: UIViewRepresentable {
 
         func textViewDidChangeSelection(_ tv: UITextView) {
             // Never let the caret land inside a hidden marker — snap it to the line's content start.
+            //
+            // *Inside* includes the marker's own first character, which is the line start. That is not
+            // a pedantic boundary: it is exactly where UIKit puts the caret. Marker glyphs have zero
+            // advancement, so every point in the 28-point list gutter resolves to the line start, and
+            // so does moving one character right from the end of the line above. Left alone there, the
+            // next keystroke inserted *in front of* the marker — "- Eggs" became the literal text
+            // "X- Eggs", the bullet gone and an internal marker on screen (RULES.md §4).
+            //
+            // A caret only. A selection that starts at a line start means "this whole line", marker
+            // included, and snapping it forward would shear the structure off a copied item
+            // (`StructuredTextExport.copyRange`).
             let selection = tv.selectedRange
             if selection.length == 0 {
                 let doc = MarkupDocument(tv.text)
                 let line = doc.line(containingSource: selection.location)
-                if line.markerLength > 0,
-                   selection.location > line.sourceRange.location,
-                   selection.location < line.contentStart {
+                if line.markerLength > 0, selection.location < line.contentStart {
                     let snapped = NSRange(location: line.contentStart, length: 0)
                     if snapped != tv.selectedRange { tv.selectedRange = snapped }
                 }
@@ -390,11 +452,17 @@ struct BodyTextView: UIViewRepresentable {
             if parent.selectedRange != tv.selectedRange { parent.selectedRange = tv.selectedRange }
         }
 
+        /// Taking the keyboard puts the tables back into words. The restyle has to happen *here* rather
+        /// than from the focus binding: SwiftUI would deliver that a runloop turn later, and the writer
+        /// would spend that turn looking at a card their caret was already inside.
         func textViewDidBeginEditing(_ tv: UITextView) {
+            restyle(tv)
             if !parent.isFocused { parent.isFocused = true }
         }
 
+        /// Giving it up puts them back into tables.
         func textViewDidEndEditing(_ tv: UITextView) {
+            restyle(tv)
             if parent.isFocused { parent.isFocused = false }
         }
 
@@ -420,6 +488,7 @@ struct BodyTextView: UIViewRepresentable {
 
         func textFieldDidEndEditing(_ field: UITextField) {
             if parent.titleFocused.wrappedValue { parent.titleFocused.wrappedValue = false }
+            parent.titleEditingEnded()
         }
 
         /// Done on the title hands the caret to the body — the note's title is one line, and the next
@@ -431,22 +500,122 @@ struct BodyTextView: UIViewRepresentable {
 
         // MARK: Checkbox tapping
 
-        /// The checklist line whose checkbox gutter contains `point` (in text-view coordinates), if any.
-        private func checkboxLine(in tv: UITextView, at point: CGPoint) -> MarkupDocument.Line? {
+        /// The table whose preview card is under `point` — the only tap on a table that means something
+        /// other than "put the caret here". See `TableCardPresenter.previewTable(at:in:)`.
+        private func tappedTable(in tv: UITextView, at point: CGPoint) -> TableBlock? {
+            guard !tv.isFirstResponder else { return nil }
+            return tableCards.previewTable(at: point, in: tv)
+        }
+
+        /// How many lines either side of the touched one can hold a box whose band reaches it. The
+        /// band grows at most `checkboxHitHeight / 2` past a line's own centre and no line of type is
+        /// shorter than about twelve points, so two would do; four is free and leaves room for the
+        /// smallest text sizes. Bounded on purpose — a tap must not walk a ten-thousand-line note.
+        private static let hitSearchRadius = 4
+
+        /// The checklist item a touch at `point` (in text-view coordinates) operates, if any.
+        ///
+        /// **Horizontally** the target is `StructuredTextStyle.checkboxHitWidth`, wider than the
+        /// gutter the box is drawn in. Only a checklist line ever claims that width — every other kind
+        /// returns `nil` here — so a bullet's gutter is unchanged and a tap in a paragraph still just
+        /// places the caret.
+        ///
+        /// **Vertically** the target is `checkboxHitHeight`, which is taller than the line it belongs
+        /// to. Neighbouring bands therefore overlap, and an overlap is only acceptable if it resolves
+        /// to exactly one item every time. It does, by two rules:
+        ///
+        ///  1. A touch inside an item's **own line** is that item's. Lines never overlap each other,
+        ///     so this alone answers every touch in a run of adjacent checklist items: the item you
+        ///     touched is the item that ticks, and no neighbour can take it.
+        ///  2. Anywhere else — the space above the first line, below the last, or inside a line that
+        ///     is not a checklist item — the nearest item wins, measured to the edge of its line.
+        ///     Ties go to the earlier item, so the boundary between two bands is decided rather than
+        ///     left to floating-point luck.
+        ///
+        /// How far a band may reach into a *neighbouring* line is capped at half that line's height,
+        /// unless the neighbour is another checklist item — overlapping one of those costs nothing,
+        /// because rule 1 has already given that space away. So the paragraph under a checklist keeps
+        /// the half of itself its own words sit in, and stays tappable for a caret.
+        func checkboxLine(in tv: UITextView, at point: CGPoint) -> MarkupDocument.Line? {
             let inset = tv.textContainerInset
             let local = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
-            guard local.x <= StructuredTextStyle.listIndent else { return nil }
+            guard local.x <= StructuredTextStyle.checkboxHitWidth else { return nil }
+
+            let doc = MarkupDocument(tv.text)
+            guard !doc.lines.isEmpty else { return nil }
             let glyphIndex = tv.layoutManager.glyphIndex(for: local, in: tv.textContainer)
             let charIndex = tv.layoutManager.characterIndexForGlyph(at: glyphIndex)
-            let line = MarkupDocument(tv.text).line(containingSource: charIndex)
-            if case .checklist = line.kind { return line }
-            return nil
+            let anchor = doc.lineIndex(containingSource: charIndex)
+
+            var winner: (line: MarkupDocument.Line, distance: CGFloat)?
+            let first = max(0, anchor - Self.hitSearchRadius)
+            let last = min(doc.lines.count - 1, anchor + Self.hitSearchRadius)
+            for index in first...last {
+                guard case .checklist = doc.lines[index].kind,
+                      let line = lineExtent(at: index, in: doc, of: tv),
+                      hitBand(around: line, at: index, in: doc, of: tv).contains(local.y)
+                else { continue }
+                // Zero inside the line itself, which is what makes rule 1 fall out of rule 2 rather
+                // than needing a case of its own. Strictly less-than keeps the earlier item on a tie.
+                let distance = max(line.lowerBound - local.y, local.y - line.upperBound, 0)
+                if winner == nil || distance < winner!.distance {
+                    winner = (doc.lines[index], distance)
+                }
+            }
+            return winner?.line
+        }
+
+        /// The vertical span a line occupies, in text-container coordinates. Line *fragments* rather
+        /// than glyph bounds, because fragments tile the page without gaps — so no touch inside the
+        /// text falls between two lines, and two adjacent spans meet exactly at their shared edge.
+        private func lineExtent(at index: Int, in doc: MarkupDocument,
+                                of tv: UITextView) -> ClosedRange<CGFloat>? {
+            let glyphs = tv.layoutManager.glyphRange(forCharacterRange: doc.lines[index].sourceRange,
+                                                    actualCharacterRange: nil)
+            guard glyphs.length > 0 else { return nil }
+            var minY = CGFloat.greatestFiniteMagnitude
+            var maxY = -CGFloat.greatestFiniteMagnitude
+            tv.layoutManager.enumerateLineFragments(forGlyphRange: glyphs) { rect, _, _, _, _ in
+                minY = Swift.min(minY, rect.minY)
+                maxY = Swift.max(maxY, rect.maxY)
+            }
+            guard maxY > minY else { return nil }
+            return minY...maxY
+        }
+
+        /// `line` grown towards `checkboxHitHeight`, taking only what the lines either side can spare.
+        private func hitBand(around line: ClosedRange<CGFloat>, at index: Int, in doc: MarkupDocument,
+                             of tv: UITextView) -> ClosedRange<CGFloat> {
+            let deficit = StructuredTextStyle.checkboxHitHeight - (line.upperBound - line.lowerBound)
+            guard deficit > 0 else { return line }
+            let reach = deficit / 2
+            let top = line.lowerBound - allowance(reach, towards: index - 1, in: doc, of: tv)
+            let bottom = line.upperBound + allowance(reach, towards: index + 1, in: doc, of: tv)
+            return top...bottom
+        }
+
+        /// How far a band may grow towards the line at `index`.
+        private func allowance(_ reach: CGFloat, towards index: Int, in doc: MarkupDocument,
+                               of tv: UITextView) -> CGFloat {
+            // Off the end of the note. The space above the first line and below the last belongs to no
+            // line at all, so the band may have as much of it as it needs.
+            guard doc.lines.indices.contains(index) else { return reach }
+            // A checklist neighbour is free to overlap: a touch inside its own line is already its own
+            // by rule 1, so reaching across the boundary can never take a touch away from it.
+            if case .checklist = doc.lines[index].kind { return reach }
+            guard let neighbour = lineExtent(at: index, in: doc, of: tv) else { return reach }
+            return min(reach, (neighbour.upperBound - neighbour.lowerBound) / 2)
         }
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+            guard let tv = gesture.view as? UITextView else { return }
+            if let table = tappedTable(in: tv, at: gesture.location(in: tv)) {
+                parent.openTable(table)
+                return
+            }
             // While recording, the transcript owns the anchor and the body is not editable — a tick then
             // has nowhere to be applied, so the tap does nothing rather than half-happening.
-            guard let tv = gesture.view as? UITextView, tv.isEditable,
+            guard tv.isEditable,
                   let line = checkboxLine(in: tv, at: gesture.location(in: tv)),
                   let edit = DocumentAction.toggleChecklistEdit(text: tv.text, sourceOffset: line.sourceRange.location)
             else { return }
@@ -459,7 +628,7 @@ struct BodyTextView: UIViewRepresentable {
             guard gestureRecognizer === checkboxTap,
                   let tv = gestureRecognizer.view as? UITextView else { return true }
             let point = gestureRecognizer.location(in: tv)
-            return checkboxLine(in: tv, at: point) != nil
+            return checkboxLine(in: tv, at: point) != nil || tappedTable(in: tv, at: point) != nil
         }
     }
 }
@@ -539,9 +708,75 @@ final class StructuredTextView: UITextView {
             // VoiceOver behavior is unaffected.
             if ProcessInfo.processInfo.arguments.contains("-exposeSourceForTests") { return text }
             #endif
-            return MarkupDocument(text).visibleText()
+            return StructuredTextExport.spokenText(text)
         }
         set { super.accessibilityValue = newValue }
+    }
+
+    /// One action per checklist item, so a box can be ticked without a touch landing in its gutter.
+    ///
+    /// VoiceOver could already *hear* the state — `spokenText` reads "Unchecked, Call Ravi" — but the
+    /// only way to change it was a tap inside a 44-point band, which is not something a rotor can aim.
+    /// Hearing a control you cannot work is not access to it (RULES.md §4).
+    ///
+    /// Each action **names its own item** ("Check Call Ravi") rather than acting on wherever a cursor
+    /// happens to be. A note being read has no caret at all — it opens with the keyboard down — so a
+    /// caret-relative action would have ticked the first line of the note every time. Naming the item
+    /// also means the reader hears which box they are about to change before they change it.
+    ///
+    /// The names are the **visible** words. The stored `- [ ] ` is never spoken, here or anywhere else.
+    override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
+        get {
+            // While a recording owns the anchor the body is not editable and a tick has nowhere to be
+            // applied — exactly the state in which `handleTap` does nothing rather than half-happen.
+            guard isEditable else { return super.accessibilityCustomActions }
+            let ns = text as NSString
+            let actions: [UIAccessibilityCustomAction] = MarkupDocument(text).lines.compactMap { line in
+                guard case .checklist(let checked) = line.kind else { return nil }
+                let content = ns.substring(with: NSRange(location: line.contentStart,
+                                                        length: line.contentLength))
+                let offset = line.sourceRange.location
+                let name = (checked ? "Uncheck " : "Check ") + Self.spoken(content)
+                return UIAccessibilityCustomAction(name: name) {
+                    [weak self] _ in self?.toggleChecklistItem(atSource: offset) ?? false
+                }
+            }
+            return actions.isEmpty ? super.accessibilityCustomActions : actions
+        }
+        set { super.accessibilityCustomActions = newValue }
+    }
+
+    /// Ticks the item starting at `offset`, through the same edit a tap on its box makes.
+    ///
+    /// Deliberately the *same* call — `DocumentAction.toggleChecklistEdit` into the coordinator's edit
+    /// primitive — and not a second implementation that happens to agree today. One undo step, the
+    /// caret left where it was, and the two ways of reaching a checkbox cannot drift apart.
+    ///
+    /// The offset is captured when the actions are built, and stays valid: both markers are the same
+    /// length, so ticking a box moves nothing after it, and an offset that has stopped being a
+    /// checklist line makes `toggleChecklistEdit` return `nil` rather than edit the wrong text.
+    private func toggleChecklistItem(atSource offset: Int) -> Bool {
+        guard isEditable,
+              let coordinator = delegate as? BodyTextView.Coordinator,
+              let edit = DocumentAction.toggleChecklistEdit(text: text, sourceOffset: offset),
+              coordinator.apply(edit, to: self, caret: selectedRange)
+        else { return false }
+        // `accessibilityValue` is derived from the text, so it is already right — but a value nobody
+        // is told about is a change the reader has to go and look for. Say the item and its new state,
+        // in the same words the note itself would have used.
+        let line = MarkupDocument(text).line(containingSource: offset)
+        let content = (text as NSString).substring(with: NSRange(location: line.contentStart,
+                                                                length: line.contentLength))
+        UIAccessibility.post(notification: .announcement,
+                             argument: line.kind.spokenMarker + Self.spoken(content))
+        return true
+    }
+
+    /// An item's words, or what to call one that has none. Pressing Return on a checklist leaves an
+    /// item holding nothing but its marker, and "Check " — a verb and a silence — names nothing a
+    /// reader could choose between.
+    private static func spoken(_ content: String) -> String {
+        content.trimmingCharacters(in: .whitespaces).isEmpty ? "item" : content
     }
 }
 

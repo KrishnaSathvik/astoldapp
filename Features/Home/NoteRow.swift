@@ -8,11 +8,12 @@ struct NoteRow: View {
     let note: Note
     private var displayTitle: String? { normalizedTitle(note.title) }
 
-    /// The body as the reader sees it — hidden structure markers replaced by the visible ones (RULES.md
-    /// §4) — with leading blank lines dropped, so a note that starts with a newline still shows its first
-    /// real words instead of an empty preview.
+    /// The body as the reader sees it — hidden structure markers replaced by the visible ones, and a
+    /// table by its cells rather than the pipes it is stored in (RULES.md §4) — with leading blank
+    /// lines dropped, so a note that starts with a newline still shows its first real words instead of
+    /// an empty preview.
     private var previewText: String {
-        String(StructuredTextExport.plainText(note.body).drop(while: { $0 == "\n" || $0 == "\r" }))
+        String(StructuredTextExport.previewText(note.body).drop(while: { $0 == "\n" || $0 == "\r" }))
     }
 
     var body: some View {
@@ -41,8 +42,10 @@ struct NoteRow: View {
         .accessibilityLabel(accessibilityText)
     }
 
+    /// What the row *says*, which is not what it shows. `previewText` draws the glyphs a reader would
+    /// have seen on the page; a reader who cannot see them needs the words those glyphs stand for
+    /// (`StructuredTextExport.spokenRow`).
     private var accessibilityText: String {
-        if let displayTitle { return "\(displayTitle). \(previewText)" }
-        return previewText
+        StructuredTextExport.spokenRow(title: displayTitle, body: note.body)
     }
 }

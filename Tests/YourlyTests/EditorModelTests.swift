@@ -25,7 +25,10 @@ struct EditorModelTests {
         #expect(try liveNotes(context).isEmpty)
     }
 
-    @Test func finishPersistsRealNoteAndNormalizesTitle() throws {
+    /// Leaving the editor tidies a title of nothing but spaces into no title. It does not tidy a real
+    /// one: those characters are the writer's (RULES.md §5, and `storedTitle`). This test asserted the
+    /// opposite until 2026-08-20, which is how the trimming that ate the space bar got in.
+    @Test func finishPersistsRealNoteAndKeepsItsTitleExactly() throws {
         let context = try makeContext()
         let note = Note(); context.insert(note)
         let model = EditorModel(note: note, context: context)
@@ -34,8 +37,108 @@ struct EditorModelTests {
         model.finish()
         let notes = try liveNotes(context)
         #expect(notes.count == 1)
-        #expect(notes.first?.title == "Alaska")
+        #expect(notes.first?.title == "  Alaska  ")
         #expect(notes.first?.body == "real content")
+    }
+
+    // MARK: The space bar
+    //
+    // Typing "Alaska Road Trip" used to lose its spaces on a real device. Every space is trailing
+    // whitespace until the next letter arrives; the 400 ms autosave landed in that gap, the store
+    // trimmed the title on its way to disk, the model published the shorter value back, and the text
+    // field's caret jumped back over the space that had just been typed. Pause between words — which
+    // is exactly when a person thinks — and the space bar looked broken.
+
+    @Test func anAutosaveNeverTakesBackTheSpaceJustTyped() throws {
+        let context = try makeContext()
+        let note = Note(); context.insert(note)
+        let model = EditorModel(note: note, context: context)
+        model.body = "content"
+        model.title = "Alaska "
+        model.flush()                       // what the debounced autosave runs
+        #expect(model.title == "Alaska ")   // was "Alaska" before 2026-08-20
+        #expect(note.title == "Alaska ")
+    }
+
+    @Test func aTitleTypedThroughAPauseIsTheTitleTyped() throws {
+        let context = try makeContext()
+        let note = Note(); context.insert(note)
+        let model = EditorModel(note: note, context: context)
+        model.body = "content"
+        for keystroke in ["Alaska", "Alaska ", "Alaska Road", "Alaska Road ", "Alaska Road Trip"] {
+            model.title = keystroke
+            model.flush()   // an autosave between every keystroke: the worst case, not the usual one
+        }
+        #expect(model.title == "Alaska Road Trip")
+    }
+
+    @Test func consecutiveAndLeadingSpacesSurviveTyping() throws {
+        let context = try makeContext()
+        let note = Note(); context.insert(note)
+        let model = EditorModel(note: note, context: context)
+        model.body = "content"
+        model.title = "My  Summer Plan"
+        model.flush()
+        #expect(model.title == "My  Summer Plan")
+        model.title = " Alaska"
+        model.flush()
+        #expect(model.title == " Alaska")
+    }
+
+    @Test func backspacingBackToASpaceLeavesTheSpace() throws {
+        let context = try makeContext()
+        let note = Note(); context.insert(note)
+        let model = EditorModel(note: note, context: context)
+        model.body = "content"
+        for keystroke in ["Alaska Road", "Alaska Roa", "Alaska Ro", "Alaska R", "Alaska "] {
+            model.title = keystroke
+            model.flush()
+        }
+        #expect(model.title == "Alaska ")
+    }
+
+    @Test func aTitleWrittenWithASpaceSurvivesSaveAndReopen() throws {
+        let context = try makeContext()
+        let note = Note(); context.insert(note)
+        let model = EditorModel(note: note, context: context)
+        model.title = "Alaska "
+        model.body = "content"
+        model.finish()
+
+        let reopened = try #require(try liveNotes(context).first)
+        #expect(reopened.title == "Alaska ")
+        #expect(EditorModel(note: reopened, context: context).title == "Alaska ")
+    }
+
+    /// Leaving the title for the body is the one moment the value may be tidied — and even then, only
+    /// a title that is nothing but whitespace becomes no title at all.
+    @Test func leavingTheTitleFieldTidiesOnlyAnEmptyTitle() throws {
+        let context = try makeContext()
+        let note = Note(); context.insert(note)
+        let model = EditorModel(note: note, context: context)
+        model.body = "content"
+
+        model.title = "Alaska "
+        model.endTitleEditing()
+        #expect(note.title == "Alaska ")
+
+        model.title = "   "
+        model.endTitleEditing()
+        #expect(note.title == nil)
+    }
+
+    @Test func titleThenBodyThenTitleAgainKeepsEveryCharacter() throws {
+        let context = try makeContext()
+        let note = Note(); context.insert(note)
+        let model = EditorModel(note: note, context: context)
+        model.title = "Alaska "
+        model.endTitleEditing()
+        model.body = "Day 1"
+        model.flush()
+        model.title = "Alaska Road Trip"
+        model.flush()
+        #expect(model.title == "Alaska Road Trip")
+        #expect(model.body == "Day 1")
     }
 
     @Test func editingDoesNotChangeCreatedAt() throws {

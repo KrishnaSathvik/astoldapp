@@ -126,7 +126,7 @@ Make the app feel like writing directly onto the screen.
 ### Rules
 
 - no visible border
-- no formatting toolbar — the Style menu is one contextual toolbar item, not a bar (Milestone B2)
+- one floating writing toolbar above the keyboard, and nothing above the page (Milestone B2)
 - no rich text controls
 - body uses comfortable line height
 - normal iOS text editing behavior remains available
@@ -596,7 +596,19 @@ them (`RULES.md` §4).
 - A pasted structure may take over the caret's line only when nothing of that line survives the paste;
   otherwise the first pasted line joins as words, with its marker dropped. A marker MUST NEVER land
   mid-line, where it would read as literal text.
-- Home and search previews render the same visible text, never the markers.
+- Home and search previews render the same visible text, never the markers — and never a table's
+  pipe source either (`StructuredTextExport.previewText`, 2026-08-21). A table is drawn on the note
+  page and nowhere else, so every other surface that shows a note *as text* shows its cells, joined
+  by `·`, with the delimiter row gone. Home read `| Day | Date | Schedule |` out of `body` until
+  then. The pasteboard is deliberately not part of this: copying a table still yields its source.
+- **The caret may never sit in front of a hidden marker, not only inside one** (2026-08-21). Marker
+  glyphs have zero advancement, so every point in the list gutter — and one step right from the end
+  of the line above — resolves to the line start, which is the marker's own first character. Left
+  there, the next keystroke inserted *before* the marker and `- Eggs` became the literal text
+  `X- Eggs`: the bullet gone and an internal marker on screen. The caret snaps to the line's first
+  visible character, and text arriving at a range no caret was drawn at — a drag and drop, dictation,
+  an autocorrect replacement — lands after the marker rather than in front of it. A *selection*
+  starting at a line start is untouched: it means "this whole line", marker included.
 
 **Pasting in from another app** (`Core/Editor/RichPasteImport.swift`, `RichPasteHTML.swift`,
 `RichPasteMarkdown.swift`, `RichPasteDocument.swift`). Each reader translates its own format into one
@@ -612,7 +624,7 @@ structure As Told already has wins:
 | 1 | `com.astold.structured-text` | the exact source — As Told → As Told is unchanged |
 | 2 | `public.html` | `<h1>` → Heading, `<h2>`…`<h6>` → Subheading, `<ul>`/`<ol>` → Bulleted/Numbered, a list item with a checkbox → Checklist, `<table>` → its cells |
 | 3 | `public.rtf` / flat RTFD | list structure, from the attributed string's own `NSTextList` |
-| 4 | a declared Markdown type | `#` → Heading, `##`…`######` → Subheading, `-`/`1.` → Bulleted/Numbered, `- [ ]` → Checklist, a pipe table → its cells (`RichPasteMarkdown`) |
+| 4 | a declared Markdown type | `#` → Heading, `##`…`######` → Subheading, `-`/`1.` → Bulleted/Numbered, `- [ ]` → Checklist, a pipe table — a header row **with the delimiter row under it** — → its cells (`RichPasteMarkdown`) |
 | 5 | plain text | the text, pasted exactly as it arrived |
 
 - **A list item is a list item however it is wrapped.** Google Docs, Notion, and GitHub all write
@@ -620,6 +632,11 @@ structure As Told already has wins:
   the item, so the bullet, number, or checkbox survives it. (Until 2026-08-20 it did not: the nested
   block reset the item's kind, which flattened those lists — and, for an `<ol>` or a task list, could
   leave the whole document with no stated structure at all and drop it to plain text.)
+- **A Markdown table needs a Markdown table's evidence** (2026-08-21). A table opens on a header row
+  with the delimiter row directly under it, and nowhere else. Reading any line that merely held a pipe
+  as a table meant `Option A | Option B` came back as a two-cell grid *and* As Told wrote the
+  `| --- | --- |` under it — a whole line the source never showed, which is precisely the inventing
+  that paste must not do. A line that opens no table is read as the prose, heading, or list item it is.
 - **Markdown is read only when the pasteboard says it is Markdown** (`net.daringfireball.markdown`,
   `public.markdown`, `text/markdown`). A declared format states its structure exactly as HTML does.
   Text that merely *looks* like Markdown is text and reaches step 5 untouched — `**Overview**` in a
@@ -652,21 +669,44 @@ structure As Told already has wins:
   typed and stays one. (Rich text used to reduce `☐`/`☑` to a bullet, discarding the one thing worth
   keeping; fixed 2026-08-20.)
 - **This adds no formatting capability.** It only lets paste reach the structures the editor already ships.
-- **Tables are not redesigned, but they are written down readably.** A table is not a structure As Told
-  can edit, and building a table editor before release would be a new feature, not a better paste
-  (`RULES.md` §7). Every cell and every row survives, in source order; how they are written depends on
-  what still reads on a phone (`RichPasteDocument`):
+- **A table stays a table** (changed 2026-08-21; this previously converted wide tables into one record
+  per row). Imports canonicalize to Markdown pipe rows in `body` — ordinary text, no new model, no
+  migration — and `TableBlock` reads them back:
 
-  | The table | What the note gets |
-  |---|---|
-  | one column | the cells, one per line — there is no grid to draw |
-  | up to three columns, short cells | the row as it was: `Park \| Day` |
-  | four or more columns, or cells longer than 60 characters | one record per row, each cell on its own line under the column heading the source gave it (`Day 2` / `Park: Kenai Fjords` / `Overnight: Anchorage`), records separated by a blank line |
+  ```
+  | Day | Date | Park         | Overnight |
+  | --- | ---  | ---          | ---       |
+  | 1   | Sat  | —            | Anchorage |
+  ```
 
-  The record form is the only one that moves anything, and it moves *layout*: a cell's text and the
-  heading above it are both the source's, printed in the source's order. An eight-column itinerary is
-  unreadable as a row on a 390-point screen, and a `| --- | --- |` rule is punctuation for a renderer
-  As Told does not have.
+  - **Reading the note, the table is a real view.** Its source lines give up their glyphs and keep only
+    their height, and a `TableCardView` sits in the space they reserved: a heading row, content-aware
+    column widths, quiet horizontal separators, wrapping cells, no vertical rules. Not one pipe and no
+    delimiter row reaches the screen. The characters never move — copy still yields the source, search
+    still finds the words — they are simply not what is drawn. A Home row, a search result, and
+    VoiceOver get the cells too, by the same rule and for the same reason (see Copy, cut & paste).
+  - **Column widths come from the words**, not from an equal share. A column of labels and a column of
+    prices settles at roughly 70/30 because that is what the cells measure; `Day` holds one digit and
+    gets a digit's worth of the screen. A column whose every value is a quantity is right-aligned, so a
+    total lines up on its digits (`TableCardLayout`).
+  - **A table too wide for the phone is previewed, not crushed**: the first three columns of the first
+    three rows, and a line saying what is held back — "9 rows · 7 columns … View Table ›". Tapping it
+    opens `TableReaderView`: real columns, a heading row that stays put while the rows travel under it,
+    horizontal scrolling, cells that wrap rather than truncate, and VoiceOver that reads each cell with
+    the column it belongs to ("Park, Kenai Fjords"). It reads and never writes. The cut-off is whether
+    the words fit at this width and text size — never a column count someone picked.
+  - **Writing the note, the table is its source.** Taking the keyboard puts every table back into pipe
+    rows, under a quiet container; giving it up puts the tables back. A table being edited is text being
+    edited, and the caret has to be somewhere the writer can see it (RULES.md §7).
+  - **Rejected: re-spacing the source in place.** Laying the pipes out as invisible tab stops and
+    painting a hairline over the delimiter row *looked* like rendering and was not: stray closing pipes,
+    a banded grey block, columns aligned by spacing, and a caret that could land inside what looked like
+    a rendered table. Hiding some characters and repositioning others is not a presentation
+    (2026-08-21).
+  - **A one-column table is just its cells**, one per line. There is no grid to draw.
+  - **Known limitation:** a cell whose source held several lines arrives as one line of words. Every
+    word survives; the line breaks inside that cell do not, because a row is a line and a line cannot
+    contain one.
 - HTML that carries no structure at all is *declined*, and the system's own plain-text paste runs — the
   shortest path is also the most faithful one.
 - The HTML is read by a small tag-level parser rather than `NSAttributedString(documentType: .html)`:
@@ -782,9 +822,20 @@ discover that As Told has structure. Promoted into V1 on 2026-08-19 (`RULES.md` 
 **As built** (`Core/Editor/BlockStyle.swift`, `Features/Editor/EditorView.swift`,
 `Features/Editor/BodyTextView.swift`):
 
-- One contextual **`Aa`** toolbar item (SF Symbol `textformat`, accessibility label "Style")
-  offering exactly: Paragraph · Heading · Subheading · Bulleted List · Numbered List · Checklist, then
-  a divider, then **Writing help…**. (`Normal` → **Paragraph**, 2026-08-19 — it is the explicit way out
+- **One floating writing toolbar** above the keyboard (`WritingToolbar`, moved out of the navigation
+  bar 2026-08-20): `Aa` · `•` · `1.` · `☑` · microphone, on a `.thinMaterial` capsule below the note.
+  The three list structures apply in one tap; `Aa` (SF Symbol `textformat`, accessibility label
+  "Style") holds Paragraph · Heading · Subheading, then a divider, then **Writing help…**.
+  - **It reflects the caret.** The button for the block the caret sits in is shown selected, so the bar
+    is a quiet indicator of the current structure as well as a way to change it. A selection spanning
+    two structures shows none of them selected — it is not any one of them.
+  - **Pressing Return out of a list changes what is selected**, immediately, which is how leaving a
+    list becomes visible rather than merely felt.
+  - **Where it is, and is not:** present while the body has the caret; microphone only while reading;
+    absent entirely while the **title** has the keyboard, because structure does not apply to a title
+    and voice does not write into one; replaced by the recording panel while recording.
+  - **Multi-line selection** converts every line it touches, as one undo step — the same
+    `DocumentAction.setBlockKind` call the menu always made. (`Normal` → **Paragraph**, 2026-08-19 — it is the explicit way out
   of a list, so it is named after what you are going back to. Title case and `Bullet list` →
   **Bulleted List**, 2026-08-20 — Apple's wording for these rows. The *spoken* command stays
   "bullet list": a label and a phrase are different jobs, RULES.md §1.) It routes through the existing `setBlockKind` primitive — no second
@@ -827,6 +878,32 @@ timeline, with an explicit "Remove from Keeping" that returns it to its natural 
 - Evaluate **only after** structured writing exists and users actually keep active drafts around.
 - NOT folders, favorites, tags, or a workspace. The timeline stays the primary organization model.
 
+## Milestone D — A note can remind you (post-1.0, decided 2026-08-20, unbuilt)
+
+Reminders were on the "not planned" list below until 2026-08-20, when they were reclassified as a
+**guarded post-V1 exception**. Full rules and preconditions: `RULES.md` §7, "Post-V1 — note reminders".
+Summary of the product shape:
+
+Sometimes something you write needs to come back at the right time. When a writer explicitly asks for
+a reminder **in their own words** — typed or spoken — As Told may notice it and offer to schedule one
+local notification that opens that exact note. Nothing is scheduled without a tap.
+
+- One-time reminders only. Explicit or relative date/time. Multiple per note.
+- Typing and voice converge on one detector; paste does not trigger it.
+- Detection is local, deterministic, and conservative — **false positives are worse than false
+  negatives**. An ambiguous phrase ("sometime next week", "later") produces no suggestion, and a past-tense
+  sentence ("I paid rent yesterday") must never trigger. A time is never invented on the user's behalf.
+- The suggestion is ephemeral: it appears, is answered, and leaves. No reminders screen, no chip parked
+  in the editor, no task state anywhere.
+- English first; Telugu / Hindi / mixed phrasing verified with real speakers before their phrase lists lock.
+
+**Not** a task manager: no tab, dashboard, inbox, projects, priorities, completion, recurrence, snooze,
+or calendar sync. Checklists gain nothing from this — a reminder attaches to a note, never to an item.
+
+**Sequencing:** begins only after the V1 release gate (`RULES.md` §8) is complete. Reopening schema
+migration, permissions, notification lifecycle, navigation, and deletion semantics during release
+validation is how a finished V1 becomes another month of regressions.
+
 ---
 
 # Later / explicitly not planned now
@@ -836,7 +913,6 @@ timeline, with an explicit "Remove from Keeping" that returns it to its natural 
 - collaborative notes
 - templates
 - tasks
-- reminders
 - streaks
 - mood tracking
 - generative prompts

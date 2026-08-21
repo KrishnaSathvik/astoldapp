@@ -5,13 +5,23 @@ import SwiftUI
 struct SearchResultRow: View {
     let note: Note
 
-    /// The body as the reader sees it: hidden structure markers never surface in a result (RULES.md §4).
-    private var bodyText: String { StructuredTextExport.plainText(note.body) }
+    /// The body as the reader sees it: neither hidden structure markers nor a table's pipe source ever
+    /// surfaces in a result (RULES.md §4).
+    private var bodyText: String { StructuredTextExport.previewText(note.body) }
 
     private var titleLine: String {
         normalizedTitle(note.title)
             ?? bodyText.split(separator: "\n", omittingEmptySubsequences: true).first.map(String.init)
             ?? bodyText
+    }
+
+    /// Title, excerpt, date — the three things the row draws, in the ear's spelling.
+    ///
+    /// The label used to be title and date alone, so the excerpt on screen was never spoken and an
+    /// untitled result announced its first line as `☐ Call Ravi`. A row that shows three things and
+    /// says two of them is a row VoiceOver reads differently from everyone else.
+    private var accessibilityText: String {
+        "\(StructuredTextExport.spokenRow(title: normalizedTitle(note.title), body: note.body)). \(dateText)"
     }
 
     private var dateText: String {
@@ -38,6 +48,6 @@ struct SearchResultRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(titleLine). \(dateText)")
+        .accessibilityLabel(accessibilityText)
     }
 }

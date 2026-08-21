@@ -1,4 +1,6 @@
 import XCTest
+import UIKit
+import UniformTypeIdentifiers
 
 /// Interactive verification of the structured-editor wiring that unit tests can't reach: typed
 /// list continuation and checkbox tapping. Both launch with `-exposeSourceForTests` so the body text
@@ -71,10 +73,15 @@ final class StructuredEditorUITests: XCTestCase {
         field.typeText("- [ ] Task")
         XCTAssertEqual(field.value as? String, "- [ ] Task", "typing '- [ ] ' should create a checklist item")
 
-        // The checkbox is in the first line's left gutter — tap just inside the text view, top-left.
-        let frame = field.frame
+        // The checkbox is in the first body line's left gutter, and that line is not at the top of the
+        // text view: the date and title scroll with the body, so the view reserves room for them in its
+        // own top inset (`NotePageView`). Measure down from the title instead — gap, the body's top
+        // inset, and half a line of body text — so this aims at the box rather than at a number that
+        // happened to work.
+        let title = app.textFields["Title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "the note's title did not appear")
         app.coordinate(withNormalizedOffset: .zero)
-            .withOffset(CGVector(dx: frame.minX + 8, dy: frame.minY + 20))
+            .withOffset(CGVector(dx: field.frame.minX + 8, dy: title.frame.maxY + 30))
             .tap()
 
         let toggled = expectation(for: NSPredicate(format: "value == %@", "- [x] Task"), evaluatedWith: field)
@@ -102,6 +109,73 @@ final class StructuredEditorUITests: XCTestCase {
         tapMenuItem("Paste", in: app, longPressing: field)
         let restored = expectation(for: NSPredicate(format: "value == %@", "- [ ] Call Ravi"), evaluatedWith: field)
         wait(for: [restored], timeout: 5)
+    }
+
+    /// Pasting from another app: the HTML flavor of the clipboard says which lines were headings and
+    /// which were list items, and As Told keeps that structure instead of flattening the paste. The
+    /// words are not touched — only markers the source's own markup asked for are added.
+    func testPastingHTMLFromAnotherAppKeepsItsStructure() {
+        UIPasteboard.general.setItems([[
+            UTType.html.identifier: "<h1>Shopping</h1><ul><li>Eggs</li><li>Milk</li></ul>",
+            UTType.utf8PlainText.identifier: "Shopping\nEggs\nMilk"
+        ]])
+
+        let app = XCUIApplication()
+        app.launchArguments = ["-openSampleEditor", "-exposeSourceForTests", "-resetStore"]
+        app.launch()
+
+        let field = body(app)
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "editor body did not appear")
+        field.tap()
+        tapMenuItem("Paste", in: app, longPressing: field)
+
+        let pasted = expectation(for: NSPredicate(format: "value == %@", "# Shopping\n- Eggs\n- Milk"),
+                                 evaluatedWith: field)
+        wait(for: [pasted], timeout: 5)
+    }
+
+    /// A clipboard that carries only plain text is inserted character-for-character, and receives no
+    /// structure from the rich-clipboard path — however much a short first line looks like a title.
+    func testPastingPlainTextFromAnotherAppIsInsertedVerbatim() {
+        UIPasteboard.general.setItems([[
+            UTType.utf8PlainText.identifier: "The Best Angle Right Now\nInstead of asking"
+        ]])
+
+        let app = XCUIApplication()
+        app.launchArguments = ["-openSampleEditor", "-exposeSourceForTests", "-resetStore"]
+        app.launch()
+
+        let field = body(app)
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "editor body did not appear")
+        field.tap()
+        tapMenuItem("Paste", in: app, longPressing: field)
+
+        let pasted = expectation(
+            for: NSPredicate(format: "value == %@", "The Best Angle Right Now\nInstead of asking"),
+            evaluatedWith: field
+        )
+        wait(for: [pasted], timeout: 5)
+    }
+
+    /// The accepted limitation, pinned so it stays a known one rather than a surprise: `body` *is* the
+    /// canonical source, so plain text whose lines already open with `# ` or `- ` renders as a heading and
+    /// a bullet once pasted. What this test guarantees is the part that matters — the characters arrive
+    /// exactly as they were copied, with nothing added, removed, or reworded (RULES.md §4).
+    func testPastedPlainTextWithLeadingMarkersArrivesCharacterForCharacter() {
+        let copied = "# this isn't a heading\n- this isn't a bullet"
+        UIPasteboard.general.setItems([[UTType.utf8PlainText.identifier: copied]])
+
+        let app = XCUIApplication()
+        app.launchArguments = ["-openSampleEditor", "-exposeSourceForTests", "-resetStore"]
+        app.launch()
+
+        let field = body(app)
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "editor body did not appear")
+        field.tap()
+        tapMenuItem("Paste", in: app, longPressing: field)
+
+        let pasted = expectation(for: NSPredicate(format: "value == %@", copied), evaluatedWith: field)
+        wait(for: [pasted], timeout: 5)
     }
 
     /// Everything outside the structured editor — here the plain title field, and by the same route any
@@ -220,7 +294,16 @@ final class StructuredEditorUITests: XCTestCase {
     }
 
     /// Opens the contextual `Aa` menu and picks a structure.
+    /// Applies a style the way a writer does. The three list structures are one tap on the writing
+    /// toolbar; Paragraph, Heading, and Subheading are a tap deeper, behind `Aa` (moved out of the
+    /// navigation bar 2026-08-20).
     private func applyStyle(_ name: String, in app: XCUIApplication) {
+        if ["Bulleted List", "Numbered List", "Checklist"].contains(name) {
+            let button = app.buttons[name]
+            XCTAssertTrue(button.waitForExistence(timeout: 8), "\(name) was not on the writing toolbar")
+            button.tap()
+            return
+        }
         let control = app.buttons["Style"]
         XCTAssertTrue(control.waitForExistence(timeout: 8), "the Style control was not available")
         control.tap()

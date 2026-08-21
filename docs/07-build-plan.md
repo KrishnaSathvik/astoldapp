@@ -413,12 +413,12 @@ known-good baseline — anything lower means something was lost, not that the ba
 ```bash
 xcodegen generate   # the .xcodeproj is generated and gitignored; regenerate after adding files
 
-# 380 unit tests
+# 625 unit tests
 xcodebuild test -project Yourly.xcodeproj -scheme Yourly \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:YourlyTests
 
-# 41 UI tests, including the three accessibility audits
+# 59 UI tests, including the three accessibility audits
 xcodebuild test -project Yourly.xcodeproj -scheme Yourly \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:YourlyUITests -parallel-testing-enabled NO

@@ -371,7 +371,7 @@ Start writing...
 
 - title has no box
 - body has no box
-- no toolbar — `Aa` is one contextual item, not a formatting bar (RULES.md §1, §4)
+- no bar above the page — the writing controls float below it, above the keyboard (RULES.md §1, §4)
 - no Save
 - no word count
 - keyboard behaves natively
@@ -386,7 +386,8 @@ The same screen serves both; only the arriving focus differs.
 | | New note | Existing note |
 |---|---|---|
 | On open | body focused, keyboard up | reading — nothing focused, no keyboard |
-| Trailing toolbar | `Aa` (Style) | nothing |
+| Trailing toolbar | nothing | nothing |
+| Floating writing toolbar | `Aa` · `•` · `1.` · `☑` · mic | mic only |
 | Starting to edit | already editing | tap title or body; caret lands where tapped |
 
 A new note takes focus **after the push finishes**, never during it. Focus taken mid-transition puts
@@ -466,6 +467,52 @@ Style
 
 Source markers (`# `, `- `, `1. `, `- [ ] `) stay in `body` and are hidden at the glyph layer; the
 visible bullet, number, and checkbox are drawn in a 28pt left gutter.
+
+**A checkbox's target is wider and taller than its gutter** (`StructuredTextStyle.checkboxHitWidth`
+and `checkboxHitHeight`, 44pt each, 2026-08-21). The box stays small — a marker is not the sentence —
+but the region that ticks it has to clear the 44pt floor below, and ticking items off is the whole
+point of a checklist. The overhang past the gutter covers roughly the item's first character, and only
+a checklist line claims it.
+
+Height is the harder half, and it is settled in the *layout* rather than in the hit test. **A checklist
+row is 44pt tall** (`StructuredTextStyle.checklistLeading`, 2026-08-21): the extra leading over a line
+of body type is split evenly above and below, so the words stay centred in their row and a run of items
+keeps an even rhythm. It is derived from the body line height, so it tracks Dynamic Type and falls to
+zero on its own at the text sizes where a line already clears 44pt.
+
+No hit test could have done this. A middle item's target is its own line — two adjacent controls cannot
+both hold 44pt of exclusive space at a 24pt pitch, and every attempt to overlap them either steals
+touches from a neighbour or collapses back to the line height. Measured: every item in a run now gets
+exactly 44.0pt, and paragraphs, bullets, and numbered items are untouched at 24.3pt. A checkbox is a
+control and takes what §4 asks for; the rest of the page is prose, which does not —
+`onlyChecklistLinesCarryTheExtraLeading` holds that line.
+
+The hit test still bounds the target and still grows it where the row is somehow short, in
+`BodyTextView.Coordinator.checkboxLine(in:at:)`, by two rules:
+
+1. **A touch inside an item's own line is that item's.** Lines never overlap, so a stack of adjacent
+   items cannot steal from each other: the item you touched is the item that ticks.
+2. **Anywhere else the nearest item wins**, measured to the edge of its line, ties to the earlier one.
+   A band may take at most half of a neighbouring line that is *not* a checklist item, so the
+   paragraph under a checklist keeps the half its own words sit in and stays tappable for a caret.
+
+Bounding it was itself a fix: the previous hit test resolved *every* point above the text to the first
+line, so a tap on the note's date row ticked the first item of the note
+(`aTouchInThePagesHeaderSpaceIsNotAToggle`, 2026-08-21).
+
+**VoiceOver can work a checklist, not only hear one** (`StructuredTextView.accessibilityCustomActions`,
+2026-08-21). Each item carries an action of its own, named with the words the reader sees — "Check Call
+Ravi", "Uncheck Book hotel" — because a note being read has no caret for a cursor-relative action to
+act on. Activating one makes the same `DocumentAction.toggleChecklistEdit` a tap on the gutter makes,
+through the same edit primitive: one undo step, the caret left where it was, and no second
+implementation to drift. The new state is announced in the note's own words ("Checked, Call Ravi").
+
+**VoiceOver is told the state, not the glyph** (`StructuredTextExport.spokenText`, 2026-08-21). The
+body's accessibility value used to be the note with every marker stripped, so `☐ Call Ravi` and
+`☑ Call Ravi` read identically and a bullet read as a paragraph — state carried by a drawn mark and
+nothing else, which the Color rule below forbids. Each item now names itself: "Bullet, Eggs",
+"Unchecked, Call Ravi", "Checked, Book hotel". A number reads as its own ordinal, a heading as its
+words, and a table as its cells rather than the pipes it is stored in.
 
 | Role | Type |
 |---|---|
@@ -871,6 +918,31 @@ Never use only a dot color/state without another accessible label/trait when sta
 ---
 
 # 15. Theme behavior
+
+## Table card (reading a note)
+
+A table that arrived by paste is *read* as a table and *written* as its source. The card is the reading
+half — see `docs/02-features.md` and RULES.md §7.
+
+Editorial, not spreadsheet. The point of reference is a table set in a book, not a grid in a
+spreadsheet: what separates two columns is the space between them.
+
+| Element | Treatment |
+|---|---|
+| Container | `SurfaceElevated`, 12 pt corner radius, hairline border at `TextTertiary` 35% |
+| Heading row | body size / semibold, `TextPrimary`, over a `TextPrimary` 4.5% tint |
+| Rule under headings | one hairline, full card width |
+| Rows | body size, `TextPrimary`, hairline separators between rows — **no zebra striping** |
+| Vertical rules | none, ever |
+| Cell padding | 10 pt vertical, 14 pt from the card edge, 14 pt between columns |
+| Column widths | measured from the cells, slack shared in the same proportion — never equal shares |
+| Alignment | left, except a column whose every value is a quantity, which is right-aligned |
+| Wrapping | cells wrap; only a *preview* truncates, and only because the full grid is one tap away |
+| Preview footer | footnote, "9 rows · 7 columns" at `TextSecondary`, "View Table ›" at `Accent` |
+| Air around the card | 10 pt above and below, inside the space the note reserves for it |
+
+Never on the card: pipes, a delimiter row, a caret, sorting, resizing, or any control at all. A card that
+can be typed into has become the spreadsheet RULES.md §7 excludes.
 
 ## User-selectable (Profile → Settings → Theme)
 

@@ -77,21 +77,19 @@ enum RichPasteDocument {
 
     // MARK: Tables
 
-    /// A table wider than this many columns will not fit a phone's line, however it is punctuated.
-    private static let widestReadableRow = 3
-    /// Nor will one whose cells are sentences rather than values.
-    private static let longestReadableCell = 60
-
-    /// A table is not a structure As Told can edit, and building a table editor before release would be
-    /// a new app rather than a better paste (RULES.md §7). Every cell and its order survive; how they
-    /// are written down depends on what will still be readable at 390 points wide:
+    /// A table is preserved **as a table**: canonical Markdown pipe rows, in `body`, where they stay
+    /// ordinary text that can be read, edited, searched, and copied like any other line.
     ///
-    ///  - one column  → the cells, one per line. There is no grid to draw.
-    ///  - narrow      → `Day | Park | Overnight`, which reads as the row it was.
-    ///  - wide        → one record per row, each cell on its own line under the column's own heading.
+    /// This replaced the row-record fallback on 2026-08-21. Records preserved every cell but destroyed
+    /// the reason the author reached for a table — a table is a claim that these values belong to each
+    /// other, and reading `Park: Kenai Fjords` twelve times does not restore it. What reads the rows
+    /// back as a grid is `TableBlock`; what this owes it is a shape it can recognize without guessing,
+    /// which is why the delimiter row is written even when the source marked no header.
     ///
-    /// The wide form is the only one that reorders anything, and it reorders *layout*, never words: a
-    /// cell's text and the heading above it are both the source's, printed in the source's order.
+    /// One limitation, and it is the line-based storage format's rather than this method's: a cell
+    /// whose source held several lines arrives here as one line of words (the reader joined them with
+    /// spaces). Every word survives; the line breaks inside that cell do not, because a row is a line
+    /// and a line cannot contain one.
     private static func written(_ table: ImportedTable) -> [ImportedLine] {
         let width = table.rows.map(\.count).max() ?? 0
         guard width > 0 else { return [] }
@@ -99,43 +97,27 @@ enum RichPasteDocument {
             row + Array(repeating: "", count: width - row.count)
         }
 
+        // One column is a list of values, not a grid, and pipes around it would be furniture.
         if width == 1 {
             return padded.enumerated().compactMap { index, row in
                 row[0].isEmpty ? nil : ImportedLine(kind: .paragraph, text: row[0], startsElement: index == 0)
             }
         }
 
-        let isWide = width > widestReadableRow
-            || padded.contains { $0.contains { $0.count > longestReadableCell } }
-        guard isWide else {
-            return padded.enumerated().map { index, row in
-                // Interior gaps are kept — a blank cell is a column with nothing in it, and the row has
-                // to still line up — but a row that simply ends early ends, rather than trailing bars.
-                var cells = row
-                while cells.last?.isEmpty == true { cells.removeLast() }
-                return ImportedLine(kind: .paragraph,
-                                    text: cells.joined(separator: " | "),
-                                    startsElement: index == 0)
-            }
-        }
-
-        let headers = table.headerRow.map { padded[$0] }
         var lines: [ImportedLine] = []
-        for (index, row) in padded.enumerated() where index != table.headerRow {
-            // The first cell names the record — "Day 2" rather than a bare "2" — because a column
-            // heading and the value under it belong together, and a lone number names nothing.
-            let title = [headers?.first ?? "", row[0]]
-                .filter { !$0.isEmpty }
-                .joined(separator: " ")
-            lines.append(ImportedLine(kind: .paragraph, text: title, startsElement: true))
-            for column in 1..<width where !row[column].isEmpty {
-                let heading = headers?[column] ?? ""
+        for (index, row) in padded.enumerated() {
+            lines.append(ImportedLine(kind: .paragraph,
+                                      text: TableBlock.row(row),
+                                      startsElement: index == 0))
+            // The rule under the headings. A source that named no header row still gets one after the
+            // first line: it is what makes the block a table rather than lines that contain pipes.
+            if index == (table.headerRow ?? 0) {
                 lines.append(ImportedLine(kind: .paragraph,
-                                          text: heading.isEmpty ? row[column] : "\(heading): \(row[column])",
+                                          text: TableBlock.delimiter(width: width),
                                           startsElement: false))
             }
         }
-        return lines.filter { !$0.text.isEmpty }
+        return lines
     }
 }
 
