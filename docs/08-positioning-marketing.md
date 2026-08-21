@@ -345,8 +345,14 @@ Outstanding:
 - [x] Audit alt text — every screenshot carries a descriptive alt; only the brand mark and the CTA
       feather are `alt=""`
 - [ ] Capture a blank-editor shot and a dark-editor shot (see `website/README.md` § Known gaps)
-- [ ] Publish a real support/privacy contact. No mailbox exists on `astold.app`, so no page prints
-      one — App Store review will require a working support contact before submission
+- [x] **Support contact for App Store Connect** — `krishnasathvikm@gmail.com`. This satisfies the
+      contact App Review requires, and it is deliberately **not** published on the site: it is a
+      personal mailbox, and a plain-text address on a crawled page is scraped within days.
+      `SUPPORT_EMAIL` in `website/lib/site.ts` therefore stays `null`, and `/support`, `/privacy`
+      and `/terms` keep the self-service answer (the FAQ, plus the app's own Writing help).
+      The public **Support URL** on the listing is `https://astold.app/support`.
+- [ ] Move support to a mailbox on `astold.app` and set `SUPPORT_EMAIL` — then all three pages
+      become a real `mailto:` from one constant, and the personal address comes out of the loop
 - [ ] JSON-LD only where the type genuinely applies (`SoftwareApplication` is the plausible one)
 
 ---

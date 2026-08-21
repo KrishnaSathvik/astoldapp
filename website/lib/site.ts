@@ -30,16 +30,21 @@ export const UTILITY_NAV = [
 export const APP_STORE_URL: string | null = null;
 
 /**
- * RELEASE TODO — the one thing on this site still waiting on something outside it.
+ * Deliberately `null`, and not an oversight.
  *
- * No mailbox exists on the astold.app domain yet, so there is no address to print
- * and the site must not invent one. Until then `SupportContact` renders a
- * self-service answer that is true: this FAQ and the app's own Writing help are
- * the support surface.
+ * A support contact for App Store Connect does exist. It is recorded once — in
+ * `docs/08-positioning-marketing.md`, under "Outstanding" — and is not repeated
+ * here, because it is a personal mailbox: setting it below would print it as
+ * plain text on three public pages, where it would be scraped within days. App
+ * Review needs a contact; the website does not need to publish one. The public
+ * support surface on the listing is the `/support` URL.
  *
- * When the mailbox exists, set it here — as a bare address, no `mailto:` — and
- * Support, Privacy, and Terms all become a real contact line at once. Nothing
- * else needs editing.
+ * So `SupportContact` renders the self-service answer instead, which is true:
+ * the FAQ and the app's own Writing help are where the answers are.
+ *
+ * When there is a real mailbox on the astold.app domain, set it here — a bare
+ * address, no `mailto:` — and Support, Privacy, and Terms all become a real
+ * contact line at once. Nothing else needs editing.
  */
 export const SUPPORT_EMAIL: string | null = null;
 

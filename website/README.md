@@ -44,9 +44,14 @@ subject was privacy, and that content now lives on `/` and `/privacy`.
    find a contact somewhere else, which is what the old line ("use the support contact provided
    with As Told on the App Store listing") did to someone who was already here. Support,
    Privacy, and Terms all render `<SupportContact>`, which points at the two things that do
-   answer immediately: the FAQ, and the app's own Writing help. Set `SUPPORT_EMAIL` in
-   `lib/site.ts` and all three become a real `mailto:` at once. **That constant is the one
-   release TODO left in this codebase.**
+   answer immediately: the FAQ, and the app's own Writing help.
+
+   `SUPPORT_EMAIL` in `lib/site.ts` stays `null` **on purpose**, not for want of an address:
+   App Store Connect has a support contact (recorded once, in
+   `docs/08-positioning-marketing.md`), but it is a personal mailbox, and setting the constant
+   would print it in plain text on three crawled pages. The listing's public support surface is
+   the `/support` URL, which is what that field is for. Set the constant when there is a real
+   mailbox on `astold.app`, and all three pages become a `mailto:` at once.
 
 4. **Nothing here imitates an Apple control.** The CTA is typographic. It used to pair a
    hand-copied Apple logo path with the words "Coming to the App Store", which is a counterfeit
