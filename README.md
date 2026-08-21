@@ -107,6 +107,17 @@ Specifications (`docs/`):
 | `docs/08-positioning-marketing.md` | Long-term positioning, brand/messaging hierarchy, App Store (ASO), SEO, website, screenshots, and the marketing-lags-implementation rule |
 | `docs/design-reference/screens-overview.png` | Canonical 10-screen visual reference for V1 |
 
+Marketing site (`website/`):
+
+| File | Purpose |
+|---|---|
+| `website/README.md` | How the site is built and deployed, the three rules it holds to, and how to regenerate the screenshots and the social card |
+
+The site is a Next.js App Router app on Vercel serving `astold.app` — six routes, every one
+statically prerendered, no environment variables. Its screenshots are captures of the shipping
+app rather than mockups, so **it lags the product on purpose**: nothing is published there until
+it works in the build (`docs/08-positioning-marketing.md` §0).
+
 ## 4. Build philosophy
 
 The app should be built as a **small native product**, not as a large architecture exercise.
@@ -181,6 +192,24 @@ transcription-service/
 ├── test/
 ├── Dockerfile
 └── package.json
+```
+
+Marketing site:
+
+```text
+website/
+├── app/                one route per directory; every page prerenders to static HTML
+│   ├── layout.tsx      header, footer, metadata defaults
+│   ├── globals.css     design tokens, lifted from the app's own light palette
+│   ├── page.tsx        homepage
+│   ├── voice/  languages/  privacy/  support/  terms/
+│   ├── sitemap.ts      generated /sitemap.xml
+│   └── robots.ts       generated /robots.txt
+├── components/         shared building blocks, each with its own CSS module
+├── lib/site.ts         canonical URL, nav, App Store state, support contact
+├── public/assets/shots/  screenshots of the shipping app, straight from the simulator
+├── scripts/            screenshot + width audits, and the og.png generator
+└── next.config.ts      permanent redirects from every retired URL, security headers
 ```
 
 ## 6. First implementation milestone
