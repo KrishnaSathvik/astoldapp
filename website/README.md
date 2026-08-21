@@ -212,6 +212,12 @@ It uses the production app icon (`public/android-chrome-512x512.png`, which is
   request URL, and every capture keeps its filename — so a rebuild happily serves the *old* image
   and the page looks untouched. This wasted a review round: the page showed a three-day-old
   timeline beside a fresh one and nothing was wrong with the code.
+- **Keep Next.js on a patched release.** Vercel refuses to *deploy* a build made with a version
+  carrying a security advisory — the build itself succeeds, all routes prerender, and then the
+  deployment is marked ERROR with "Vulnerable version of Next.js detected". `15.5.4` was blocked
+  this way; the `backport` dist-tag (`npm view next dist-tags`) is the patched 15.5.x line and is
+  a drop-in. `npm audit` still reports `postcss` and `sharp` through Next, and their only fix is
+  Next 16 — a major upgrade, not a deploy fix, and not what Vercel blocks on.
 - **Never run `next build` while `next dev` is running.** They share `.next/`, and the build
   pulls it out from under the dev server, which then 500s with `Cannot find module './611.js'`.
 - **Look at the screenshots, at full size, not in a downscaled contact sheet.** Run
