@@ -1,0 +1,89 @@
+.doc {
+  width: var(--wrap-read);
+  margin-inline: auto;
+  padding-top: clamp(40px, 4.6vw, 68px);
+  padding-bottom: clamp(56px, 6vw, 92px);
+}
+
+.head {
+  margin-bottom: clamp(32px, 3.6vw, 48px);
+  padding-bottom: clamp(26px, 3vw, 36px);
+  border-bottom: 1px solid var(--line);
+}
+
+.head h1 {
+  font-size: clamp(2.25rem, 4.4vw, 3.1rem);
+}
+
+.lede {
+  margin-top: 1.15rem;
+}
+
+.updated {
+  margin-top: 1.3rem;
+  color: var(--faint);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
+/* --- The desktop table of contents -------------------------------------- */
+
+.toc {
+  display: none;
+}
+
+@media (min-width: 1060px) {
+  .withToc {
+    width: min(1040px, calc(100vw - 2 * var(--gutter)));
+    display: grid;
+    grid-template-columns: 208px minmax(0, 736px);
+    column-gap: 64px;
+    justify-content: center;
+  }
+
+  .toc {
+    display: block;
+    position: sticky;
+    top: calc(var(--header-h) + 32px);
+    align-self: start;
+    /* No padding here: a sticky box keeps its padding, so any top padding would
+       push the list that much further down once it sticks. It lines up with the
+       document's eyebrow as-is. */
+  }
+}
+
+.tocTitle {
+  font-size: 0.68rem;
+  font-weight: 620;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.toc ul {
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-left: 1px solid var(--line);
+}
+
+.toc a {
+  display: block;
+  padding: 0.36rem 0 0.36rem 0.95rem;
+  margin-left: -1px;
+  border-left: 1px solid transparent;
+  color: var(--muted);
+  font-size: 0.89rem;
+  line-height: 1.4;
+  text-decoration: none;
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease);
+}
+
+.toc a:hover {
+  color: var(--ink);
+}
+
+.tocCurrent {
+  color: var(--accent) !important;
+  border-left-color: var(--accent) !important;
+}

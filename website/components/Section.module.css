@@ -1,0 +1,48 @@
+.section {
+  padding-block: var(--section);
+}
+
+.tight {
+  padding-block: var(--section-tight);
+}
+
+.flush {
+  padding-top: 0;
+}
+
+.warm {
+  background: var(--bg-warm);
+}
+
+.deep {
+  background: var(--bg-deep);
+}
+
+/* Consecutive bands of the same tone shouldn't double their padding into a
+   canyon — they read as one band with an internal step. */
+.warm + .warm,
+.deep + .deep {
+  padding-top: 0;
+}
+
+.intro {
+  max-width: var(--measure);
+}
+
+.wide {
+  max-width: var(--measure-wide);
+}
+
+.center {
+  margin-inline: auto;
+  text-align: center;
+}
+
+/* Anything a centred intro carries — chips, steps — centres with it. */
+.center :is(ul, ol) {
+  justify-content: center;
+}
+
+.introLede {
+  margin-top: 1.05rem;
+}

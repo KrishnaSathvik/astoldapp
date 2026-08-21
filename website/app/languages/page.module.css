@@ -1,0 +1,177 @@
+.closing {
+  margin-top: clamp(28px, 3vw, 38px);
+  font-family: var(--font-serif);
+  font-size: clamp(1.2rem, 2vw, 1.5rem);
+  color: var(--ink);
+}
+
+.para {
+  margin-top: 1.15rem;
+  color: var(--ink-soft);
+}
+
+/* --- Typed, then spoken, in one note ----------------------------------- */
+
+.handoff {
+  margin-top: 1.6rem;
+  border-left: 2px solid var(--accent-soft);
+  padding-left: clamp(16px, 2vw, 22px);
+  display: grid;
+  gap: 1rem;
+}
+
+.handoffStep {
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: 1.06rem;
+  line-height: 1.55;
+}
+
+.handoffStep:lang(te) {
+  line-height: 1.72;
+}
+
+/* Scoped to the tag class, not `span` — a bare `span` selector also caught the
+   <En> runs inside the sentence and rendered each one as an uppercase label. */
+.handoffTag {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  font-weight: 620;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* --- The mix stays the mix ---------------------------------------------- */
+
+.mix {
+  display: grid;
+  gap: 18px;
+  margin-top: clamp(32px, 4vw, 44px);
+}
+
+@media (min-width: 860px) {
+  .mix {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.mixKept,
+.mixRefused {
+  padding: clamp(22px, 2.8vw, 32px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+}
+
+.mixKept {
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.mixRefused {
+  background: var(--surface);
+}
+
+.mixTag {
+  display: block;
+  margin-bottom: 0.9rem;
+  font-size: 0.66rem;
+  font-weight: 620;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.mixKept .mixTag {
+  color: var(--accent);
+}
+
+.mix p {
+  font-family: var(--font-serif);
+  font-size: clamp(1.1rem, 1.7vw, 1.3rem);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.mix p:lang(te) {
+  line-height: 1.72;
+}
+
+.mixRefused p {
+  color: var(--faint);
+}
+
+.mixNote {
+  margin-top: clamp(22px, 2.6vw, 30px);
+  max-width: var(--measure);
+  color: var(--muted);
+}
+
+.mixNote strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* --- May add / does not -------------------------------------------------- */
+
+.rules {
+  display: grid;
+  gap: clamp(28px, 4vw, 64px);
+  margin-top: clamp(32px, 4vw, 44px);
+}
+
+@media (min-width: 760px) {
+  .rules {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.rulesHead {
+  font-size: 0.72rem;
+  font-weight: 620;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.rulesList {
+  margin: 1.1rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.rulesList li {
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-serif);
+  font-size: clamp(1.05rem, 1.6vw, 1.22rem);
+  color: var(--ink);
+}
+
+.rulesNever li {
+  color: var(--muted);
+}
+
+.aside {
+  margin-top: clamp(36px, 4.5vw, 56px);
+  padding-top: clamp(26px, 3vw, 34px);
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 0.9rem;
+  max-width: var(--measure-wide);
+}
+
+.asideSaid {
+  font-family: var(--font-serif);
+  font-size: clamp(1.25rem, 2.2vw, 1.6rem);
+  line-height: 1.72;
+  color: var(--ink);
+}
+
+.asideNot {
+  color: var(--muted);
+  max-width: var(--measure);
+}

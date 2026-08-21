@@ -1,0 +1,118 @@
+.hero {
+  position: relative;
+  padding-top: clamp(28px, 3.4vw, 52px);
+  padding-bottom: 0;
+  overflow: clip;
+}
+
+/* A single warm disc behind the device, so the hero has depth without noise. */
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -14%;
+  right: -14%;
+  width: min(760px, 70vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, var(--bg-deep), transparent 68%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.grid {
+  display: grid;
+  gap: clamp(40px, 5vw, 64px);
+  align-items: center;
+}
+
+.copy {
+  max-width: 34rem;
+}
+
+.lede {
+  margin-top: 1.25rem;
+}
+
+.cta {
+  margin-top: 1.8rem;
+}
+
+.visual {
+  display: flex;
+  justify-content: center;
+}
+
+@media (min-width: 900px) {
+  .grid {
+    /* The device gets close to half the frame — it is the hero element here,
+       not an illustration parked beside the copy. */
+    grid-template-columns: 1fr 0.98fr;
+    gap: clamp(40px, 4vw, 64px);
+  }
+
+  .visual {
+    justify-content: flex-end;
+  }
+}
+
+.proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin: 1.7rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.proof li {
+  position: relative;
+}
+
+/* The separator trails the item it follows rather than leading the next one.
+   Leading it left a stray "·" at the start of a wrapped line on a phone. */
+.proof li:not(:last-child)::after {
+  content: '·';
+  position: absolute;
+  right: -13px;
+  color: var(--faint);
+}
+
+/* Under ~480px the three items no longer fit on one line, and a trailing "·"
+   ends up hanging off the end of the wrap. One item per line instead — three
+   short lines read as a list, a wrapped row reads as a mistake. */
+@media (max-width: 480px) {
+  .proof {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .proof li:not(:last-child)::after {
+    content: none;
+  }
+}
+
+.verbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(24px, 6vw, 72px);
+  margin-top: clamp(30px, 3vw, 44px);
+  padding-top: clamp(24px, 2.4vw, 32px);
+  border-top: 1px solid var(--line);
+}
+
+.verbs span {
+  font-family: var(--font-serif);
+  font-size: clamp(1.4rem, 3vw, 2.1rem);
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.verbs span:nth-child(2) {
+  color: var(--accent);
+}
+
+.verbs span:nth-child(3) {
+  color: var(--muted);
+}

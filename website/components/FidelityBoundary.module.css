@@ -1,0 +1,82 @@
+.boundary {
+  margin-top: clamp(28px, 3.4vw, 40px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.row {
+  display: grid;
+  gap: 4px 22px;
+  padding: clamp(18px, 2.2vw, 24px);
+}
+
+.row + .row {
+  border-top: 1px solid var(--line);
+}
+
+@media (min-width: 660px) {
+  .row {
+    grid-template-columns: 92px 1fr;
+    align-items: baseline;
+  }
+}
+
+.tag {
+  font-size: 0.66rem;
+  font-weight: 620;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.row p {
+  color: var(--ink-soft);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.kept {
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+}
+
+.kept .tag {
+  color: var(--accent);
+}
+
+.kept p {
+  color: var(--ink);
+}
+
+.refused p {
+  color: var(--faint);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--faint) 55%, transparent);
+  text-decoration-thickness: 1px;
+}
+
+.promises {
+  display: grid;
+  gap: 0;
+  margin: clamp(26px, 3vw, 36px) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+@media (min-width: 700px) {
+  .promises {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 40px;
+  }
+}
+
+.promises li {
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-serif);
+  font-size: clamp(1.08rem, 1.7vw, 1.28rem);
+  color: var(--ink);
+}

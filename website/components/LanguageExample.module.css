@@ -1,0 +1,57 @@
+.specimen {
+  padding: clamp(20px, 2.6vw, 30px) 0;
+}
+
+.specimen + .specimen {
+  border-top: 1px solid var(--line);
+}
+
+.label {
+  display: block;
+  margin-bottom: 0.7rem;
+  font-size: 0.7rem;
+  font-weight: 620;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.line {
+  font-family: var(--font-serif);
+  font-size: clamp(1.22rem, 2.1vw, 1.6rem);
+  line-height: 1.5;
+  color: var(--ink);
+  max-width: 34ch;
+  text-wrap: pretty;
+}
+
+/* Telugu and Devanagari sit taller than Latin; give them room to breathe. */
+.line:lang(te),
+.line:lang(hi) {
+  line-height: 1.72;
+}
+
+.en {
+  /* The English inside the sentence. These specimens switch often, so the tint
+     is kept light — enough to trace the switching, not enough to stripe it. */
+  color: color-mix(in srgb, var(--accent) 82%, var(--ink));
+}
+
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 1.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips li {
+  padding: 0.42rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}

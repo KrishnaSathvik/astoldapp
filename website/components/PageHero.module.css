@@ -1,0 +1,31 @@
+.hero {
+  padding-top: clamp(40px, 4.6vw, 68px);
+  padding-bottom: clamp(24px, 2.6vw, 36px);
+}
+
+.copy {
+  max-width: var(--measure-wide);
+}
+
+.lede {
+  margin-top: 1.25rem;
+  max-width: var(--measure);
+}
+
+/* A centred hero is only honest when what follows it is centred too — on
+   `/voice` that is a full-width device and the three-word flow under it. */
+.center {
+  max-width: none;
+  text-align: center;
+}
+
+.center .lede {
+  margin-inline: auto;
+}
+
+.updated {
+  margin-top: 1.5rem;
+  color: var(--faint);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}

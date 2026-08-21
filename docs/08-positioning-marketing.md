@@ -300,13 +300,20 @@ stuffing; accurate structured data only where the type genuinely applies.
 
 ### Landing pages (start small)
 
-**Shipped 2026-08-18:** `/` · `/voice-notes` · `/private-notes` · `/multilingual` · `/privacy` ·
-`/support`, each with a unique title, description, canonical, and one H1, all listed in `sitemap.xml`.
+**Rebuilt 2026-08-20 (site v9, Next.js App Router):** `/` · `/voice` · `/languages` · `/privacy` ·
+`/support` · `/terms`, each with a unique title, description, canonical, and one H1, all listed in
+the generated `sitemap.xml`.
 
-`/voice-notes` covers voice → editable note, English/Telugu/Hindi and mixed speech, punctuation without
-rewriting, and what happens to the recording. `/private-notes` covers no account, the local note
-library, Face ID, and the honest boundary around voice. Both describe real, shipped behavior — they
-correspond to genuine product capability, not SEO filler.
+`/voice` covers voice → editable note, spoken structure commands, punctuation without rewriting,
+English/Telugu/Hindi and mixed speech, and what happens to the recording. `/languages` covers
+code-switching and per-language fidelity. Both describe real, shipped behavior — they correspond to
+genuine product capability, not SEO filler.
+
+`/private-notes` was retired as a page: its subject was privacy, and that content now lives in the
+homepage privacy section and on `/privacy`. Renamed and retired routes are 308-redirected in
+`website/next.config.ts` — `/voice-notes` → `/voice`, `/multilingual` → `/languages`,
+`/private-notes` → `/privacy`, plus the `.html` spelling of each, so no inbound link or indexed URL
+is dropped.
 
 Later, and only after the matching feature ships: `/writing-app` · `/telugu-voice-to-text` ·
 `/hindi-voice-to-text` · `/speech-to-text-notes` · `/checklists`. Do not generate dozens of shallow
@@ -317,14 +324,17 @@ keyword pages.
 Production origin is **`https://astold.app`** (matches the locked `com.astold.app` bundle id). Every
 absolute URL — canonical, `og:url`, `og:image`, sitemap — is written against it.
 
-Done (2026-08-18):
+Done (2026-08-18, re-verified on the v9 rebuild 2026-08-20):
 
 - [x] Unique `<title>` and meta description per page
 - [x] Exactly one H1 per page
 - [x] `<link rel="canonical">` on every page
 - [x] `robots.txt` (points at the sitemap)
-- [x] `sitemap.xml` (all six pages; kept in sync with the canonical set)
-- [x] Crawlable internal links — new pages linked from the footer nav and from the relevant home sections
+- [x] `sitemap.xml` (all six pages; generated from `app/sitemap.ts`, kept in sync with the canonical set)
+- [x] Crawlable internal links — `/voice` and `/languages` from the header and from the matching home
+      sections; `/privacy`, `/support`, `/terms` from the footer. Product links live in the header only,
+      utility links in the footer only — neither set is duplicated.
+- [x] Permanent redirects from every v8 URL (both the clean and `.html` spellings)
 - [x] Open Graph + Twitter `summary_large_image` on every page, pointing at `/og.png`
 - [x] Favicon / apple-touch-icon / web manifest wired and verified
 
@@ -332,7 +342,11 @@ Outstanding:
 
 - [x] **Ship `website/og.png`** — rendered and in place; every page references it (see §5 Open Graph)
 - [ ] Point the `astold.app` DNS at the Vercel project, then re-verify canonicals resolve
-- [ ] Audit alt text and use descriptive screenshot filenames as new shots land
+- [x] Audit alt text — every screenshot carries a descriptive alt; only the brand mark and the CTA
+      feather are `alt=""`
+- [ ] Capture a blank-editor shot and a dark-editor shot (see `website/README.md` § Known gaps)
+- [ ] Publish a real support/privacy contact. No mailbox exists on `astold.app`, so no page prints
+      one — App Store review will require a working support contact before submission
 - [ ] JSON-LD only where the type genuinely applies (`SoftwareApplication` is the plausible one)
 
 ---

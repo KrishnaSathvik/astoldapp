@@ -1,0 +1,212 @@
+/* Composition that belongs to the homepage story and nowhere else. */
+
+.afterLink {
+  display: inline-block;
+  margin-top: clamp(22px, 2.4vw, 30px);
+}
+
+/* --- 2 · The turn from blank page to structure --------------------------- */
+
+/* "Shape it when you need to" used to be a section of its own. It is the second
+   half of one sentence, so it lives under the first half with a rule between. */
+.turn {
+  margin-top: clamp(26px, 3vw, 36px);
+  padding-top: clamp(22px, 2.6vw, 30px);
+  border-top: 1px solid var(--line);
+}
+
+.turnTitle {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: clamp(1.32rem, 2vw, 1.6rem);
+  letter-spacing: -0.018em;
+  line-height: 1.18;
+  color: var(--ink);
+}
+
+.turnBody {
+  margin-top: 0.7rem;
+  color: var(--ink-soft);
+  font-size: 0.99rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 1.15rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips li {
+  padding: 0.34rem 0.78rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+/* A quiet coda under a section's copy: the boundary on what was just claimed.
+   It is deliberately not a card — the limit is part of the same paragraph of
+   thought, not a warning box beside it. */
+.aside {
+  margin-top: clamp(20px, 2.2vw, 26px);
+  padding-left: 1rem;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  max-width: 32rem;
+}
+
+/* --- 4 · Paste ------------------------------------------------------------ */
+
+.pasteHead {
+  display: grid;
+  gap: clamp(16px, 2vw, 40px);
+  padding-bottom: clamp(26px, 3vw, 36px);
+  border-bottom: 1px solid var(--line);
+}
+
+@media (min-width: 940px) {
+  .pasteHead {
+    grid-template-columns: 1.1fr 0.9fr;
+    align-items: end;
+  }
+
+  .pasteHead p {
+    padding-bottom: 0.35rem;
+  }
+}
+
+/* Intro across the full width, then the capture beside what it proves. The
+   section reads media-first on a wide screen, which is the one composition the
+   splits above and below don't use. */
+.pasteGrid {
+  display: grid;
+  gap: clamp(32px, 4vw, 56px);
+  align-items: center;
+  margin-top: clamp(32px, 3.6vw, 48px);
+}
+
+@media (min-width: 940px) {
+  .pasteGrid {
+    grid-template-columns: auto 1fr;
+  }
+}
+
+.pasteCopy {
+  max-width: var(--measure);
+}
+
+/* --- 3 · Spoken structure, folded into the voice section ------------------ */
+
+.spoken {
+  margin-top: clamp(26px, 3vw, 36px);
+  padding-top: clamp(22px, 2.6vw, 30px);
+  border-top: 1px solid var(--line);
+}
+
+.spokenLede {
+  margin-bottom: 1.25rem;
+  color: var(--ink-soft);
+  font-size: 0.99rem;
+}
+
+.spokenNote {
+  margin-top: 1rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+/* --- 4 · Multilingual ----------------------------------------------------- */
+
+/* The claim holds one column while the specimens fill the other, so the native
+   script gets the width it needs and nothing is left stranded. */
+.langGrid {
+  display: grid;
+  gap: clamp(28px, 3.4vw, 52px);
+  align-items: center;
+}
+
+@media (min-width: 1000px) {
+  .langGrid {
+    grid-template-columns: 0.82fr 1fr;
+  }
+
+  .specimens {
+    border-top: 1px solid var(--line);
+    margin-top: 0;
+  }
+}
+
+.claims h2 {
+  font-size: clamp(1.95rem, 3.2vw, 2.6rem);
+}
+
+.claims h2 + h2 {
+  color: var(--muted);
+}
+
+.claimsNote {
+  margin-top: 1.15rem;
+  max-width: 30rem;
+  color: var(--ink-soft);
+}
+
+.specimens {
+  margin-top: clamp(24px, 2.6vw, 32px);
+  border-top: 1px solid var(--line);
+}
+
+/* The two captures that prove the claim above them. They sit apart from the
+   specimen grid so neither column has to make room for a device. */
+.langShots {
+  margin-top: clamp(40px, 4.4vw, 64px);
+  padding-top: clamp(32px, 3.6vw, 44px);
+  border-top: 1px solid var(--line);
+}
+
+/* --- 5 · Organization + Privacy, side by side ----------------------------- */
+
+.twoUp {
+  display: grid;
+  gap: clamp(48px, 5vw, 72px);
+  align-items: stretch;
+}
+
+@media (min-width: 1040px) {
+  .twoUp {
+    /* The left half carries two devices and the right one, so the halves are
+       not equal — they are sized to what they hold. */
+    grid-template-columns: 1.16fr 1fr;
+    column-gap: clamp(48px, 4.4vw, 60px);
+  }
+}
+
+/* The two headings are different lengths, so one wraps and the other doesn't.
+   Bottom-aligning each half's device keeps the two captures on one line across
+   the section instead of stepping down with the copy above them. */
+.half {
+  display: flex;
+  flex-direction: column;
+}
+
+.half > :last-child {
+  margin-top: auto;
+}
+
+.half h2 {
+  font-size: clamp(1.9rem, 3vw, 2.5rem);
+}
+
+.halfLede {
+  margin-top: 1rem;
+  max-width: 30rem;
+}
+
+.promises {
+  margin-top: clamp(36px, 4vw, 52px);
+}

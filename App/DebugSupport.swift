@@ -16,6 +16,13 @@ enum DebugLaunch {
     static var seedStructuredDemo: Bool { args.contains("-seedStructuredDemo") }
     /// Seeds a note holding a pasted table — for verifying how a table reads on the page.
     static var seedTableDemo: Bool { args.contains("-seedTableDemo") }
+    /// Seeds one ordinary note that happens to use every structure — for the marketing capture that
+    /// has to look like a note somebody wrote, not like a fixture exercising a feature list.
+    static var seedSeattleDemo: Bool { args.contains("-seedSeattleDemo") }
+    /// Seeds a short pasted note whose table is small enough to read at marketing scale.
+    static var seedBudgetDemo: Bool { args.contains("-seedBudgetDemo") }
+    /// Seeds a single spoken Hindi/English note — the Devanagari counterpart to `-seedVoiceDemo`.
+    static var seedHindiDemo: Bool { args.contains("-seedHindiDemo") }
     /// Seeds one note far longer than a screen — for verifying that the writing toolbar never covers
     /// the line being written. Pair with `-openSeededNote -caretAtEnd`.
     static var seedLongNote: Bool { args.contains("-seedLongNote") }
@@ -55,8 +62,99 @@ enum DebugLaunch {
                 నాకు Alaska trip గురించి ఒక idea వచ్చింది. Maybe మనం Anchorage లో whole week stay చేయకుండా, Seward లో two nights stay చేస్తే better ఉంటుంది.
 
                 Rest of the days రోడ్డు మీద ఉంటాం — that way we actually see something.
+
+                Kenai Fjords cruise ఒకటి book చేయాలి, and Denali కి వెళ్లే day ని weather బట్టి decide చేద్దాం.
+
+                Flights ఇంకా చూడలేదు. Next week rates check చేసి, cheaper ఉంటే dates కొంచెం మార్చుకుందాం.
+
+                Camping option కూడా ఒకసారి చూద్దాం. Gear rent చేసుకుంటే two nights బయటే ఉండొచ్చు.
+
+                అమ్మకి ముందే చెప్పాలి. లేకపోతే last minute లో మళ్ళీ అదే గోల.
                 """
                 context.insert(Note(title: "Alaska trip idea", body: body))
+                try? context.save()
+            }
+            return
+        }
+
+        if seedHindiDemo {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let body = """
+                इस weekend घर जाने का plan है, but Saturday meeting हुई तो Sunday morning निकलूँगा. Tickets अभी तक book नहीं की.
+
+                घर पहुँचकर सबसे पहले अम्मा से बात करनी है — पिछली बार बहुत short call हुई थी.
+
+                वापसी की train Monday early morning वाली ठीक रहेगी, so office भी miss नहीं होगा.
+
+                अगर plan बदला तो अगले हफ़्ते try करेंगे. वैसे भी अभी तक कुछ भी confirm नहीं है.
+
+                जाते वक़्त वो किताब साथ ले जानी है जो पिछली बार छूट गई थी.
+
+                और हाँ, chacha ji के यहाँ भी एक बार हो आना चाहिए. बहुत दिन हो गए.
+                """
+                context.insert(Note(title: "Weekend plan", body: body))
+                try? context.save()
+            }
+            return
+        }
+
+        if seedSeattleDemo {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let body = """
+                # Three days, no schedule
+
+                A relaxed few days with enough time to wander.
+
+                ## Before we go
+
+                - [ ] Book hotel
+                - [x] Reserve dinner
+                - [ ] Download offline maps
+
+                ## Saturday
+
+                1. Pike Place Market
+                2. Ferry to Bainbridge
+                3. Dinner near Capitol Hill
+
+                ## Pack
+
+                - Rain jacket
+                - Camera
+                - Portable charger
+                """
+                context.insert(Note(title: "Weekend in Seattle", body: body))
+                try? context.save()
+            }
+            return
+        }
+
+        if seedBudgetDemo {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let body = """
+                Pasted from the planning doc.
+
+                ## Fixed costs
+
+                | Item | Estimate |
+                | --- | --- |
+                | Hotel | $1,400 |
+                | Rental car | $650 |
+                | Boat tour | $229 |
+                | Flights | $980 |
+
+                ## Still to price
+
+                - [ ] Ferry to Bainbridge
+                - [ ] Parking downtown
+                - [x] Museum passes
+
+                The numbers move once the dates are fixed.
+                """
+                context.insert(Note(title: "Trip budget", body: body))
                 try? context.save()
             }
             return

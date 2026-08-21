@@ -1,0 +1,46 @@
+<!doctype html>
+<!--
+  The source of `public/og.png`. Rendered at exactly 1200×630 by scripts/og.mjs.
+
+  It exists as a file rather than as a one-off image so the card can be rebuilt
+  whenever the home-screen capture changes — the previous og.png was composed by
+  hand and still showed a note timeline three days older than the site's own
+  screenshots. The icon is the production app icon; nothing here is redrawn.
+-->
+<html><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    background: #f8f7f3;
+    background-image: radial-gradient(120% 90% at 88% 12%, #efece3 0%, rgba(248,247,243,0) 62%);
+    font-family: -apple-system, "SF Pro Text", sans-serif;
+    color: #1c1c1e;
+    display: grid; grid-template-columns: 1fr 400px; align-items: center;
+    padding: 0 0 0 82px;
+    overflow: hidden;
+  }
+  .icon { width: 92px; height: 92px; border-radius: 21px; display:block; box-shadow: 0 8px 22px rgba(40,36,28,.14); }
+  .name { font-family: "Iowan Old Style", Palatino, serif; font-size: 66px; font-weight: 500; letter-spacing: -.02em; margin-top: 30px; line-height: 1; }
+  .tag { margin-top: 16px; font-size: 16px; letter-spacing: .19em; text-transform: uppercase; color: #68686d; font-weight: 500; }
+  .rule { margin: 34px 0 30px; width: 96px; height: 1px; background: rgba(28,28,30,.18); }
+  .promise { font-family: "Iowan Old Style", Palatino, serif; font-size: 46px; font-weight: 500; letter-spacing: -.02em; line-height: 1.13; max-width: 15ch; }
+  .sub { margin-top: 20px; font-size: 20px; line-height: 1.5; color: #3d3d41; max-width: 34ch; }
+  .stage { position: relative; height: 630px; }
+  .phone {
+    position: absolute; top: 31px; left: 52px;
+    width: 252px; padding: 8px; border-radius: 38px;
+    background: #111; box-shadow: 0 34px 70px rgba(28,28,30,.24), 0 6px 16px rgba(28,28,30,.10);
+  }
+  .phone img { display:block; width: 100%; border-radius: 31px; }
+</style></head>
+<body>
+  <div>
+    <img class="icon" src="/android-chrome-512x512.png" alt="">
+    <div class="name">As Told</div>
+    <div class="tag">Write it. Say it. Keep it.</div>
+    <div class="rule"></div>
+    <div class="promise">Anything you want to put into words.</div>
+    <div class="sub">Thoughts, notes, drafts, lists and plans — written or spoken, in your own words.</div>
+  </div>
+  <div class="stage"><div class="phone"><img src="/assets/shots/home-light.webp" alt=""></div></div>
+</body></html>

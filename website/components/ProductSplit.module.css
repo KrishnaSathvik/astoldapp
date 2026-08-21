@@ -1,0 +1,56 @@
+.split {
+  display: grid;
+  gap: clamp(36px, 5vw, 72px);
+  align-items: center;
+}
+
+.copy {
+  max-width: var(--measure);
+}
+
+.lede {
+  margin-top: 1.05rem;
+}
+
+.copy > :global(.textlink) {
+  display: inline-block;
+  margin-top: 1.4rem;
+}
+
+.media {
+  display: flex;
+  justify-content: center;
+}
+
+@media (min-width: 860px) {
+  .split {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* The device sits on the section's own edge. Centring it inside its half
+     left every screenshot short of the column edge by a different amount,
+     which is what made the widths read as inconsistent down the page. */
+  .media {
+    justify-content: flex-end;
+  }
+
+  .reverse .media {
+    justify-content: flex-start;
+  }
+
+  .mediaLed {
+    grid-template-columns: 0.85fr 1fr;
+  }
+
+  .reverse .copy {
+    order: 2;
+  }
+
+  .reverse .media {
+    order: 1;
+  }
+
+  .reverse.mediaLed {
+    grid-template-columns: 1fr 0.85fr;
+  }
+}

@@ -1,0 +1,29 @@
+.list {
+  margin: 1.7rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0;
+}
+
+.list li {
+  position: relative;
+  padding: 0.66rem 0 0.66rem 1.7rem;
+  color: var(--ink-soft);
+  font-size: 1rem;
+}
+
+.list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 1.24rem;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.rule li + li {
+  border-top: 1px solid var(--line);
+}

@@ -1,0 +1,31 @@
+.final {
+  padding-block: var(--section);
+  background: var(--bg-deep);
+  border-top: 1px solid var(--line);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.feather {
+  border-radius: 16px;
+  margin-bottom: 1.6rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.tagline {
+  margin: 1rem 0 1.9rem;
+  font-family: var(--font-serif);
+  font-size: clamp(1.1rem, 1.8vw, 1.32rem);
+  color: var(--muted);
+}
+
+.avail {
+  margin-top: 1.2rem;
+  color: var(--faint);
+  font-size: 0.86rem;
+}

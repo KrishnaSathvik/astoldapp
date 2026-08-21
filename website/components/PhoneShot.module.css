@@ -1,0 +1,97 @@
+/* A screenshot is evidence. Nothing here crops, masks, fades, or overlaps one. */
+
+.phone {
+  position: relative;
+  width: 100%;
+  max-width: var(--device-w, 300px);
+  border-radius: var(--radius-phone);
+  background: #0f0f11;
+  padding: 6px;
+  box-shadow: var(--shadow-device);
+  /* The bezel highlight that stops it reading as a flat rounded rectangle. */
+  outline: 1px solid rgba(255, 255, 255, 0.12);
+  outline-offset: -1px;
+}
+
+/* The size lives in a custom property so both the device and the <figure> that
+   wraps it resolve to the same width. Without a width on the figure, a flex
+   item shrinks to nothing until its image has loaded. */
+.sm {
+  --device-w: 268px;
+}
+
+.md {
+  --device-w: 300px;
+}
+
+.lg {
+  --device-w: 356px;
+}
+
+/* Hero only. The device is the hero element, not an illustration beside it. */
+.xl {
+  --device-w: 404px;
+}
+
+.shot {
+  width: 100%;
+  height: auto;
+  border-radius: calc(var(--radius-phone) - 6px);
+  display: block;
+}
+
+/* ------------------------------- Pairs -------------------------------- */
+
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: clamp(20px, 3vw, 44px);
+  margin-top: clamp(28px, 3.4vw, 44px);
+}
+
+/* Share the row instead of wrapping. `width: auto` is required: the figure's
+   own `width: min(100%, var(--device-w))` would otherwise fight flex-basis. */
+@media (min-width: 700px) {
+  .fit {
+    flex-wrap: nowrap;
+    gap: 20px;
+  }
+
+  .fit > .figure {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+  }
+
+  .fit > .figure > .phone {
+    max-width: var(--device-w, 300px);
+    margin-inline: auto;
+  }
+}
+
+/* The second device steps down, never across. Overlapping two captures hides
+   real UI — it buried the calendar's back button and its whole Sunday column. */
+@media (min-width: 760px) {
+  .pair.stagger > .figure + .figure {
+    margin-top: 72px;
+  }
+}
+
+.figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  flex: 0 0 auto;
+  width: min(100%, var(--device-w, 300px));
+}
+
+.figure figcaption {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 560;
+  letter-spacing: 0.02em;
+}
