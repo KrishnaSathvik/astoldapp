@@ -49,6 +49,21 @@ enum DebugLaunch {
     }
     private static var args: [String] { ProcessInfo.processInfo.arguments }
 
+    /// Creation stamp for every single-note demo seed.
+    ///
+    /// The editor caption renders the note's own `createdAt`, and every screenshot capture pins the
+    /// status bar to 9:41 (`docs/appstore/README.md`). A note created at the wall-clock moment of
+    /// capture therefore puts two different times in one frame — a 9:41 status bar above an
+    /// "AUGUST 21, 2026 · 22:31" caption — which reads as a bug in the product rather than in the
+    /// screenshot. Pinning the seed to 9:41 makes the frame agree with itself, and it agrees in
+    /// both hour cycles: a 24-hour simulator renders it "09:41" and a 12-hour one "9:41 AM".
+    ///
+    /// Today's date, not a fixed one: a demo note dated months ago would contradict the timeline
+    /// these captures also show.
+    static var demoNoteDate: Date {
+        Calendar.current.date(bySettingHour: 9, minute: 41, second: 0, of: .now) ?? .now
+    }
+
     @MainActor
     static func seedIfRequested(_ context: ModelContext) {
         if resetStore {
@@ -71,7 +86,8 @@ enum DebugLaunch {
 
                 అమ్మకి ముందే చెప్పాలి. లేకపోతే last minute లో మళ్ళీ అదే గోల.
                 """
-                context.insert(Note(title: "Alaska trip idea", body: body))
+                context.insert(Note(title: "Alaska trip idea", body: body,
+                                    createdAt: demoNoteDate, updatedAt: demoNoteDate))
                 try? context.save()
             }
             return
@@ -93,7 +109,8 @@ enum DebugLaunch {
 
                 और हाँ, chacha ji के यहाँ भी एक बार हो आना चाहिए. बहुत दिन हो गए.
                 """
-                context.insert(Note(title: "Weekend plan", body: body))
+                context.insert(Note(title: "Weekend plan", body: body,
+                                    createdAt: demoNoteDate, updatedAt: demoNoteDate))
                 try? context.save()
             }
             return
@@ -125,7 +142,8 @@ enum DebugLaunch {
                 - Camera
                 - Portable charger
                 """
-                context.insert(Note(title: "Weekend in Seattle", body: body))
+                context.insert(Note(title: "Weekend in Seattle", body: body,
+                                    createdAt: demoNoteDate, updatedAt: demoNoteDate))
                 try? context.save()
             }
             return
@@ -154,7 +172,8 @@ enum DebugLaunch {
 
                 The numbers move once the dates are fixed.
                 """
-                context.insert(Note(title: "Trip budget", body: body))
+                context.insert(Note(title: "Trip budget", body: body,
+                                    createdAt: demoNoteDate, updatedAt: demoNoteDate))
                 try? context.save()
             }
             return
@@ -167,7 +186,8 @@ enum DebugLaunch {
                     "Line \($0) of a long note that keeps going and going so the page has to scroll well past one screen."
                 }
                 let body = paragraphs.joined(separator: "\n\n") + "\n\nthen build the actual day-by-day itinerary only after we've loc"
-                context.insert(Note(title: "Alaska planning", body: body))
+                context.insert(Note(title: "Alaska planning", body: body,
+                                    createdAt: demoNoteDate, updatedAt: demoNoteDate))
                 try? context.save()
             }
             return
@@ -201,7 +221,8 @@ enum DebugLaunch {
 
                 And another, for the same reason.
                 """
-                context.insert(Note(title: "Alaska itinerary", body: body))
+                context.insert(Note(title: "Alaska itinerary", body: body,
+                                    createdAt: demoNoteDate, updatedAt: demoNoteDate))
                 try? context.save()
             }
             return
@@ -230,7 +251,8 @@ enum DebugLaunch {
                 2. Seward
                 3. Denali
                 """
-                context.insert(Note(title: "Yellowstone notes", body: body))
+                context.insert(Note(title: "Yellowstone notes", body: body,
+                                    createdAt: demoNoteDate, updatedAt: demoNoteDate))
                 try? context.save()
             }
             return

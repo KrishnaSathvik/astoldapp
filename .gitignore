@@ -29,3 +29,7 @@ Package.resolved
 # Vercel local link (project/org ids)
 .vercel/
 .playwright-mcp/
+
+# Python bytecode (docs/appstore/compose.py)
+__pycache__/
+*.pyc
