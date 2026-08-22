@@ -187,12 +187,12 @@ struct VoiceCaptureModelTests {
 
     /// The app's mirror of the limit has to be the relay's limit, or the guard is decorative.
     @Test func clientLimitMatchesTheRelayDefault() {
-        #expect(VoiceLimits.maxRecordingSeconds == 600)
-        #expect(VoiceLimits.maxRecordingDuration == .seconds(600))
+        #expect(VoiceLimits.maxRecordingSeconds == 300)
+        #expect(VoiceLimits.maxRecordingDuration == .seconds(300))
     }
 
     @Test func lengthLimitCopyReadsInMinutes() {
-        #expect(RecordingPanel.lengthLimitMessage(maxSeconds: 600) == "Recordings can be up to 10 minutes.")
+        #expect(RecordingPanel.lengthLimitMessage(maxSeconds: 300) == "Recordings can be up to 5 minutes.")
         #expect(RecordingPanel.lengthLimitMessage(maxSeconds: 60) == "Recordings can be up to 1 minute.")
         #expect(RecordingPanel.lengthLimitMessage(maxSeconds: 90) == "Recordings can be up to 90 seconds.")
     }

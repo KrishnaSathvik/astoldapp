@@ -4,6 +4,7 @@ import { ALLOWED_AUDIO_MIME, type Config } from '../config.js';
 import { audioDurationSeconds, UnreadableAudioError } from '../media/audioDuration.js';
 import { AttestationError, type AttestationVerifier } from '../security/attestation.js';
 import type { RateLimiter } from '../security/rateLimit.js';
+import type { VoiceUsageStore } from '../security/voiceUsage.js';
 import {
   EmptyTranscriptError,
   type TranscriptionProvider,
@@ -14,13 +15,14 @@ interface TranscribeDeps {
   provider: TranscriptionProvider;
   verifier: AttestationVerifier;
   limiter: RateLimiter;
+  usage: VoiceUsageStore;
 }
 
 export async function transcribeRoutes(
   app: FastifyInstance,
   deps: TranscribeDeps,
 ): Promise<void> {
-  const { config, provider, verifier, limiter } = deps;
+  const { config, provider, verifier, limiter, usage } = deps;
 
   app.post('/v1/transcriptions', async (req, reply) => {
     const requestId =
@@ -109,7 +111,29 @@ export async function transcribeRoutes(
       });
     }
 
-    // 7) Relay to the provider. Nothing is persisted; the buffer is dropped after this scope.
+    // 7) Monthly fair-use allowance. The last gate before money is spent, and deliberately after
+    //    every free rejection above so a refused request never touches the counter. It charges the
+    //    duration measured in step 6 — there is no second measurement and never a client-reported
+    //    one. Soft ceiling: being *under* the limit admits this recording whole, however long it is
+    //    (docs/04-voice-transcription.md §14).
+    const reservation = usage.reserve(identity, durationSeconds);
+    if (!reservation.allowed) {
+      req.log.info(
+        { requestId, status: 429, reason: 'monthly_voice_limit' },
+        'monthly voice allowance reached',
+      );
+      // Shares 429 with the rate limiter, so the code is what separates them: the two mean
+      // different things to the user and get different copy.
+      return reply.code(429).send({
+        requestId,
+        error: 'monthly_voice_limit',
+        resetsAt: reservation.resetsAt,
+      });
+    }
+
+    // 8) Relay to the provider. Nothing is persisted; the buffer is dropped after this scope.
+    //    Every exit that does not return a transcript refunds — a user is charged for words they
+    //    got back, never for a call that happened to cost us money.
     try {
       const result = await provider.transcribe({
         audio,
@@ -131,9 +155,20 @@ export async function transcribeRoutes(
         requestId,
         text: result.text,
         languages: result.languages,
+        // Only when this very recording spent the last of the allowance. The app caches the reset
+        // instant and refuses the *next* microphone tap before the recorder opens, so nobody has to
+        // lose a spoken thought to find out where the ceiling was. Deliberately a flag and a date
+        // and nothing else — a remaining-minutes figure is a usage meter waiting to be drawn.
+        ...(reservation.exhausted
+          ? { allowanceExhausted: true, resetsAt: reservation.resetsAt }
+          : {}),
       });
     } catch (err) {
+      usage.refund(identity, reservation.period, durationSeconds);
       if (err instanceof EmptyTranscriptError) {
+        // A billed provider call that returned nothing. We absorb the cost; charging a user for
+        // silence they got no text from would be indefensible, and repeated-silence abuse is the
+        // rate limiter's problem. Provider cost and user quota are different ledgers.
         return reply.code(422).send({ requestId, error: 'no_speech' });
       }
       req.log.error({ requestId, status: 502, err_kind: (err as Error).name }, 'transcription failed');

@@ -102,28 +102,28 @@ describe('POST /v1/transcriptions', () => {
  * provider is reached, because a request that reaches the provider has already cost money.
  */
 describe('POST /v1/transcriptions duration limit', () => {
-  it('accepts a recording just under the limit (599s)', async () => {
+  it('accepts a recording just under the limit (299s)', async () => {
     const provider = new FakeTranscriptionProvider();
     const app = await buildTestServer({ provider, config: { MAX_AUDIO_BYTES: 1 << 20 } });
-    const res = await app.inject({ method: 'POST', url: '/v1/transcriptions', ...multipartAudio(m4a(599)) });
+    const res = await app.inject({ method: 'POST', url: '/v1/transcriptions', ...multipartAudio(m4a(299)) });
     expect(res.statusCode).toBe(200);
     expect(provider.calls).toBe(1);
     await app.close();
   });
 
-  it('accepts a recording exactly at the limit (600s)', async () => {
+  it('accepts a recording exactly at the limit (300s)', async () => {
     const provider = new FakeTranscriptionProvider();
     const app = await buildTestServer({ provider, config: { MAX_AUDIO_BYTES: 1 << 20 } });
-    const res = await app.inject({ method: 'POST', url: '/v1/transcriptions', ...multipartAudio(m4a(600)) });
+    const res = await app.inject({ method: 'POST', url: '/v1/transcriptions', ...multipartAudio(m4a(300)) });
     expect(res.statusCode).toBe(200);
     expect(provider.calls).toBe(1);
     await app.close();
   });
 
-  it('rejects a recording one second over the limit (601s)', async () => {
+  it('rejects a recording one second over the limit (301s)', async () => {
     const provider = new FakeTranscriptionProvider();
     const app = await buildTestServer({ provider, config: { MAX_AUDIO_BYTES: 1 << 20 } });
-    const res = await app.inject({ method: 'POST', url: '/v1/transcriptions', ...multipartAudio(m4a(601)) });
+    const res = await app.inject({ method: 'POST', url: '/v1/transcriptions', ...multipartAudio(m4a(301)) });
     expect(res.statusCode).toBe(413);
     expect(res.json().error).toBe('audio_duration_exceeded');
     expect(provider.calls).toBe(0);
@@ -242,7 +242,7 @@ describe('POST /v1/transcriptions duration limit', () => {
     const rejection = logs.records().find((r) => r.msg === 'audio duration over limit');
     expect(rejection).toBeDefined();
     expect(rejection!.seconds).toBe(900);
-    expect(rejection!.maxSeconds).toBe(600);
+    expect(rejection!.maxSeconds).toBe(300);
     expect(rejection!.status).toBe(413);
     expect(rejection!.bytes).toEqual(expect.any(Number));
 

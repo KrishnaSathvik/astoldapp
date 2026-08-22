@@ -103,6 +103,13 @@ enum WritingHelp {
     static let structurePromise =
         "As Told only adds structure when you ask. Otherwise your words stay as written or spoken."
 
+    /// The one place in the app that mentions the monthly voice allowance before someone reaches it
+    /// (`docs/04-voice-transcription.md` §14). Stated once, quietly, and never as a meter: the limit
+    /// is a cost boundary, not a feature, and most writers will never come near it.
+    static let voiceAllowanceNote =
+        "Voice includes up to 60 minutes of transcription each month. "
+        + "If you reach it, As Told will tell you when voice is available again."
+
 }
 
 /// Whether the one-time voice-structure tip has been shown. Local only — nothing about it is sent.

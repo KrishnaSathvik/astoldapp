@@ -46,7 +46,8 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>Your notes stay on your device.</strong> They&rsquo;re stored locally on
-              your iPhone. There is no cloud copy and no sync.
+              your iPhone. There is no cloud copy and no sync, so deleting the app deletes them
+              with it.
             </li>
             <li>
               <strong>Voice leaves the device only when you ask.</strong> A recording is sent for
@@ -79,7 +80,14 @@ export default function PrivacyPage() {
         <p>
           Search and the calendar run against your own device, which is also why they stay fast
           and work without a connection. In this version there is no built-in sync or backup
-          service — the device backups you already use are the way to keep a copy.
+          service, and As Told does not keep a separate cloud copy of your notes.
+        </p>
+        <p>
+          Keeping your notes on the device also means iOS controls their lifetime. If you delete
+          As Told, iOS deletes the app&rsquo;s local data, and the notes in it, along with the app;
+          As Told has no copy elsewhere to restore them from. Offloading the app instead of
+          deleting it keeps that data in place. Whether a device backup or a transfer to a new
+          iPhone brings your notes back depends on your own Apple backup settings.
         </p>
         <p>
           If a future version adds optional device-to-device sync, it will be exactly that —{' '}
@@ -120,6 +128,17 @@ export default function PrivacyPage() {
           <strong>Keeping the service from being abused.</strong> Transcription requests are
           checked with Apple&rsquo;s App Attest to confirm they come from a genuine copy of As
           Told. That check identifies the app, not you, and is not linked to your notes.
+        </p>
+        <p>
+          <strong>The fair-use counter.</strong> Voice transcription is free and costs As Told
+          money to run, so each installation includes up to 60 minutes of transcription a month.
+          Counting that is the one thing the transcription service keeps between requests: a
+          scrambled, one-way form of the App&nbsp;Attest installation identifier, the current
+          calendar month, and a number of seconds. That is the whole record. It holds no audio, no
+          transcript, no note text, no name, and no email, and it cannot be traced back to you or
+          to anything you wrote &mdash; it is a duration, not a history of what you said. If you
+          reach the limit, As Told tells you when voice becomes available again; everything else in
+          the app keeps working.
         </p>
         <p>
           Your speech is transcribed <strong>in your own words</strong>. Natural punctuation,

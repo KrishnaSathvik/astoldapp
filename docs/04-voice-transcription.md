@@ -191,7 +191,7 @@ capture:
 | Done | finish + transcribe |
 | Backgrounding the app | finish + transcribe |
 | Call / Siri interruption | finish + transcribe |
-| 10-minute duration cap | finish + transcribe |
+| 5-minute duration cap | finish + transcribe |
 | **Back** | **was: delete. now: finish + transcribe** |
 
 The rule the rest of the capture already followed: *the words are already said, and dropping them is
@@ -270,12 +270,18 @@ Do not prematurely downsample so aggressively that recognition quality suffers.
 
 ### Product limit
 
-The maximum voice capture duration is **10 minutes**, and it protects:
+The maximum voice capture duration is **5 minutes** (changed 2026-08-21 from 10 minutes), and it
+protects:
 
 - latency
 - memory/storage
 - service cost
 - accidental long recordings
+
+Five minutes is roughly 650–800 spoken words — already a very large note entry. The number is mostly
+a statement about what As Told *is*: you speak a thought into a note, you do not record a meeting.
+Ten minutes cost barely more per request; what it invited was a different product. Shorter recordings
+also upload faster, retry more cheaply, and put less at risk when the network drops mid-transcription.
 
 **The relay is the authority.** It measures the duration of the uploaded audio from the container
 itself and rejects anything longer with `413 audio_duration_exceeded`, before the paid call is made
@@ -445,6 +451,55 @@ Actions:
 - Try Again
 - Discard
 
+### Monthly voice allowance reached
+
+Shown when the monthly fair-use ceiling (§14) refuses a recording. It is not a transcription
+failure, and it must not read like one.
+
+**No recording is ever spent discovering the ceiling.** The relay knows at reservation time whether
+*this* request took the installation to the limit, so it says so on the **successful** response —
+`allowanceExhausted: true` alongside the transcript and an authoritative `resetsAt`. The recording
+that crosses the ceiling therefore returns its words normally, and the app caches the reset instant
+(`VoiceAllowanceStoring`) and refuses the **next** microphone tap before the recorder opens. The
+user finishes the thought they were speaking and is stopped before starting the one they cannot.
+
+This is why the signal rides the success rather than waiting for the next refusal: a ceiling that
+announces itself only by rejecting an upload teaches the user where it was by taking a spoken
+thought from them, which is precisely the failure this whole design exists to avoid.
+
+`429 monthly_voice_limit` remains, as the **fallback** rather than the normal path — a reinstalled
+client, a stale build, or a request already in flight when the allowance ran out. The relay is
+authoritative either way; the cached date is only how the app avoids asking a question it already
+knows the answer to.
+
+The app never invents a reset date. If the answer carries no readable `resetsAt`, nothing is
+remembered and the relay simply refuses the next upload — a wrong date shown confidently is worse
+than no date.
+
+**The signal is a flag and a date, and nothing else.** No used figure, no remaining figure, no
+total. A number sent to the client is a number the interface eventually shows, and no usage meter
+ships in V1 (RULES.md §1).
+
+Title:
+
+`Voice will be back soon`
+
+Message:
+
+`You've used this month's included voice transcription. You can keep writing normally, and voice
+will be available again on <date>.`
+
+Action:
+
+`OK` — the only one. Retry is absent because the same upload would be refused again, and there is no
+upgrade call to action because there is nothing to upgrade to (RULES.md §1).
+
+`<date>` is rendered from the relay's `resetsAt` in the user's local time zone — never computed on
+the device. Where no date is known, the sentence ends after "You can keep writing normally."
+
+A successful transcription clears the remembered refusal, so a stale date can never outlive the
+month it belonged to.
+
 ### Invalid server output
 
 Treat as failure.
@@ -475,6 +530,11 @@ Production logs may contain metadata such as:
 
 Do not log content payloads.
 
+The monthly fair-use counter (§14) is the **only** thing the relay stores per installation beyond the
+App Attest registry: a hashed install identifier, a UTC month, and a number of seconds. It carries no
+transcript, no note text, no audio, and no account, and it is not derived from what was said — only
+from how long it lasted.
+
 ---
 
 ## 14. Abuse protection
@@ -488,11 +548,90 @@ Production controls:
 - IP-level anomaly limits as secondary defense
 - request size limit
 - duration limit
+- **monthly per-install fair-use allowance** (below)
 - MIME validation
 - timeout
 - server-side model allowlist
 
 Do not treat an anonymous public endpoint as sufficient.
+
+### Monthly fair-use allowance (locked 2026-08-21)
+
+Voice is **free and unmetered in the interface**. There is no subscription, no credit balance, and no
+Pro tier to upgrade to. What exists is a ceiling that stops a free app with a paid dependency from
+being an unbounded bill.
+
+**The allowance: 60 minutes (3,600 seconds) of successfully transcribed audio per attested
+installation per UTC calendar month.**
+
+**It is a soft ceiling.** A recording started while the installation is below the ceiling is allowed
+to finish and transcribe completely — the check is "are you under 60 minutes?", never "do you have
+enough left for this?". Making someone speak for four minutes and then telling them only forty
+seconds remained is the failure mode this exists to avoid. Combined with the 5-minute per-recording
+cap (§7), the natural worst case is just under **65 minutes** in a month.
+
+**What consumes allowance:**
+
+| Outcome | Consumes |
+|---|---|
+| Successful transcript | **yes** — the server-measured duration |
+| `no_speech` (422) | no — refunded |
+| OpenAI / provider failure (502) | no — refunded |
+| Network failure after upload | no — refunded |
+| Cancelled before upload | no — never reserved |
+| Attestation, MIME, size, duration, or rate-limit rejection | no — never reserved |
+
+`no_speech` costs As Told a real provider call, and As Told absorbs it. Charging a user for silence
+they did not get text back from would be indefensible; repeated-silence abuse is the rate limiter's
+problem, not the quota's. **Provider cost accounting and user quota accounting are different
+ledgers** and MUST NOT be merged.
+
+**Duration comes from one place.** The counter consumes the same server-measured `durationSeconds`
+that already bounds a single recording (§7). A client-reported duration is never trusted and a second
+measurement is never introduced.
+
+**Identity** is the existing verified App Attest install identity, hashed before storage. No account,
+email, note id, title, or transcript is involved.
+
+**Reservation is atomic.** Reserve inside a transaction before the paid call; refund in a transaction
+if the call does not yield a transcript. Read-then-call-then-increment would let two concurrent
+requests both pass at 59 minutes.
+
+**Periods are UTC calendar months** (`2026-08`, `2026-09`). A new month is a new bucket — no cron job
+resets anything. The relay returns an authoritative ISO `resetsAt`; the app renders it locally and
+never computes a reset date itself.
+
+**Refusal is machine-distinguishable.** `429` with `error: "monthly_voice_limit"` and `resetsAt`, not
+the generic `rate_limited` — the two mean different things to the user and MUST show different copy
+(§12).
+
+**Exhaustion is reported on the success that causes it.** When a reservation takes an installation to
+or past the ceiling, the `200` response carries `allowanceExhausted: true` and `resetsAt` beside the
+transcript. This MUST be a flag and an instant only — never a used, remaining, or total figure. A
+refunded reservation reports nothing, because nothing was spent.
+
+**Reinstalling may mint a new identity, and that is accepted for V1.** Deleting the app destroys its
+App Attest key, so a reinstall likely starts a fresh allowance. Closing that hole requires persistent
+identity or accounts, both of which are on the do-not-build list. It is documented here so a later
+audit does not rediscover it and call it a P0.
+
+### What the limits are not
+
+The three controls protect different things and MUST NOT be collapsed or traded against each other:
+
+| Control | Protects against |
+|---|---|
+| 5 min per recording | one runaway request; latency, memory, retry cost |
+| 20 requests / minute | scripted bursts |
+| 60 min / UTC month | sustained cost over time |
+
+No visible usage meter, progress bar, credit count, or Profile usage screen ships in V1. The ceiling
+is a cost boundary, not a feature, and the only time a user learns it exists is the one sentence in
+Writing Help, the Support FAQ, and the single dialog at §12.
+
+**No silence-based automatic stopping in V1.** It was considered and deliberately excluded: a writer
+pausing to think is indistinguishable from a writer who has finished, and a false stop mid-thought is
+worse than a few seconds of recorded silence.
 
 ---
 

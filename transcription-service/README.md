@@ -62,6 +62,11 @@ All errors are `{ requestId, error }`; `audio_duration_exceeded` also carries `m
 | 401 | `attestation_failed` | Missing or invalid App Attest assertion. |
 | 413 | `audio_too_large` | Over `MAX_AUDIO_BYTES`. |
 | 413 | `audio_duration_exceeded` | Over `MAX_DURATION_SECONDS`. |
+| 429 | `monthly_voice_limit` | Install is at `MONTHLY_VOICE_SECONDS` for this UTC month. Carries `resetsAt`. Distinct from `rate_limited`. Fallback path — see below. |
+
+A `200` additionally carries `allowanceExhausted: true` and `resetsAt` when *that* request spent
+the last of the allowance, so the client can stop the next recording before it starts rather than
+have one rejected after it was spoken. A flag and a date only — never a used or remaining figure.
 | 415 | `unsupported_media_type` | Content type outside the allowlist. |
 | 422 | `no_speech` | The provider returned nothing usable. |
 | 429 | `rate_limited` | Over the per-identity rate limit. |
@@ -88,6 +93,13 @@ The app mirrors the same limit (`VoiceLimits.maxRecordingSeconds`) so a recordin
 rather than being rejected after the fact. That mirror is a courtesy; **this relay is the authority.**
 If you change `MAX_DURATION_SECONDS`, change the client constant to match.
 
+`MONTHLY_VOICE_SECONDS` bounds sustained spend the way `MAX_DURATION_SECONDS` bounds one request and
+`RATE_LIMIT_MAX` bounds bursts. The three protect different things and are not interchangeable — do
+not raise one because the other two exist (RULES.md §3). Usage lives in the `voice_usage` table on
+the `APP_ATTEST_DB_PATH` volume: a hashed install id, a UTC month, and seconds. Reservations are
+taken before the paid call and refunded whenever no transcript comes back, so a failed or speechless
+request costs the user nothing.
+
 Transcribe headers: `x-request-id` (echoed), and when attestation is required
 `x-attest-key-id` / `x-attest-assertion` / `x-attest-challenge`.
 
@@ -101,7 +113,8 @@ Transcribe headers: `x-request-id` (echoed), and when attestation is required
 | `TRANSCRIBE_MODEL` | gpt-4o-transcribe | Chosen by benchmark, never by model recency. |
 | `TRANSCRIBE_PROMPT_VARIANT` | punctuated | `punctuated` \| `strictVerbatim` \| `terse` — see `src/prompt.ts`. |
 | `MAX_AUDIO_BYTES` | 26214400 | 25 MB → 413 `audio_too_large`. Bounds upload size, **not** billable minutes. |
-| `MAX_DURATION_SECONDS` | 600 | 10 min product limit → 413 `audio_duration_exceeded`. Measured from the container; the cap that actually bounds cost. Mirror any change in `VoiceLimits.maxRecordingSeconds`. |
+| `MAX_DURATION_SECONDS` | 300 | 5 min product limit → 413 `audio_duration_exceeded`. Measured from the container; the cap that actually bounds one request. Mirror any change in `VoiceLimits.maxRecordingSeconds`. |
+| `MONTHLY_VOICE_SECONDS` | 3600 | Monthly fair-use allowance per attested install → 429 `monthly_voice_limit`. A *soft* ceiling: being under it admits the whole recording. Only successful transcripts count. |
 | `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_SECONDS` | 20 / 60 | Per attested-install + IP. |
 | `APP_ATTEST_REQUIRED` | false | **Set `true` in production.** |
 | `APP_ATTEST_APP_ID` | _(unset)_ | `TEAMID.bundleId`. Required when attestation is on. |

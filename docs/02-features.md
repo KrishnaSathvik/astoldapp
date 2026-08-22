@@ -386,6 +386,7 @@ Required in V1.
 - microphone interruption
 - permission denied
 - transcription returns empty text
+- monthly voice allowance reached
 
 ### Behavior
 
@@ -397,6 +398,23 @@ Provide concise actions such as:
 - Discard
 
 Keep temporary audio only as long as required for explicit Retry.
+
+The monthly allowance is the one case that is not a failure of the recording, and it behaves
+differently: it gets its own title ("Voice will be back soon"), a single `OK`, and no Retry — the
+same upload would be refused again. It also gets no upgrade call to action, because no Pro tier
+exists (RULES.md §1). No recording is ever lost to it: the transcription that reaches the limit
+still returns its words and tells the app so, and the app then refuses the *next* microphone tap
+before the recorder opens.
+
+### Acceptance criteria
+
+- a single recording stops at 5 minutes and transcribes what was captured, never discarding it
+- tapping the mic again after the cap continues at the cursor
+- the recording that reaches the monthly ceiling still succeeds and inserts its text
+- the mic tap after that refuses before the recorder opens, with no permission prompt
+- no minutes used or remaining appear anywhere in the app
+- the reset date shown comes from the relay and is rendered in local time
+- typing, editing, search, and the calendar are unaffected by the allowance
 
 ---
 

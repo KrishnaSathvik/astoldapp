@@ -85,6 +85,26 @@ These are treated as fixed product constraints unless intentionally changed.
   do-not-build list.
 - Voice and typing are two input methods for the **same** note — not two note types.
 - A voice transcript MUST become ordinary, editable text.
+- **Voice is free in V1 and MUST NOT be gated behind a purchase.** There is no subscription, no
+  credit balance, and no Pro tier — so there is also nothing to upsell, and no upgrade call to action
+  may appear anywhere in the voice flow. (Locked 2026-08-21.)
+- A single recording MUST NOT exceed **5 minutes**, and reaching the cap MUST finish and transcribe
+  what was captured rather than discard it. (Changed 2026-08-21 from 10 minutes.)
+- An attested installation receives **60 minutes of successful transcription per UTC calendar
+  month** as a **soft** ceiling: a recording begun while under the ceiling MUST be allowed to finish
+  completely, and only the *next* one is refused. Enforced by the relay, never by the client.
+- **No recording may be spent discovering the ceiling.** The transcription that reaches the limit
+  MUST still return its words, and MUST report the exhaustion on that same successful response so
+  the app can refuse the *next* microphone tap before the recorder opens. A limit that announces
+  itself only by rejecting an upload teaches the user where it was by taking a spoken thought from
+  them. `429 monthly_voice_limit` stays as the fallback for stale or reinstalled clients.
+- The monthly allowance MUST NOT become visible interface. No usage meter, progress bar, credit
+  count, or Profile usage screen. A user learns the limit exists from Writing Help, the Support FAQ,
+  or the one dialog shown when they reach it — nowhere else. The relay MUST NOT send the client a
+  used, remaining, or total figure: a flag and a reset instant are all it may know, because a number
+  the client holds is a number the interface eventually shows.
+- Only a **successful transcript** consumes allowance. Cancelled, rejected, failed, and `no_speech`
+  requests MUST NOT. See `docs/04-voice-transcription.md` §14.
 - V1 voice target languages: English, Telugu, Hindi, Telugu+English, Hindi+English.
 - Face ID / device authentication lock is **optional** and opt-in.
 - App content MUST be obscured in the app switcher when privacy lock is enabled.
@@ -244,6 +264,11 @@ Source: `docs/01-product-requirements.md` §11, §13, `docs/04-voice-transcripti
 - note body
 - search terms
 
+The relay's durable storage is limited to two things, both anonymous and both content-free: the App
+Attest key registry (key id, public key, assertion counter) and the monthly voice-usage counter
+(hashed install id, UTC month, seconds). Anything beyond those two MUST be justified against this
+list before it is added, and neither may be extended to carry note-derived data.
+
 ### Logging
 
 - Server logs may contain **metadata only**: request ID, route, status code, latency, model id,
@@ -258,8 +283,12 @@ Source: `docs/01-product-requirements.md` §11, §13, `docs/04-voice-transcripti
   client-readable remote config, the Keychain as a bundled secret, or an obfuscated binary. **Non-negotiable.**
 - HTTPS only.
 - The transcription endpoint MUST be protected against abuse: App Attest validation, per-attested-install
-  rate limiting, IP anomaly limits (secondary), request size limit, duration limit, MIME validation,
-  timeout, and a server-side model allowlist. An anonymous public endpoint is NOT sufficient.
+  rate limiting, IP anomaly limits (secondary), request size limit, duration limit, a monthly
+  per-install fair-use allowance, MIME validation, timeout, and a server-side model allowlist. An
+  anonymous public endpoint is NOT sufficient.
+- The per-recording cap, the per-minute rate limit, and the monthly allowance protect three different
+  things and MUST NOT be collapsed into one control or traded off against each other. Raising or
+  removing any one of them MUST NOT be justified by the existence of the other two.
 - App Attest is anti-abuse protection, **not** user authentication. Development builds need a controlled
   bypass; a generic `X-Debug-Bypass` MUST NOT work in production.
 - A production relay MUST NOT boot with attestation off. The only way past that is
@@ -833,7 +862,8 @@ Source: `docs/01-product-requirements.md` §15, `docs/07-build-plan.md` (Definit
   listing, website, and support content all read **As Told**.
 - The verification suite in `docs/07-build-plan.md` ("Verification suite") is green at **at least the
   current committed baseline**, with a clean typecheck and a succeeding Release build. As of this
-  checkpoint that baseline is **625 unit, 59 UI, 84 relay** (measured, not estimated, 2026-08-21).
+  checkpoint that baseline is **649 unit, 59 UI, 136 relay** (measured, not estimated, 2026-08-21;
+  raised from 625/59/84 by the monthly voice allowance the same day).
   If additional tests are committed later, **the higher committed count becomes authoritative and this
   line MUST be updated** — a run that passes only the number written here while the suite has grown
   past it is a failure, not a pass. This line has gone stale three times ("305 unit, 33 UI", then
@@ -848,6 +878,18 @@ Source: `docs/01-product-requirements.md` §15, `docs/07-build-plan.md` (Definit
 Even with acceptable overall WER, release is blocked if the system frequently: translates Telugu/Hindi
 to English · collapses mixed-language speech into one language · invents content during silence ·
 "improves" meaning · loses large sections of speech.
+
+Release is also blocked unless all of these hold:
+
+- The monthly allowance is enforced **server-side**, on durable storage that survives a relay restart
+  and deploy. A client-side counter is not enforcement.
+- Reserving allowance is **atomic** — two concurrent requests at 59 minutes MUST NOT both pass.
+- A failed or speechless transcription **refunds** its reservation, verified by test.
+- Reaching the ceiling returns `monthly_voice_limit` with `resetsAt`, distinguishable from
+  `rate_limited`, and the app shows the allowance dialog rather than a generic failure.
+- The recording that crosses the ceiling succeeds, carries `allowanceExhausted` + `resetsAt`, and
+  the following microphone tap is refused locally without opening the recorder — verified by test.
+- No usage meter, credit count, or upgrade call to action appears anywhere in the shipped app.
 
 ---
 

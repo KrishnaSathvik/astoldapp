@@ -40,13 +40,13 @@ describe('sniffContainer', () => {
 
 describe('audioDurationSeconds', () => {
   it('reads mvhd duration ÷ timescale (version 0)', () => {
-    expect(audioDurationSeconds(m4a(599))).toBeCloseTo(599, 3);
-    expect(audioDurationSeconds(m4a(600))).toBeCloseTo(600, 3);
-    expect(audioDurationSeconds(m4a(601))).toBeCloseTo(601, 3);
+    expect(audioDurationSeconds(m4a(299))).toBeCloseTo(299, 3);
+    expect(audioDurationSeconds(m4a(300))).toBeCloseTo(300, 3);
+    expect(audioDurationSeconds(m4a(301))).toBeCloseTo(301, 3);
   });
 
   it('reads 64-bit mvhd duration (version 1)', () => {
-    expect(audioDurationSeconds(m4a(600, { version: 1 }))).toBeCloseTo(600, 3);
+    expect(audioDurationSeconds(m4a(300, { version: 1 }))).toBeCloseTo(300, 3);
   });
 
   it('is independent of byte size — a small file can be a long recording', () => {
@@ -78,7 +78,7 @@ describe('audioDurationSeconds', () => {
     });
 
     it('rejects a truncated container rather than guessing', () => {
-      expect(() => audioDurationSeconds(m4a(600).subarray(0, 20))).toThrow(UnreadableAudioError);
+      expect(() => audioDurationSeconds(m4a(300).subarray(0, 20))).toThrow(UnreadableAudioError);
     });
 
     it('rejects an empty buffer', () => {

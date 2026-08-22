@@ -122,16 +122,31 @@ struct RecordingPanel: View {
 
     private func failure(_ error: TranscriptionError) -> some View {
         VStack(spacing: DSSpacing.s4) {
+            if let title = Self.title(for: error) {
+                Text(title)
+                    .font(.ds.preview)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+            }
             Text(message(for: error))
                 .font(.ds.preview)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
             HStack(spacing: DSSpacing.s6) {
-                Button("Discard") { model.discard(); onClose() }
-                    .foregroundStyle(.white.opacity(0.8))
-                Button(retryLabel(for: error)) { model.retry() }
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.white)
+                if case .monthlyLimitReached = error {
+                    // Nothing to retry — the same upload would be refused again — and nothing to
+                    // upsell, because there is no Pro tier to sell (RULES.md §1).
+                    Button("OK") { model.discard(); onClose() }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                } else {
+                    Button("Discard") { model.discard(); onClose() }
+                        .foregroundStyle(.white.opacity(0.8))
+                    Button(retryLabel(for: error)) { model.retry() }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                }
             }
         }
     }
@@ -182,11 +197,29 @@ struct RecordingPanel: View {
         case .rateLimited: return "Too many requests. Try again in a moment."
         case .requestTooLarge: return "That recording is too large to send."
         case .recordingTooLong(let maxSeconds): return Self.lengthLimitMessage(maxSeconds: maxSeconds)
+        case .monthlyLimitReached(let resetsAt): return Self.allowanceMessage(resetsAt: resetsAt)
         default: return "Couldn't transcribe that recording."
         }
     }
 
-    /// "Recordings can be up to 10 minutes." — stated in the relay's units, not a hard-coded number,
+    /// Only the monthly allowance gets a title. It is the one failure that is not about *this*
+    /// recording, and reading it as "something went wrong" would be the wrong thing to believe.
+    static func title(for error: TranscriptionError) -> String? {
+        if case .monthlyLimitReached = error { return "Voice will be back soon" }
+        return nil
+    }
+
+    /// The date comes from the relay and is rendered in the reader's own time zone — the app never
+    /// works out when the month turns over. Without one, the sentence simply stops early rather than
+    /// guessing a date (`docs/04-voice-transcription.md` §12).
+    static func allowanceMessage(resetsAt: Date?) -> String {
+        let used = "You've used this month's included voice transcription."
+        guard let resetsAt else { return "\(used) You can keep writing normally." }
+        let day = resetsAt.formatted(.dateTime.month(.wide).day())
+        return "\(used) You can keep writing normally, and voice will be available again on \(day)."
+    }
+
+    /// "Recordings can be up to 5 minutes." — stated in the relay's units, not a hard-coded number,
     /// so changing the server limit changes the copy with it.
     static func lengthLimitMessage(maxSeconds: Int) -> String {
         let minutes = maxSeconds / 60

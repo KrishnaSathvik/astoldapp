@@ -56,6 +56,13 @@ These decisions should be treated as product constraints unless intentionally ch
   text. (`tables` was on the do-not-build list until this date; it now reads *table editing*.)
 - Voice and typing are two input methods for the same note.
 - Voice transcript becomes ordinary editable text.
+- **Voice is free, with a quiet fair-use ceiling** (locked 2026-08-21). No subscription and no Pro
+  tier, so no upsell appears anywhere. One recording is capped at **5 minutes** (changed from 10) and
+  auto-finishes into a transcript rather than being discarded. An attested install gets **60 minutes
+  per UTC month** as a *soft* ceiling — a recording started under the limit finishes whole, and only
+  the next is refused. Enforced by the relay, never the client; only successful transcripts count.
+  **No usage meter ships** — the limit is a cost boundary, not a feature. See `RULES.md` §1 and
+  `docs/04-voice-transcription.md` §14.
 - V1 voice target: English, Telugu, Hindi, Telugu+English, Hindi+English.
 - Voice structure is **nine actions**, each accepting a small closed set of spellings (aliases added
   2026-08-19 — `start bullet list`, `bulleted list`, `start numbered list`, `start checklist`,

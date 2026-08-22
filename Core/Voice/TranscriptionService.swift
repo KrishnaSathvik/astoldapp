@@ -4,6 +4,20 @@ import Foundation
 struct TranscriptionResult: Sendable, Equatable {
     let text: String
     let detectedLanguages: [String]
+    /// Set only when *this* transcription spent the last of the month's voice allowance, carrying
+    /// the relay's own reset instant (`docs/04-voice-transcription.md` §14). It lets the app refuse
+    /// the next microphone tap before the recorder opens, so the ceiling is never discovered by
+    /// losing a spoken thought to it.
+    ///
+    /// A date or nothing — never a remaining-minutes figure. There is no usage meter in V1, and a
+    /// number carried here is a number the interface eventually shows (RULES.md §1).
+    var allowanceExhaustedUntil: Date?
+
+    init(text: String, detectedLanguages: [String], allowanceExhaustedUntil: Date? = nil) {
+        self.text = text
+        self.detectedLanguages = detectedLanguages
+        self.allowanceExhaustedUntil = allowanceExhaustedUntil
+    }
 }
 
 /// The product's recording length limit.
@@ -14,8 +28,10 @@ struct TranscriptionResult: Sendable, Equatable {
 /// relay's `MAX_DURATION_SECONDS` so the app can stop at the same point rather than let someone
 /// speak for fourteen minutes and only then be told no. Keep the two in step.
 enum VoiceLimits {
-    /// 10 minutes, matching the relay default.
-    static let maxRecordingSeconds = 600
+    /// 5 minutes, matching the relay default. Roughly 650–800 spoken words — already a very large
+    /// note entry. The number says what As Told is: you speak a thought into a note, you do not
+    /// record a meeting (changed 2026-08-21 from 10 minutes).
+    static let maxRecordingSeconds = 300
     static var maxRecordingDuration: Duration { .seconds(maxRecordingSeconds) }
 }
 
@@ -30,6 +46,11 @@ enum TranscriptionError: Error, Equatable, Sendable {
     /// follows the server's configuration instead of restating a number the app guessed.
     case recordingTooLong(maxSeconds: Int)
     case rateLimited
+    /// The installation has used its monthly voice allowance
+    /// (`docs/04-voice-transcription.md` §14). Distinct from `rateLimited` even though both arrive
+    /// as `429`: one clears in seconds and the other in days, so they cannot share copy. Carries the
+    /// relay's own reset instant — the app renders it, never computes it.
+    case monthlyLimitReached(resetsAt: Date?)
     /// The relay took too long, or could not be reached at all. Distinct from `offline`: the device
     /// has a connection, the service is simply not answering — and distinct from the generic
     /// `serviceUnavailable`, because retrying in a moment is the useful advice.

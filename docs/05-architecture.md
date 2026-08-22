@@ -516,7 +516,41 @@ Headers:
 }
 ```
 
+When *this* transcription spent the last of the monthly allowance, and only then, two more fields
+ride along:
+
+```json
+{
+  "requestId": "uuid",
+  "text": "transcribed text",
+  "languages": ["te", "en"],
+  "allowanceExhausted": true,
+  "resetsAt": "2026-09-01T00:00:00.000Z"
+}
+```
+
+That pair is why no recording is lost to the ceiling: the client caches the instant and refuses the
+next microphone tap locally, instead of learning where the limit was by having an upload rejected
+after the words were already spoken. A flag and a date deliberately — a used or remaining figure
+would be a usage meter waiting to be drawn, and none ships (RULES.md §1).
+
 Do not return model internals the client does not need.
+
+### Refusals
+
+Every refusal carries a machine-readable `error` code; the app maps codes to copy, never HTTP status
+alone. Two distinct conditions share `429` and MUST stay distinguishable:
+
+```json
+{ "requestId": "uuid", "error": "rate_limited" }
+```
+
+```json
+{ "requestId": "uuid", "error": "monthly_voice_limit", "resetsAt": "2026-09-01T00:00:00.000Z" }
+```
+
+`resetsAt` is the authoritative start of the next UTC month. The client renders it in local time and
+MUST NOT compute a reset date of its own.
 
 ---
 
@@ -525,22 +559,31 @@ Do not return model internals the client does not need.
 ```text
 request
   ↓
-size/content-type validation
+App Attest verification            → 401 attestation_failed
   ↓
-App Attest verification
+rate limit                         → 429 rate_limited
   ↓
-rate limit
+size/content-type validation       → 413 / 415 / 400
   ↓
-temporary in-memory/file handling
+server-measured audio duration     → 413 audio_duration_exceeded · 400 unreadable_audio
+  ↓
+reserve monthly allowance (atomic) → 429 monthly_voice_limit + resetsAt
   ↓
 OpenAI transcription
   ↓
-validate response
+validate response                  → 422 no_speech · 502 transcription_failed  ⟶ refund reservation
   ↓
-return transcript
+return transcript                     (reservation stands; + allowanceExhausted/resetsAt when it
+                                       was this request that reached the ceiling)
   ↓
 destroy temporary audio reference
 ```
+
+Ordering is load-bearing. Everything free happens before the reservation, so a rejected request never
+touches the counter; the reservation happens before the paid call, so the ceiling is checked while it
+can still prevent spend; and the refund happens on every path that does not return a transcript. The
+duration the reservation consumes is the one the duration check already measured — there is never a
+second measurement, and never a client-supplied one.
 
 No user account and no note persistence.
 
@@ -575,6 +618,50 @@ in-memory for dev and tests. `APP_ATTEST_DB_PATH` is required when `APP_ATTEST_R
 Challenges stay in-process on purpose: they expire in 5 minutes and a lost one costs a single
 retried request, so they do not justify the durability cost. That, plus the in-memory rate limiter,
 is why the relay stays single-instance until there is a shared store.
+
+### Monthly voice usage
+
+The fair-use counter (`docs/04-voice-transcription.md` §14) shares that same SQLite file, for the
+same reason the key registry needs it: a counter that resets on deploy enforces nothing. It is a
+second table, not a second service.
+
+```sql
+CREATE TABLE voice_usage (
+  identity_hash TEXT    NOT NULL,   -- SHA-256 of the attested key id, never the id itself
+  period        TEXT    NOT NULL,   -- UTC calendar month, 'YYYY-MM'
+  used_seconds  REAL    NOT NULL,
+  updated_at    INTEGER NOT NULL,
+  PRIMARY KEY (identity_hash, period)
+);
+```
+
+Four columns, all anonymous. The identity is hashed because the counter has no need for the
+reversible value — the registry already holds the key id it must hold, and this table should not be a
+second copy of it.
+
+`reserve()` and `refund()` are the only operations, both single transactions:
+
+```text
+reserve(identity, period, seconds) -> ok | { limitReached, resetsAt }
+  BEGIN IMMEDIATE
+    used = SELECT used_seconds ... (0 if absent)
+    if used >= CEILING: ROLLBACK; return limitReached
+    UPSERT used_seconds = used + seconds
+  COMMIT
+
+refund(identity, period, seconds)
+  BEGIN IMMEDIATE
+    UPSERT used_seconds = max(0, used_seconds - seconds)
+  COMMIT
+```
+
+`BEGIN IMMEDIATE` is what makes the soft ceiling correct under concurrency: read-then-write in
+separate statements lets two requests at 59 minutes both observe "under the ceiling" and both
+proceed. The check is `used >= CEILING` on the value *before* this recording — that is the soft
+ceiling, stated in one comparison.
+
+Old periods are dead weight, not a privacy problem, and may be pruned whenever convenient; nothing
+reads a period other than the current one.
 
 Development builds need a controlled bypass/development environment.
 

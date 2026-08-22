@@ -10,9 +10,14 @@ const schema = z.object({
   // Benchmark arm selector for the transcription instruction; see src/prompt.ts.
   TRANSCRIBE_PROMPT_VARIANT: z.string().default('punctuated'),
   MAX_AUDIO_BYTES: z.coerce.number().int().positive().default(26_214_400),
-  MAX_DURATION_SECONDS: z.coerce.number().int().positive().default(600),
+  MAX_DURATION_SECONDS: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
+  // Monthly fair-use allowance per attested install, in seconds (60 minutes). A *soft* ceiling and a
+  // different control from the two above: the rate limit stops bursts, MAX_DURATION_SECONDS stops one
+  // runaway request, and this stops sustained spend over a month. Do not trade one against another
+  // (RULES.md §3, docs/04-voice-transcription.md §14).
+  MONTHLY_VOICE_SECONDS: z.coerce.number().int().positive().default(3600),
   APP_ATTEST_REQUIRED: z
     .enum(['true', 'false'])
     .default('false')

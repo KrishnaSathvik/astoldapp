@@ -23,6 +23,8 @@ struct PrivacyView: View {
     private let points: [Point] = [
         .init(title: "Your notes stay on your device",
               body: "Notes are stored locally on your iPhone. There is no cloud copy and no sync. The name and settings on your profile are local too."),
+        .init(title: "If you delete As Told",
+              body: "Because your notes live only in the app's own storage, removing As Told removes them with it. Offloading the app instead, from iPhone Storage in Settings, keeps them. A device backup or a transfer to a new iPhone may bring them back too, depending on how your backups are set up."),
         .init(title: "No sign-in",
               body: "As Told never asks you to create an account or sign in. There is nothing tying your notes to an identity."),
         .init(title: "Voice leaves the device only when you ask",

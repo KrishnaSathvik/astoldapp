@@ -17,7 +17,8 @@ primary_region = "ord"   # Chicago. Use `fly platform regions` to pick one neare
   # The authoritative cost bound on a single request. The byte cap does NOT bound minutes — 25 MB of
   # low-bitrate AAC is hours of audio — and OpenAI bills per minute, so this is what caps the spend.
   # Measured server-side from the container, before the paid call (src/media/audioDuration.ts).
-  MAX_DURATION_SECONDS = "600"
+  MAX_DURATION_SECONDS = "300"
+  MONTHLY_VOICE_SECONDS = "3600"
   MAX_AUDIO_BYTES = "26214400"
   # Attestation is REQUIRED. APP_ATTEST_ALLOW_UNPROTECTED is deliberately absent: with it gone,
   # `loadConfig` refuses to boot a production relay that has attestation off, so an open paid

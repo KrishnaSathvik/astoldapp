@@ -3,8 +3,8 @@ import { Buffer } from 'node:buffer';
 /**
  * Synthetic audio containers with an exact, known duration.
  *
- * Boundary cases (599 / 600 / 601 seconds) have to be exact, and no encoder will hand you exactly
- * 600.000 s — real files land a frame or two either side of the value you asked for. So these are
+ * Boundary cases (299 / 300 / 301 seconds) have to be exact, and no encoder will hand you exactly
+ * 300.000 s — real files land a frame or two either side of the value you asked for. So these are
  * built field by field: the duration a test asks for is the duration written into the header.
  *
  * `test/audioDuration.test.ts` cross-checks the parser against genuine ffmpeg output where ffmpeg is

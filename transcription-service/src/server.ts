@@ -8,6 +8,7 @@ import { transcribeRoutes } from './routes/transcribe.js';
 import { makeVerifier, type AttestationVerifier } from './security/attestation.js';
 import { makeAttestedKeyStore } from './security/attestedKeyStore.js';
 import { InMemoryRateLimiter, type RateLimiter } from './security/rateLimit.js';
+import { makeVoiceUsageStore, type VoiceUsageStore } from './security/voiceUsage.js';
 import { FakeTranscriptionProvider } from './services/fakeTranscription.js';
 import { OpenAITranscriptionProvider } from './services/openaiTranscription.js';
 import type { TranscriptionProvider } from './services/transcription.js';
@@ -17,6 +18,7 @@ export interface Deps {
   provider: TranscriptionProvider;
   verifier: AttestationVerifier;
   limiter: RateLimiter;
+  usage: VoiceUsageStore;
   /**
    * Where log records are written. Exists so tests can assert what the relay actually logs, while
    * still going through the configured serializers and redaction — a seam that replaced the logger
@@ -48,6 +50,7 @@ export function makeDefaultDeps(config: Config): Deps {
       config.RATE_LIMIT_MAX,
       config.RATE_LIMIT_WINDOW_SECONDS * 1000,
     ),
+    usage: makeVoiceUsageStore(config),
   };
 }
 

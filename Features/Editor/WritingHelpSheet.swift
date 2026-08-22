@@ -76,6 +76,12 @@ struct WritingHelpSheet: View {
                         .foregroundStyle(Color.ds.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, DSSpacing.s2)
+                    // Below the promise, in the same quiet caption: a fact worth being able to find,
+                    // not a number worth putting in front of anyone.
+                    Text(WritingHelp.voiceAllowanceNote)
+                        .font(.ds.caption)
+                        .foregroundStyle(Color.ds.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, DSSpacing.screenH)

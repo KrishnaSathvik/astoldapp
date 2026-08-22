@@ -22,6 +22,7 @@ final class VoiceCaptureModel {
     private var recorder: AudioRecording
     private let service: TranscriptionService
     private let consent: TranscriptionConsentStoring
+    private let allowance: VoiceAllowanceStoring
     private let onTranscript: (String) -> Void
 
     private var recordedURL: URL?
@@ -35,6 +36,7 @@ final class VoiceCaptureModel {
     init(recorder: AudioRecording,
          service: TranscriptionService,
          consent: TranscriptionConsentStoring? = nil,
+         allowance: VoiceAllowanceStoring? = nil,
          maxRecordingDuration: Duration = VoiceLimits.maxRecordingDuration,
          onTranscript: @escaping (String) -> Void) {
         self.recorder = recorder
@@ -43,12 +45,22 @@ final class VoiceCaptureModel {
         self.consent = consent ?? (service.sendsAudioOffDevice
             ? UserDefaultsTranscriptionConsent()
             : AlwaysGrantedTranscriptionConsent())
+        // Likewise: audio that never reaches the relay never spends the relay's allowance.
+        self.allowance = allowance ?? (service.sendsAudioOffDevice
+            ? UserDefaultsVoiceAllowance()
+            : AlwaysAvailableVoiceAllowance())
         self.maxRecordingDuration = maxRecordingDuration
         self.onTranscript = onTranscript
     }
 
     /// Ask for permission and start recording.
     func begin() async {
+        // Refuse before the microphone opens, not after the upload. The relay already told us voice
+        // is spent for this month; recording anyway would take a thought we then cannot transcribe.
+        if let until = allowance.unavailableUntil {
+            phase = .failed(.monthlyLimitReached(resetsAt: until))
+            return
+        }
         guard await recorder.requestPermission() else { phase = .permissionDenied; return }
         do {
             // A call or Siri ends the recording for us — finish with what was captured rather than
@@ -147,10 +159,23 @@ final class VoiceCaptureModel {
                 onTranscript(result.text)          // editor owns insertion
                 recorder.cleanup(url)              // delete temp audio on success
                 recordedURL = nil
+                if let until = result.allowanceExhaustedUntil {
+                    // This recording succeeded *and* spent the last of the month's allowance.
+                    // Remembering that here is what makes the next microphone tap refuse before it
+                    // opens, instead of taking a thought it cannot transcribe.
+                    allowance.markUnavailable(until: until)
+                } else {
+                    allowance.clear()              // voice worked; any remembered refusal is stale
+                }
                 phase = .idle
             } catch is CancellationError {
                 // left as-is; cancel()/discard() handle cleanup
             } catch let e as TranscriptionError {
+                if case .monthlyLimitReached(let resetsAt) = e {
+                    // The one recording that crosses the ceiling is lost; remembering the date is
+                    // what stops the one after it from being lost too.
+                    allowance.markUnavailable(until: resetsAt)
+                }
                 phase = .failed(e)                 // keep temp file for explicit retry
             } catch {
                 phase = .failed(.serviceUnavailable)

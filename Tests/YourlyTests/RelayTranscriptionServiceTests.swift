@@ -59,6 +59,43 @@ struct RelayTranscriptionServiceTests {
         }
     }
 
+    /// The relay uses 429 for both of its limits; only the error code says which one was hit.
+    /// Sending too fast clears in a moment, the monthly allowance clears in days — telling someone
+    /// with a spent allowance to "try again shortly" would simply be false.
+    @Test func maps429MonthlyLimitToItsOwnError() async throws {
+        StubURLProtocol.failWith = nil
+        StubURLProtocol.status = 429
+        StubURLProtocol.body = try JSONSerialization.data(withJSONObject: [
+            "requestId": "r1", "error": "monthly_voice_limit", "resetsAt": "2026-09-01T00:00:00.000Z",
+        ])
+
+        let expected = Date(timeIntervalSince1970: 1_788_220_800) // 2026-09-01T00:00:00Z
+        await #expect(throws: TranscriptionError.monthlyLimitReached(resetsAt: expected)) {
+            _ = try await makeService().transcribe(audioURL: try tempAudio(), requestID: UUID())
+        }
+    }
+
+    /// A reset instant the app cannot read must not become a reset instant the app makes up.
+    @Test func monthlyLimitWithoutAReadableDateCarriesNoDate() async throws {
+        StubURLProtocol.failWith = nil
+        StubURLProtocol.status = 429
+        StubURLProtocol.body = try JSONSerialization.data(withJSONObject: [
+            "error": "monthly_voice_limit", "resetsAt": "not a date",
+        ])
+        await #expect(throws: TranscriptionError.monthlyLimitReached(resetsAt: nil)) {
+            _ = try await makeService().transcribe(audioURL: try tempAudio(), requestID: UUID())
+        }
+    }
+
+    /// Accept the instant with or without fractional seconds, rather than letting a formatter
+    /// mismatch turn a known reset date into an unknown one.
+    @Test func parsesTheResetInstantEitherWay() {
+        let expected = Date(timeIntervalSince1970: 1_788_220_800)
+        #expect(RelayTranscriptionService.isoDate("2026-09-01T00:00:00.000Z") == expected)
+        #expect(RelayTranscriptionService.isoDate("2026-09-01T00:00:00Z") == expected)
+        #expect(RelayTranscriptionService.isoDate("whenever") == nil)
+    }
+
     @Test func maps413ToTooLarge() async throws {
         StubURLProtocol.failWith = nil
         StubURLProtocol.status = 413
@@ -74,9 +111,9 @@ struct RelayTranscriptionServiceTests {
         StubURLProtocol.failWith = nil
         StubURLProtocol.status = 413
         StubURLProtocol.body = try JSONSerialization.data(withJSONObject: [
-            "requestId": "r1", "error": "audio_duration_exceeded", "maxSeconds": 600,
+            "requestId": "r1", "error": "audio_duration_exceeded", "maxSeconds": 300,
         ])
-        await #expect(throws: TranscriptionError.recordingTooLong(maxSeconds: 600)) {
+        await #expect(throws: TranscriptionError.recordingTooLong(maxSeconds: 300)) {
             _ = try await makeService().transcribe(audioURL: try tempAudio(), requestID: UUID())
         }
     }
@@ -86,9 +123,9 @@ struct RelayTranscriptionServiceTests {
         StubURLProtocol.failWith = nil
         StubURLProtocol.status = 413
         StubURLProtocol.body = try JSONSerialization.data(withJSONObject: [
-            "error": "audio_duration_exceeded", "maxSeconds": 300,
+            "error": "audio_duration_exceeded", "maxSeconds": 900,
         ])
-        await #expect(throws: TranscriptionError.recordingTooLong(maxSeconds: 300)) {
+        await #expect(throws: TranscriptionError.recordingTooLong(maxSeconds: 900)) {
             _ = try await makeService().transcribe(audioURL: try tempAudio(), requestID: UUID())
         }
     }

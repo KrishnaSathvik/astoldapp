@@ -46,7 +46,7 @@ Everything here is done **offline**. No `fly deploy`, no machine.
 
 - [x] Duration guard committed — `src/media/audioDuration.ts` measures the recording server-side,
       before the paid call, and fails closed on audio it cannot read.
-- [x] `fly.toml` hardened — `MAX_DURATION_SECONDS=600`, `MAX_AUDIO_BYTES`, `APP_ATTEST_REQUIRED=true`,
+- [x] `fly.toml` hardened — `MAX_DURATION_SECONDS=300`, `MONTHLY_VOICE_SECONDS=3600`, `MAX_AUDIO_BYTES`, `APP_ATTEST_REQUIRED=true`,
       `APP_ATTEST_DB_PATH=/data/app-attest.db`, and `APP_ATTEST_ALLOW_UNPROTECTED` **deleted**.
       With that line gone, `loadConfig` refuses to boot a production relay that has attestation off,
       so an open paid endpoint is now a startup failure rather than a silent risk. Do not re-add it.

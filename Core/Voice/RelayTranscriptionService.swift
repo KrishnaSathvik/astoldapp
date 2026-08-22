@@ -27,6 +27,11 @@ struct RelayTranscriptionService: TranscriptionService {
         let error: String?
         /// Present on `audio_duration_exceeded` — the relay's configured limit, in seconds.
         let maxSeconds: Int?
+        /// Present on `monthly_voice_limit`, and on the success that spends the last of the
+        /// allowance — ISO-8601 start of the next UTC month.
+        let resetsAt: String?
+        /// Present only on the successful response that exhausted the monthly allowance.
+        let allowanceExhausted: Bool?
     }
 
     func transcribe(audioURL: URL, requestID: UUID) async throws -> TranscriptionResult {
@@ -76,7 +81,15 @@ struct RelayTranscriptionService: TranscriptionService {
                   let text = decoded.text, !text.isEmpty else {
                 throw TranscriptionError.invalidResponse
             }
-            return TranscriptionResult(text: text, detectedLanguages: decoded.languages ?? [])
+            // The relay reports exhaustion on the very request that caused it, so the app can stop
+            // the *next* recording rather than let it be spoken and then refused.
+            return TranscriptionResult(
+                text: text,
+                detectedLanguages: decoded.languages ?? [],
+                allowanceExhaustedUntil: decoded.allowanceExhausted == true
+                    ? decoded.resetsAt.flatMap(Self.isoDate)
+                    : nil
+            )
         case 401:
             await attestationRejected()                   // stale registration — re-attest next time
             throw TranscriptionError.serviceUnavailable   // attestation failed — not user-facing detail
@@ -99,10 +112,29 @@ struct RelayTranscriptionService: TranscriptionService {
         case 422:
             throw TranscriptionError.noSpeech
         case 429:
-            throw TranscriptionError.rateLimited
+            // Two unrelated limits share this status, so the code decides which. Sending too fast
+            // clears in a moment; the monthly allowance clears in days, and telling someone to
+            // "try again shortly" would simply be false.
+            let decoded = try? JSONDecoder().decode(Response.self, from: responseData)
+            guard decoded?.error == "monthly_voice_limit" else {
+                throw TranscriptionError.rateLimited
+            }
+            throw TranscriptionError.monthlyLimitReached(
+                resetsAt: decoded?.resetsAt.flatMap(Self.isoDate)
+            )
         default:
             throw TranscriptionError.serviceUnavailable
         }
+    }
+
+    /// The relay sends `resetsAt` with fractional seconds; accept it with or without them rather
+    /// than letting a formatter mismatch turn a known reset date into an unknown one.
+    static func isoDate(_ raw: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: raw) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: raw)
     }
 
     /// Idle timeout for the upload + transcription round trip. Not the handshake's short deadline.

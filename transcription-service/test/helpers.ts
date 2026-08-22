@@ -3,6 +3,7 @@ import { Writable } from 'node:stream';
 import { buildServer, type Deps } from '../src/server.js';
 import { DevBypassVerifier } from '../src/security/attestation.js';
 import { InMemoryRateLimiter } from '../src/security/rateLimit.js';
+import { MemoryVoiceUsageStore } from '../src/security/voiceUsage.js';
 import { FakeTranscriptionProvider } from '../src/services/fakeTranscription.js';
 import type { TranscriptionProvider } from '../src/services/transcription.js';
 
@@ -13,9 +14,10 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     OPENAI_API_KEY: undefined,
     TRANSCRIBE_MODEL: 'gpt-transcribe',
     MAX_AUDIO_BYTES: 1024, // small, so oversized tests are cheap
-    MAX_DURATION_SECONDS: 600,
+    MAX_DURATION_SECONDS: 300,
     RATE_LIMIT_MAX: 3,
     RATE_LIMIT_WINDOW_SECONDS: 60,
+    MONTHLY_VOICE_SECONDS: 3600,
     APP_ATTEST_REQUIRED: false,
     APP_ATTEST_APP_ID: undefined,
     APP_ATTEST_PRODUCTION: false,
@@ -38,6 +40,7 @@ export function buildTestServer(opts: {
     limiter:
       opts.deps?.limiter ??
       new InMemoryRateLimiter(config.RATE_LIMIT_MAX, config.RATE_LIMIT_WINDOW_SECONDS * 1000),
+    usage: opts.deps?.usage ?? new MemoryVoiceUsageStore(config.MONTHLY_VOICE_SECONDS),
     ...(opts.deps?.logDestination ? { logDestination: opts.deps.logDestination } : {}),
   };
   return buildServer(deps);

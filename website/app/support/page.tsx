@@ -213,6 +213,28 @@ const VOICE: readonly FaqItem[] = [
       </p>
     ),
   },
+  {
+    q: 'How long can one recording be?',
+    a: (
+      <p>
+        Up to five minutes, which is roughly seven or eight hundred spoken words. If you reach it,
+        As Told finishes the recording and transcribes it rather than throwing it away &mdash; tap
+        the microphone again to keep going, and the next transcription lands wherever your cursor
+        is. Voice is for speaking a thought into a note, not for recording a meeting.
+      </p>
+    ),
+  },
+  {
+    q: 'Is there a limit on voice transcription?',
+    a: (
+      <p>
+        As Told includes up to 60 minutes of voice transcription each month. Most people
+        won&rsquo;t need to think about it. If you reach the limit, As Told will tell you when
+        voice becomes available again, and everything else &mdash; typing, editing, search, the
+        calendar &mdash; keeps working normally.
+      </p>
+    ),
+  },
 ];
 
 const PRIVACY: readonly FaqItem[] = [
@@ -238,9 +260,10 @@ const PRIVACY: readonly FaqItem[] = [
     q: 'Is there cloud sync or a backup?',
     a: (
       <p>
-        Not in this version. There is no cloud copy of your notes and no device-to-device sync, so
-        the device backups you already use are the way to keep a copy. Deleting the app deletes its
-        notes with it.
+        Not in this version. There is no cloud copy of your notes and no device-to-device sync.
+        Deleting As Told deletes its local notes; offloading the app instead, from iPhone Storage
+        in Settings, keeps them. A device backup or transfer may restore them later, depending on
+        your Apple backup settings.
       </p>
     ),
   },
