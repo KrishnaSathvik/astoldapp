@@ -112,6 +112,7 @@ Specifications (`docs/`):
 | `docs/06-tech-stack.md` | Exact recommended technologies and why |
 | `docs/07-build-plan.md` | Implementation order, phases, and definition of done |
 | `docs/08-positioning-marketing.md` | Long-term positioning, brand/messaging hierarchy, App Store (ASO), SEO, website, screenshots, and the marketing-lags-implementation rule |
+| `docs/09-v2-roadmap.md` | **Proposed** V2 direction: the Free / Pro split, the eight-phase build order, and the rule amendments each phase would require (nothing in it is built or locked) |
 | `docs/design-reference/screens-overview.png` | Canonical 10-screen visual reference for V1 |
 
 Marketing site (`website/`):

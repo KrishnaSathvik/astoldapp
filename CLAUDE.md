@@ -47,6 +47,7 @@ there, surface the conflict instead of silently overriding it.
 | `docs/05-architecture.md` | Modules, `Note` model, `NoteStore`, pagination, backend flow, error model |
 | `docs/06-tech-stack.md` | Exact technologies and the reasoning for each |
 | `docs/07-build-plan.md` | Phase-by-phase build order and Definition of Done |
+| `docs/09-v2-roadmap.md` | Proposed V2 roadmap (Free/Pro split, build order) — **not built, not locked; `RULES.md` still wins** |
 | `docs/design-reference/screens-overview.png` | **Canonical 10-screen visual reference** — match it |
 
 ## How to work here
