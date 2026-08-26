@@ -15,26 +15,19 @@ type Props = {
  * and a homemade one reads as a fake the moment it sits next to a real one. So
  * the button is typographic — the site's own accent, the site's own type.
  *
- * The listing is live, so this is a real link to it — one `APP_STORE_URL`, set
- * in `lib/site.ts`, feeds every CTA on the site. The `pending` branch below is
- * kept because it is the honest state if that constant is ever `null` again;
- * it is not dead weight, it is the switch. Only the official Apple-supplied
- * badge asset may replace this text; nothing else may.
+ * As Told is **on** the App Store, so this is simply a link to it. The
+ * pre-launch "Coming to the App Store" state is gone rather than switched off:
+ * `APP_STORE_URL` is a constant in `lib/site.ts`, not a maybe, and a shipped
+ * app has no use for a state that says it hasn't shipped. Only the official
+ * Apple-supplied badge asset may replace this text; nothing else may.
  */
 export function AppStoreButton({ size = 'full' }: Props) {
-  const className = `${styles.btn} ${size === 'compact' ? styles.compact : ''}`;
-
-  if (APP_STORE_URL) {
-    return (
-      <a className={className} href={APP_STORE_URL}>
-        Get As Told
-      </a>
-    );
-  }
-
   return (
-    <span className={`${className} ${styles.pending}`}>
-      {size === 'compact' ? 'Get As Told' : 'Coming to the App Store'}
-    </span>
+    <a
+      className={`${styles.btn} ${size === 'compact' ? styles.compact : ''}`}
+      href={APP_STORE_URL}
+    >
+      Get As Told
+    </a>
   );
 }

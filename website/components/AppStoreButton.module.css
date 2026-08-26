@@ -31,12 +31,3 @@ a.btn:active {
   font-size: 0.9rem;
   box-shadow: none;
 }
-
-/* No store record yet: reads as a status, not as a control. */
-.pending {
-  cursor: default;
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-  color: var(--accent-deep);
-  box-shadow: none;
-  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
-}

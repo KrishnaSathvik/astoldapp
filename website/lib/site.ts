@@ -32,15 +32,16 @@ export const UTILITY_NAV = [
 ] as const;
 
 /**
- * The listing is live (approved 2026-08-26), so every call to action on the
- * site is a real link. This is still the only place the store is named: the
- * CTA reads `APP_STORE_URL`, and the iOS Safari smart banner in `app/layout.tsx`
- * is built from `APP_STORE_ID`. The `| null` type is kept on purpose — the
- * `pending` CTA state is one edit away if the listing ever has to come down.
+ * As Told shipped on 2026-08-26. This is the only place the store is named:
+ * every CTA reads `APP_STORE_URL`, and the iOS Safari smart banner in
+ * `app/layout.tsx` is built from `APP_STORE_ID`.
+ *
+ * Not nullable. It was, while there was nothing to link to, and the CTA carried
+ * a matching "Coming to the App Store" state — both are gone. An app that is on
+ * the store does not need a way to say it isn't.
  */
 export const APP_STORE_ID = '6804007726';
-export const APP_STORE_URL: string | null =
-  `https://apps.apple.com/us/app/as-told/id${APP_STORE_ID}`;
+export const APP_STORE_URL = `https://apps.apple.com/us/app/as-told/id${APP_STORE_ID}`;
 
 /**
  * Deliberately `null`, and not an oversight.
