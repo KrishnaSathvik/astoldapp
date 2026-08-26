@@ -1,5 +1,4 @@
 import SwiftUI
-import StoreKit
 
 /// Profile — the top-level "you" screen in As Told's Quiet Editorial style (warm canvas, chromeless
 /// rows, no iOS cards). Holds an optional name and Settings / About / Rating.
@@ -7,7 +6,6 @@ struct ProfileView: View {
     @Bindable var lock: AppLockModel
     @Environment(ThemeStore.self) private var themeStore
     @AppStorage("profileName") private var name = ""
-    @Environment(\.requestReview) private var requestReview
 
     var body: some View {
         ScrollView {
@@ -49,10 +47,15 @@ struct ProfileView: View {
                     }
                     .buttonStyle(.plain)
                     Separator()
-                    Button { requestReview() } label: {
+                    // A link to the listing's review sheet, not `requestReview()`. SwiftUI's
+                    // review action is a *system* prompt: Apple rate-limits it and may show
+                    // nothing at all, which makes a row someone deliberately tapped look broken.
+                    // The write-review deep link always opens something.
+                    Link(destination: AppLinks.writeReview) {
                         ProfileRow(title: "Rate As Told") { Chevron() }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityHint("Opens the App Store to write a review")
                     Separator()
                     ProfileRow(title: "Version") {
                         Text(appVersion).font(.ds.preview).foregroundStyle(Color.ds.textSecondary)

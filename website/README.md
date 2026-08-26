@@ -55,8 +55,8 @@ subject was privacy, and that content now lives on `/` and `/privacy`.
 
 4. **Nothing here imitates an Apple control.** The CTA is typographic. It used to pair a
    hand-copied Apple logo path with the words "Coming to the App Store", which is a counterfeit
-   of a system badge; the SVG is gone. When there is a listing, `APP_STORE_URL` makes the CTA a
-   link, and only Apple's own supplied badge asset may replace the text.
+   of a system badge; the SVG is gone. The listing is live, so `APP_STORE_URL` is set and every
+   CTA is a real link — only Apple's own supplied badge asset may replace the text.
 
 ## Architecture
 
@@ -69,7 +69,7 @@ app/                 one route per directory; every page is statically prerender
   sitemap.ts         generated /sitemap.xml
   robots.ts          generated /robots.txt
 components/          shared building blocks, each with its own CSS module
-lib/site.ts          canonical URL, nav, App Store state, support contact, metadata helper
+lib/site.ts          canonical URL, nav, App Store listing, support contact, metadata helper
 public/              screenshots, icons, og.png, site.webmanifest
 ```
 
@@ -99,8 +99,11 @@ server component.
   collapses to nothing until its image loads.
 - **Never lock `body` overflow.** `<html>` is the scroll port here; hiding body's overflow makes
   body a scroll container and the sticky header stops sticking.
-- **The App Store CTA** is the `pending` "Coming to the App Store" state until
-  `APP_STORE_URL` in `lib/site.ts` is a real URL. Setting it flips every CTA on the site.
+- **The App Store CTA** links to the live listing. `APP_STORE_URL` in `lib/site.ts` is the only
+  place the store is named — it flips every CTA on the site at once, and `APP_STORE_ID` beside it
+  feeds the iOS Safari smart banner (`itunes.appId` in `app/layout.tsx`). Setting the constant
+  back to `null` restores the `pending` "Coming to the App Store" state; that branch is kept for
+  exactly that reason.
 - **The language specimens carry no linguistic gloss.** "English nouns taking Telugu case
   endings" is true, academic, and worth nothing to a reader who already speaks that way. Show
   the sentence; let them recognise themselves. Captions say what the *product* does.

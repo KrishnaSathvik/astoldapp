@@ -15,10 +15,11 @@ type Props = {
  * and a homemade one reads as a fake the moment it sits next to a real one. So
  * the button is typographic — the site's own accent, the site's own type.
  *
- * There is no App Store record yet, so it renders as a non-interactive status
- * rather than a button that does nothing when tapped. It becomes a real link the
- * moment `APP_STORE_URL` is set, in one place, for the whole site. When that
- * happens the official Apple-supplied badge may replace this; nothing else may.
+ * The listing is live, so this is a real link to it — one `APP_STORE_URL`, set
+ * in `lib/site.ts`, feeds every CTA on the site. The `pending` branch below is
+ * kept because it is the honest state if that constant is ever `null` again;
+ * it is not dead weight, it is the switch. Only the official Apple-supplied
+ * badge asset may replace this text; nothing else may.
  */
 export function AppStoreButton({ size = 'full' }: Props) {
   const className = `${styles.btn} ${size === 'compact' ? styles.compact : ''}`;

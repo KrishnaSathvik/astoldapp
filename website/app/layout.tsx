@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { RevealObserver } from '@/components/RevealObserver';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SiteHeader } from '@/components/SiteHeader';
-import { PROMISE, SITE_NAME, SITE_URL, TAGLINE } from '@/lib/site';
+import { APP_STORE_ID, PROMISE, SITE_NAME, SITE_URL, TAGLINE } from '@/lib/site';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -14,6 +14,10 @@ export const metadata: Metadata = {
   description:
     'A private writing space for iPhone. Write it or speak it — in English, Telugu or Hindi — shape it with headings and lists, and keep it on your device.',
   applicationName: SITE_NAME,
+  /* Renders <meta name="apple-itunes-app">, which is the Safari smart banner on
+     iOS — the one place a visitor already holding the right device can install
+     without reading a word. Same listing id as every CTA. */
+  itunes: { appId: APP_STORE_ID },
   manifest: '/site.webmanifest',
   icons: {
     icon: [

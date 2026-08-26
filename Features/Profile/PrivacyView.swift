@@ -1,10 +1,20 @@
 import SwiftUI
 
-/// Where the app's user-facing privacy links live. The policy is hosted, not bundled, so it can be
+/// Where the app's user-facing links live. The privacy policy is hosted, not bundled, so it can be
 /// corrected without shipping a build — App Review 5.1.1(i) requires the link to be reachable from
 /// inside the app as well as from App Store Connect.
 enum AppLinks {
-    static let privacyPolicy = URL(string: "https://astold.app/privacy")!
+    static let privacyPolicy = URL(string: "https://www.astold.app/privacy")!
+
+    /// The live listing (approved 2026-08-26). Written once, here; the website keeps its own copy
+    /// of the same id in `website/lib/site.ts`.
+    static let appStoreID = "6804007726"
+
+    static let appStore = URL(string: "https://apps.apple.com/app/id\(appStoreID)")!
+
+    /// The listing with the review sheet already open. `?action=write-review` is the documented
+    /// deep link, and unlike a review *prompt* it always lands somewhere real.
+    static let writeReview = URL(string: "https://apps.apple.com/app/id\(appStoreID)?action=write-review")!
 }
 
 /// Privacy screen. The copy reflects the *actual* architecture (docs/01-product-requirements.md §11,

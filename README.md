@@ -17,7 +17,7 @@ The app is intentionally **not** a productivity workspace, AI writing assistant,
 
 These decisions should be treated as product constraints unless intentionally changed later.
 
-- Product name is **As Told** (locked 2026-08-17). Full marketing name: **As Told — Private Notes**. App Store name and home-screen icon label: **As Told**. The internal Xcode target/module stays `Yourly`; the bundle id is `com.astold.app` (changed 2026-08-18, before any App Store Connect record existed).
+- Product name is **As Told** (locked 2026-08-17). Full marketing name: **As Told — Private Notes**. App Store name and home-screen icon label: **As Told**. The internal Xcode target/module stays `Yourly`; the bundle id is `com.astold.app` (changed 2026-08-18, before any App Store Connect record existed — it is permanent now that one does). **Reviewed and approved 2026-08-26**: Apple ID `6804007726`, listing at `https://apps.apple.com/us/app/as-told/id6804007726`. The id lives in two places that feed everything else — `APP_STORE_ID` in `website/lib/site.ts` and `AppLinks.appStoreID` in `Features/Profile/PrivacyView.swift`.
 - Primary descriptor: **A private place for anything you want to put into words.** Brand promise: **Your words, as told by you.** (Repositioned 2026-08-18 from the thoughts-only *"Private notes, in your own words."* framing. This **widens the invitation, not the product**: V1 shipped scope, the do-not-build fences, and all shipped-feature marketing claims are unchanged; structured writing and voice-structure commands are sequenced roadmap, not V1. Tagline is unchanged. Full brand / ASO / SEO / website direction: `docs/08-positioning-marketing.md`.)
 - iPhone only, **portrait only** (locked 2026-08-18). No iPad, Mac Catalyst, or visionOS.
 - No account or sign-in.
@@ -121,7 +121,7 @@ Marketing site (`website/`):
 |---|---|
 | `website/README.md` | How the site is built and deployed, the three rules it holds to, and how to regenerate the screenshots and the social card |
 
-The site is a Next.js App Router app on Vercel serving `astold.app` — six routes, every one
+The site is a Next.js App Router app on Vercel serving `www.astold.app` (the apex redirects to it) — six routes, every one
 statically prerendered, no environment variables. Its screenshots are captures of the shipping
 app rather than mockups, so **it lags the product on purpose**: nothing is published there until
 it works in the build (`docs/08-positioning-marketing.md` §0).
@@ -214,7 +214,7 @@ website/
 │   ├── sitemap.ts      generated /sitemap.xml
 │   └── robots.ts       generated /robots.txt
 ├── components/         shared building blocks, each with its own CSS module
-├── lib/site.ts         canonical URL, nav, App Store state, support contact
+├── lib/site.ts         canonical URL, nav, App Store listing, support contact
 ├── public/assets/shots/  screenshots of the shipping app, straight from the simulator
 ├── scripts/            screenshot + width audits, and the og.png generator
 └── next.config.ts      permanent redirects from every retired URL, security headers

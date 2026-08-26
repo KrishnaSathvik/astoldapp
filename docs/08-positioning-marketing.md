@@ -104,6 +104,15 @@ Optional supporting line: *Type it or say it. As Told stays out of your way.*
 
 ## 4. App Store (ASO)
 
+**Live since 2026-08-26** — approved and on the store:
+`https://apps.apple.com/us/app/as-told/id6804007726` (Apple ID `6804007726`, bundle `com.astold.app`).
+
+That id is written in exactly two places in this repo, both of which derive every other use of it:
+`APP_STORE_ID` in `website/lib/site.ts` (the site's CTAs and the iOS Safari smart banner) and
+`AppLinks.appStoreID` in `Features/Profile/PrivacyView.swift` (the app's own "Rate As Told" row,
+which is a `?action=write-review` deep link, not a rate-limited system prompt). Everything below
+this line described the listing before it existed; it is still the copy of record for it.
+
 Apple currently indexes the **app name**, **subtitle**, **keyword field**, and **company name** for
 search, allows the name and subtitle up to 30 characters each, and up to 100 bytes of keywords. Do not
 keyword-stuff the name, do not duplicate searchable terms across fields, and do not use competitor
@@ -341,7 +350,15 @@ Done (2026-08-18, re-verified on the v9 rebuild 2026-08-20):
 Outstanding:
 
 - [x] **Ship `website/og.png`** — rendered and in place; every page references it (see §5 Open Graph)
-- [ ] Point the `astold.app` DNS at the Vercel project, then re-verify canonicals resolve
+- [x] **Live App Store listing wired into the site and the app** (2026-08-26) — `APP_STORE_URL` is
+      set, so all three CTAs (header, hero, final) are links; the iOS Safari smart banner is on via
+      `itunes.appId`; and "Rate As Told" in the app opens the listing's review sheet
+- [x] **Point the `astold.app` DNS at the Vercel project** — done: Vercel nameservers, both hosts
+      attached to the `astoldapp` project, every route serving 200
+- [x] **Canonicals resolve without a redirect** (2026-08-26) — `www` is the Vercel **primary**, so
+      the apex 308s to it; `SITE_URL` named the apex, which made every canonical, `og:url` and
+      sitemap entry point at a URL that redirects. `SITE_URL` is now `https://www.astold.app`.
+      The apex redirect stays, so older links keep working
 - [x] Audit alt text — every screenshot carries a descriptive alt; only the brand mark and the CTA
       feather are `alt=""`
 - [ ] Capture a blank-editor shot and a dark-editor shot (see `website/README.md` § Known gaps)
@@ -350,7 +367,7 @@ Outstanding:
       personal mailbox, and a plain-text address on a crawled page is scraped within days.
       `SUPPORT_EMAIL` in `website/lib/site.ts` therefore stays `null`, and `/support`, `/privacy`
       and `/terms` keep the self-service answer (the FAQ, plus the app's own Writing help).
-      The public **Support URL** on the listing is `https://astold.app/support`.
+      The public **Support URL** on the listing is `https://www.astold.app/support`.
 - [ ] Move support to a mailbox on `astold.app` and set `SUPPORT_EMAIL` — then all three pages
       become a real `mailto:` from one constant, and the personal address comes out of the loop
 - [ ] JSON-LD only where the type genuinely applies (`SoftwareApplication` is the plausible one)

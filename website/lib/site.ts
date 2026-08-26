@@ -1,6 +1,15 @@
 import type { Metadata } from 'next';
 
-export const SITE_URL = 'https://astold.app';
+/**
+ * `www` on purpose, and it must match the Vercel project's **primary** domain.
+ *
+ * Both hosts are attached; `www` is primary, so the bare apex 308-redirects to
+ * it. Every absolute URL the site emits is built from this one constant —
+ * canonical, `og:url`, `og:image`, sitemap — so when it named the apex, every
+ * page was declaring a canonical that immediately redirected somewhere else.
+ * If the primary is ever changed in Vercel, change it here in the same breath.
+ */
+export const SITE_URL = 'https://www.astold.app';
 
 export const SITE_NAME = 'As Told';
 export const TAGLINE = 'Write it. Say it. Keep it.';
@@ -23,11 +32,15 @@ export const UTILITY_NAV = [
 ] as const;
 
 /**
- * There is no App Store record yet, so every call to action renders as a
- * non-interactive "Coming to the App Store" state. When there is a real store
- * URL, set it here and every CTA on the site becomes a link at once.
+ * The listing is live (approved 2026-08-26), so every call to action on the
+ * site is a real link. This is still the only place the store is named: the
+ * CTA reads `APP_STORE_URL`, and the iOS Safari smart banner in `app/layout.tsx`
+ * is built from `APP_STORE_ID`. The `| null` type is kept on purpose — the
+ * `pending` CTA state is one edit away if the listing ever has to come down.
  */
-export const APP_STORE_URL: string | null = null;
+export const APP_STORE_ID = '6804007726';
+export const APP_STORE_URL: string | null =
+  `https://apps.apple.com/us/app/as-told/id${APP_STORE_ID}`;
 
 /**
  * Deliberately `null`, and not an oversight.
