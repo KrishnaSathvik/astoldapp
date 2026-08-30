@@ -43,6 +43,29 @@ Markdown UI, font/color pickers, block-type zoos, due-date/priority/recurring-ta
 analytics, streaks, or any AI rewriting / summaries / chat / generation. It remains a **writing space**,
 not a productivity operating system. See `RULES.md` §7.
 
+### Voice positioning — repositioned 2026-08-28
+
+> **Previous framing (too narrow):** *English, Telugu & Hindi.*
+>
+> **New framing:** **Multilingual voice transcription, including mixed-language speech.**
+
+English / Telugu / Hindi were always the **benchmark groups** — the five sets whose quality is measured
+before a release (`docs/04-voice-transcription.md` §3) — and were never the product's boundary. The relay
+deliberately omits the `language` parameter, because forcing one would collapse code-switching, so the
+shipped pipeline does not restrict what a person may speak. Marketing that led with three languages
+described the test plan and made As Told read as a niche three-language app.
+
+Headline the capability; keep the groups as evidence:
+
+- **Use:** *Speak the way you actually speak* · *Multilingual voice transcription* · *Switch languages
+  naturally* · *Your words stay in the language you used* · *No forced translation* · *Mixed-language
+  speech is welcome*.
+- **Never use:** *all languages* · *every language* · a language **count** · *perfect transcription* ·
+  *understands any accent*. See `RULES.md` §7 ("Language claims"), which is binding.
+- **English, Telugu, Hindi and the code-switched pairs stay on the page** — as a quiet line saying what
+  has been tested most closely, in the register of a footnote, never as a headline or a chip row that
+  reads like a supported-languages list.
+
 ### Core principle
 
 > **The page does not decide what the writing is. The user does.** One universal document supports many
@@ -170,34 +193,82 @@ Opening:
 > Build a list. Or tap the microphone and simply say what's on your mind. Typing and speaking belong on
 > the same page, so you never have to decide what kind of note you're creating first.
 
-Sections: **Write naturally** · **Say it instead** · **Make it whatever you need** · **Find it again**
-(timeline / search / calendar) · **Speak the way you speak** (English, Telugu, Hindi, natural mix) ·
-**Private by design** (no account, local library, optional Face ID).
+Sections, revised 2026-08-29 for V2: **Write naturally** · **Say it instead** (Quick Voice from Home;
+pause and resume) · **Make it whatever you need** (headings, lists, checklists, links, tables, code) ·
+**Find it again** (timeline / search / calendar) · **Speak the way you actually speak** ·
+**Share when you need to** · **Private by design** (no account, local library, optional Face ID).
+
+The multilingual section is the one with a trap in it. Write the capability, then the evidence, in
+that order and no other:
+
+> **Speak the way you actually speak.**
+>
+> As Told doesn't ask you to choose a language before you talk. Speak in one, or move between two in
+> the same sentence — the transcript comes back in the languages you used, in the scripts you used,
+> rather than translated into one. Voice transcription is tested most closely with English, Telugu,
+> Hindi, and speech that moves between them.
+
+Do **not** write "English, Telugu and Hindi" as a supported-languages line, and do not write "all
+languages", a language count, or any accuracy guarantee (`RULES.md` §7, "Language claims").
 
 Closing:
 
 > Whatever you want to put into words — write it, say it, keep it.
 
-**Remove any claim about headings / checklists / lists / voice commands until those capabilities are in
-the shipping version.**
+**Remove any claim about a capability until it is in the shipping version.** Everything listed above
+ships as of 2026-08-29; iCloud sync, export/restore, reminders, Pro, App Intents, Siri and the voice
+dictionary do not, and none of them may appear.
 
 ### Screenshots
 
-The old sequence was built around *thoughts + voice*. The app is broader now, so the story changes —
-shot 4 (shaping) is the important new one and carries the milestone:
+**Rebuilt 2026-08-29 for V2 — `docs/appstore/README.md` is the operational truth; this is the story.**
+The nine-shot V1 sequence that stood here was built around *thoughts + voice* and is superseded. Ten
+frames, which is Apple's maximum:
 
-1. *Anything you want to put into words.* — Home.
-2. *Just start writing.* — clean editor.
-3. *Or just say it.* — voice recording state.
-4. *Shape it as you go.* — heading + paragraph + bullet + checklist in one real note. **The key new shot.**
-5. *Keep your own words.* — multilingual voice (Telugu+English or Hindi+English).
-6. *Notes. Drafts. Lists. Plans.* — several different documents side by side.
-7. *Everything finds its day.* — timeline.
-8. *Find it again.* — search / calendar.
-9. *Private by design.* — Face ID / local storage.
+1. *Anything you want to put into words.* — Home, `+` and the microphone side by side.
+2. *Write it. Or just say it.* — Quick Voice listening, dark.
+3. *Speak the way you actually speak.* — a code-switched note.
+4. *Pause. Think. Keep going.* — the in-note recorder, paused.
+5. *Structure without the complexity.* — the writing toolbar over a structured note.
+6. *Code that still looks like code.* — the SQL card, dark.
+7. *Paste it. Keep the structure.* — a pasted table.
+8. *Your words shouldn't disappear.* — a retained recording, Retry / Delete.
+9. *Find it again.* — timeline, search and calendar.
+10. *Private by default.* — app lock.
 
-Shot 4 must stay tasteful: one natural document that happens to use structure. The moment it reads as a
-productivity dashboard, the implementation and the marketing have both gone too far (RULES.md §7).
+Frames 1–3 carry the most weight: they can appear directly in search results and most people never
+swipe past them. Frame 1 leads with **Home**, reversing V1's editor-first choice, because Home is
+where the two ways into a note now sit beside each other.
+
+Two constraints on this set, both recorded in `docs/appstore/README.md`:
+
+- **No Share frame yet.** It cannot be captured from a simulator, which has no Messages, Mail or
+  AirDrop; a sheet offering Reminders and Save to Files misrepresents where a note can go. It needs a
+  device capture, and it displaces a frame when it arrives.
+- **Frame 8 shows a failure state on purpose**, and is placed eighth for it. Durability is a real
+  differentiator, but *"Couldn't transcribe that recording."* out of context can be read as the app
+  not working. It never moves forward in the carousel; if it is ever doubted, drop it.
+
+Frames 5 and 7 must stay tasteful: natural documents that happen to use structure. The moment either
+reads as a productivity dashboard, the implementation and the marketing have both gone too far
+(RULES.md §7).
+
+**Done 2026-08-29 — the assets are rebuilt; the listing itself is not yet updated.** Every raw was
+recaptured against the current build and the ten frames above are composed in `docs/appstore/6.9/`.
+What remains is the upload, plus one capture that needs a real iPhone (Share). **Subtitle and keywords
+are unaffected**: *Notes, drafts, lists & voice* still describes the app, and no keyword names a
+language.
+
+### What's New (per version)
+
+App Store Connect asks for a **What's New** text on every version after the first. It lives in
+`docs/appstore/release-notes.md`, one section per submitted version, and it is held to this section's
+bar: only capability that is in *that* build, no language list or accuracy claim, and no mention of
+the monthly voice allowance — naming a cost boundary in store text turns it into a feature
+(`RULES.md` §8).
+
+The current entry is **1.1.0 (build 2)**: Quick Voice from Home, pause/resume, retained recordings,
+links, code cards, and per-note Share.
 
 ---
 
@@ -206,8 +277,12 @@ productivity dashboard, the implementation and the marketing have both gone too 
 ### Title & meta
 
 - **Browser / SEO title:** `As Told — Private Notes, Voice & Writing for iPhone`
-- **Meta description:** *Write or speak notes, thoughts, drafts, lists, and plans with As Told — a
-  private iPhone writing app with multilingual voice transcription and Face ID.*
+- **Meta description:** *A private writing space for iPhone. Write it or say it — multilingual voice
+  transcription, headings, lists, tables and code — and keep it on your device.*
+
+Both the root layout default and the homepage's own `pageMetadata` carry the description, and they must
+say the same thing. The pre-2026-08-28 line named *English, Telugu or Hindi* in the description on every
+page; it is now the multilingual line above (`RULES.md` §7, "Language claims").
 
 Write titles/descriptions for humans, not as keyword dumps (Google may rewrite either from page content).
 
@@ -229,28 +304,43 @@ Write it or say it.
 - Eyebrow: **Private writing for iPhone** · One primary CTA (App Store); one secondary ("See how it
   works"). Do not add six CTAs.
 
-### Sections
+### Sections — rebuilt 2026-08-28
 
-- **One page. Whatever it becomes.** — a thought needs no folder, a draft no workspace, a checklist no
-  project-management system; show thought → draft → list → checklist in the *same* editor.
-- **Just start writing.** — no setup, no document type, no formatting wall; spacious Editor.
-- **Or just say it.** — mic → waveform → transcribing → document.
-- **Speak the structure, too.** — *only after structured voice ships.* Checklist-by-voice example.
-- **Your words, however they come.** — no rewriting, no summarizing, no polishing your personality away;
-  keep copy matched to the actual transcription contract (`RULES.md` §2).
-- **Speak the way you speak.** — English, Telugu, Hindi, and the natural mix (a real code-switch example).
-- **Nothing to organize first.** — Timeline / Search / Calendar. Do not market folders.
-- **Your writing stays yours.** — only claims the production behavior supports: no account required,
-  local note library, optional Face ID, and an **accurate** voice-processing statement. **Never say
-  "Nothing ever leaves your phone"** — transcription involves server processing (`RULES.md` §3).
-- **Less, deliberately.** — no account, no folders, no productivity dashboard, no streaks, no AI
-  rewriting, no workspace to configure. *Just somewhere good to write.*
+The page was written for V1 and had gone stale in both directions: it headlined three languages, and it
+said nothing about Quick Voice, pause / resume, retained recordings, links, code blocks, preformatted
+blocks, or Share — all of which shipped after it was written. Nine sections, in this order:
+
+1. **Hero** — *Anything you want to put into words.* / *Write it. Say it. Keep it.* / private-notes
+   descriptor / App Store CTA / current Home capture (which now carries the microphone).
+2. **Write or speak** — the two entry points side by side in the Home header. Home → Listening →
+   an ordinary note, as three real captures.
+3. **Multilingual** — *Speak the way you actually speak.* The capability leads; the tested groups
+   follow as a footnote. Two code-switch specimens and two in-app captures.
+4. **Writing** — the writing toolbar and the shape vocabulary: six toolbar shapes plus links, tables
+   and code, which arrive with your text rather than from a button.
+5. **Paste + code** — what survives a paste and what doesn't, then the code card: syntax colour, the
+   language label, **Copy Code**, edited in place. One section, two movements — they are one argument.
+6. **Reliable voice** — pause / resume, and a retained recording after a retryable failure with
+   **Retry** / **Delete Recording**. Deliberately placed **after** voice has been shown working: a page
+   that opens on failure UX is selling a defect.
+7. **Share** — the system sheet, and nothing of ours around it. **Copy-only, no device**: a
+   simulator has no Messages, Mail or AirDrop, so a capture of the sheet would advertise Reminders
+   and Save to Files as the only destinations. It stays copy-only until the sheet is captured on a
+   device (`website/README.md`, "Known gaps").
+8. **Nothing to organize + Your writing isn't an account** — Timeline / Search / Calendar beside the
+   privacy promises. Do not market folders. **Never say "Nothing ever leaves your phone"** —
+   transcription involves server processing (`RULES.md` §3).
+9. **Light / Dark** — the same *note* in both, not the same Home screen.
+
+**Do not market on this page:** iCloud sync & backup, export & restore, reminders, Pro / expanded voice,
+the App Intent or Action Button, Siri shortcuts, the voice dictionary, AI self-correction, or generated
+titles. None of them ships (`docs/09-v2-roadmap.md`, `docs/10-voice-v2.md` §25).
 
 ### Final CTA
 
 ```text
 [feather]  As Told
-Whatever you want to put into words.
+Your thoughts. Your words. As told.
 Write it. Say it. Keep it.
 [ Download on the App Store ]
 ```
@@ -282,6 +372,13 @@ three-row checklist (two open, one ticked), and a draft, which is accurate now t
 > An earlier prompt revision carried the retired headline *"Your thoughts, in your own words."* and a
 > plain-text Home mockup. Both were superseded before the asset was rendered; the shipped image uses
 > *"Anything you want to put into words."*
+
+**Superseded 2026-08-28 — the card is now generated, not painted.** The paragraph above describes the
+one-off `gpt-image-2` render. `public/og.png` is rebuilt from `website/scripts/og.html` (`npm run og`),
+which composes the brand, the tagline, the headline and the **live `home-light` capture** in real type —
+so it is regenerated whenever the Home capture changes rather than being a binary nobody can re-derive.
+It was regenerated in this pass, because Home now carries the microphone. The copy is unchanged; the
+device inside it is current.
 
 ### Social bio
 

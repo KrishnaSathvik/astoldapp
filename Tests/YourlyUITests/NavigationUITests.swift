@@ -37,6 +37,39 @@ final class NavigationUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Back to notes"].exists, "Editor should be gone")
     }
 
+    /// The Back button on a *brand-new* note is the chevron alone.
+    ///
+    /// Asserted on the rendered navigation bar, not on `EditorOrigin`: the enum's own unit tests pass
+    /// happily while the button says "Notes", because what reaches the button is a separate question
+    /// from what the enum returns. This test is the one that fails when the origin goes stale on its
+    /// way through `navigationDestination`.
+    func testANewNotesBackButtonIsTheChevronAlone() {
+        let app = launchedApp()
+        tap(app.buttons["New note"], "New note")
+        XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8), "editor should open")
+        let back = app.navigationBars.element(boundBy: 0).buttons.element(boundBy: 0)
+        XCTAssertEqual(back.staticTexts.count, 0,
+                       "A new note's Back button must carry no word beside the chevron")
+    }
+
+    /// The same for an *existing* note (changed 2026-08-26 — this previously asserted "Notes").
+    /// The word is gone from every origin, so the one thing left to check is that no origin
+    /// reintroduces it.
+    func testAnExistingNotesBackButtonIsAlsoTheChevronAlone() {
+        let app = launchedApp()
+        let note = app.buttons
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Alaska trip idea"))
+            .firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 8), "seeded note should exist")
+        note.tap()
+        XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8), "editor should open")
+        let back = app.navigationBars.element(boundBy: 0).buttons.element(boundBy: 0)
+        XCTAssertEqual(back.staticTexts.count, 0,
+                       "An existing note's Back button must carry no word either")
+        XCTAssertEqual(back.label, "Back to notes",
+                       "the spoken destination is all that survives the word being dropped")
+    }
+
     /// A new note is a capture intent: the editor opens with the keyboard already up.
     func testNewNoteOpensWithTheKeyboard() {
         let app = launchedApp()
@@ -201,15 +234,24 @@ final class EditorChromeUITests: XCTestCase {
     }
 
     /// The editor carries no overflow menu. Deleting a note is done on the timeline, by swiping it —
-    /// one place, one gesture. An overflow in here is how Share / Export / Duplicate arrive
-    /// (RULES.md §7), so its absence is the fence.
+    /// one place, one gesture. An overflow in here is how Export / Duplicate arrive (RULES.md §7), so
+    /// its absence is the fence.
+    ///
+    /// **Share moved from forbidden to required** (2026-08-26). This test listed `Share` among the
+    /// things that must not exist, which was true right up until §7 admitted per-note sharing and §4
+    /// made Share part of the header: "Back, **the note's date**, **Share**, Style menu". The rule
+    /// moved and the fence did not, so it was failing against correct code. Note what did *not* change:
+    /// Share is one button, never the first item of an `…` menu, and everything the overflow would have
+    /// carried is still forbidden below.
     func testTheEditorHasNoOverflowMenu() {
         let app = launchedApp()
         openSeededNote(app)
 
+        XCTAssertTrue(app.buttons["Share"].exists,
+                      "Share is a required header element (RULES.md §4)")
         XCTAssertFalse(app.buttons["More actions"].exists, "the editor must not offer an overflow menu")
         XCTAssertFalse(app.buttons["Delete Note"].exists, "delete belongs to the timeline, not the editor")
-        for forbidden in ["Share", "Export", "Duplicate", "Word Count", "Pin"] {
+        for forbidden in ["Export", "Duplicate", "Word Count", "Pin"] {
             XCTAssertFalse(app.buttons[forbidden].exists, "\(forbidden) must not be in the editor")
         }
     }
@@ -287,8 +329,17 @@ final class CalendarDayNotesUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 8))
         row.tap()
 
-        XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8), "editor should open")
-        app.buttons["Back to notes"].tap()
+        // Back must *announce* Calendar, not Notes. It always went to the calendar — it just named a
+        // screen the tap does not lead to, which is a back button breaking its one promise (fixed
+        // 2026-08-25). Since 2026-08-26 the naming is spoken only: the button draws a bare chevron
+        // from here too, so this label is the entire difference the origin still makes.
+        let back = app.buttons["Back to calendar"]
+        XCTAssertTrue(back.waitForExistence(timeout: 8), "editor should open with a Back to calendar")
+        XCTAssertFalse(app.buttons["Back to notes"].exists,
+                       "a note opened from the calendar must not offer Back to notes")
+        XCTAssertEqual(back.staticTexts.count, 0,
+                       "the calendar's Back button carries no word either")
+        back.tap()
 
         XCTAssertTrue(app.navigationBars["Calendar"].waitForExistence(timeout: 8),
                       "Back should return to the calendar, not Home")
@@ -318,11 +369,12 @@ final class CalendarDayNotesUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 8))
         row.tap()
 
-        XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8), "the note should open")
+        XCTAssertTrue(app.buttons["Back to calendar"].waitForExistence(timeout: 8),
+                      "the note should open, offering Back to calendar")
         XCTAssertFalse(app.buttons["More actions"].exists, "no overflow in the editor")
         XCTAssertFalse(app.buttons["Delete Note"].exists, "no delete in the editor")
 
-        app.buttons["Back to notes"].tap()
+        app.buttons["Back to calendar"].tap()
         XCTAssertTrue(app.navigationBars["Calendar"].waitForExistence(timeout: 8),
                       "Back should return to the calendar")
         XCTAssertTrue(note(app, "Work ideas").waitForExistence(timeout: 8),

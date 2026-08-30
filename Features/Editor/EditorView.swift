@@ -20,6 +20,9 @@ struct EditorView: View {
     let note: Note
     /// Set by Home to nil the navigationDestination item — the reliable way to pop an item-based push.
     var onClose: (() -> Void)? = nil
+    /// Which screen pushed this one, so Back can name where it actually goes (`EditorOrigin`).
+    /// Defaults to Home, so every caller that does not say otherwise reads exactly as it always has.
+    var origin: EditorOrigin = .notes
     @State private var model: EditorModel?
     @State private var voice: VoiceCaptureModel?
     @State private var bodySelection = NSRange(location: 0, length: 0)
@@ -40,17 +43,90 @@ struct EditorView: View {
     @State private var openedTable: TableBlock?
     /// The way the Style menu reaches the body text view — see `BodyEditorActions`.
     @State private var bodyActions = BodyEditorActions()
+    /// The note as it stood when Share was tapped. Non-nil presents the system sheet.
+    ///
+    /// A snapshot, deliberately: everything the sheet sends is decided at the moment of the tap, so a
+    /// note cannot change underneath an open sheet and nothing the sheet does can reach back into the
+    /// note (`NoteSharePayload`).
+    @State private var sharing: NoteSharePayload?
 
     private var isCapturing: Bool { voice != nil }
     /// True while the user is actually editing (a field owns the keyboard), false while reading.
     private var isEditing: Bool { bodyFocused || titleFocused }
 
+    /// The note's own line in the navigation bar: when it was last written to, in the reader's locale.
+    ///
+    /// `updatedAt` rather than `createdAt` (2026-08-26). What a reader wants from a timestamp on the
+    /// note they are looking at is when it last changed; the note's birthday is the timeline's job, and
+    /// the timeline already does it. Formatted through `Date.FormatStyle` rather than a hand-written
+    /// pattern, so "August 24, 2026 at 10:16" is the *English* spelling of it and every other locale
+    /// gets its own — a hard-coded `MMMM d, yyyy` is only correct where the calendar happens to agree.
+    ///
+    /// Minute precision, so this changes at most once a minute while somebody is typing.
     private var dateText: String {
-        let df = DateFormatter(); df.dateFormat = "MMMM d, yyyy · h:mm a"
-        return df.string(from: note.createdAt).uppercased()
+        note.updatedAt.formatted(date: .long, time: .shortened)
+    }
+
+    /// What Share would send right now, or `nil` when the note is empty.
+    ///
+    /// Read from the **model**, which is what the body binding writes on every keystroke, so this
+    /// tracks the note as it is being typed and Share enables itself the moment there is a first
+    /// character. The payload actually shared is rebuilt at the tap, after pending edits commit.
+    private func currentPayload(_ model: EditorModel) -> NoteSharePayload? {
+        NoteSharePayload.make(title: model.title, body: model.body)
+    }
+
+    /// Commit what is on screen, put the keyboard away, then open the sheet.
+    ///
+    /// The order is the whole point. A table cell being edited lives in the card's own field until it
+    /// commits, so someone who changes `Anchorage` to `Fairbanks` and taps Share straight away would
+    /// otherwise send `Anchorage` — the note on screen and the note in `body` disagreeing for exactly
+    /// as long as that field is open. `commitPendingEdits()` closes it and hands back the text view's
+    /// own text, which is authoritative.
+    ///
+    /// Sharing never *changes* a note. Committing a cell is the writer's own edit landing through the
+    /// ordinary undoable path — it would have landed on the next tap anywhere else.
+    private func share(_ model: EditorModel) {
+        commitPendingBodyEdits(model)
+        // The title is tidied on the same terms it is tidied on any other way out of the field, so a
+        // title of nothing but spaces does not become a line of nothing but spaces in somebody's inbox.
+        model.endTitleEditing()
+        bodyFocused = false
+        titleFocused = false
+        sharing = currentPayload(model)
+    }
+
+    /// Folds an edit that is still living *outside* `body` back into the note.
+    ///
+    /// Today that means one thing: a table cell being edited lives in the card's own field until it
+    /// commits. Anything that reads or persists the note has to call this first, or it works from a
+    /// `body` the writer can see is out of date on screen.
+    ///
+    /// This used to exist only inside `share(_:)`, which made Share the one exit in the app that did
+    /// not lose an open cell edit — tapping Back dropped it, because `finish()` flushed a `body` the
+    /// cell had never reached (fixed 2026-08-27). It is the same generic flush now, called from every
+    /// exit, rather than a favour Share does for itself.
+    @discardableResult
+    private func commitPendingBodyEdits(_ model: EditorModel) -> Bool {
+        guard let committed = bodyActions.commitPendingEdits(), committed != model.body else {
+            return false
+        }
+        model.body = committed
+        return true
     }
 
     private func close() {
+        // The capture is finalized **here**, at the tap, rather than left to `onDisappear`.
+        //
+        // Order is the whole reason: leaving mid-upload retains the recording and remembers it
+        // (`VoiceCaptureModel.finishOnLeave`), and Home looks for a recording to offer back the moment
+        // this route clears. Finalizing on teardown instead put the two the wrong way round — Home
+        // asked before anything had been remembered, and a recording that was perfectly safe on disk
+        // was not offered until the next launch.
+        //
+        // `onDisappear` still calls it, for the ways out that do not come through this button. The
+        // second call is a no-op: the recording is already retained by then.
+        voice?.finishOnLeave()
         // onDisappear runs finish() (flush or discard empty draft).
         if let onClose { onClose() } else { dismiss() }
     }
@@ -79,12 +155,33 @@ struct EditorView: View {
             }
             if DebugLaunch.autoStartVoice, let model {
                 startVoice(model)
-                Task { try? await Task.sleep(for: .seconds(1.5)); voice?.done() }
+                // `-voiceAutoPause` holds the panel open instead of finishing it, which is the only
+                // way to capture the in-note recorder: a screenshot cannot outrun a 1.5s auto-Done.
+                // `-voiceHold` does the same for the *recording* state, which otherwise finishes
+                // before the timer ever reaches a number that does not look staged.
+                if DebugLaunch.voiceAutoPause {
+                    Task {
+                        try? await Task.sleep(for: .seconds(DebugLaunch.voicePauseAfter))
+                        voice?.pause()
+                    }
+                } else if !DebugLaunch.voiceHold {
+                    Task { try? await Task.sleep(for: .seconds(1.5)); voice?.done() }
+                }
+            }
+            // Screenshot hook only: the system sheet is iOS's own view and appears on a tap. This
+            // goes through the same `share(_:)` the button calls, so the payload is the real one.
+            if DebugLaunch.openShare, let model {
+                Task { try? await Task.sleep(for: .seconds(1)); share(model) }
             }
             #endif
         }
         .onDisappear {
-            // Back is not a cancel. A running recording is finished and transcribed, exactly as
+            // Back is not a cancel — for a half-typed table cell exactly as much as for a running
+            // recording (RULES.md §4). The open cell is folded back into `body` *before* `finish()`
+            // flushes, because `finish()` writes whatever `body` holds and would otherwise persist a
+            // note missing the words somebody had just typed into a cell.
+            if let model { commitPendingBodyEdits(model) }
+            // A running recording is finished and transcribed, exactly as
             // backgrounding, a phone call, and the duration cap already do — leaving used to delete
             // the audio, so tapping Back mid-sentence destroyed everything the user had said.
             // `finishOnLeave` stops the microphone either way, so nothing is left hot or on disk.
@@ -93,22 +190,61 @@ struct EditorView: View {
             model?.finish()
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { model?.flush() }
+            // Same order as leaving: commit the open cell, then flush. A note written while the app is
+            // going away must be the note that was on screen.
+            if phase != .active, let model {
+                commitPendingBodyEdits(model)
+                model.flush()
+            }
             // Recording cannot continue once the app is suspended, so finish the capture with the
-            // audio already on disk rather than stranding it.
-            if phase == .background, voice?.phase == .recording { voice?.done() }
+            // audio already on disk rather than stranding it — from `paused` as much as from
+            // `recording`, because a paused capture is holding words that were already spoken
+            // (`docs/10-voice-v2.md` §14). Nothing else backgrounding does is destructive: a
+            // transcription in flight is left alone, and a retained recording stays retained.
+            if phase == .background { voice?.finishOnBackground() }
         }
+        // Back left, the note's date centred, Share right — and deliberately no overflow menu. An
+        // overflow in the editor is how duplicate / word count / pin arrive, and those are all still on
+        // the do-not-build list (RULES.md §4, §7). Share is one button because it is one verb.
+        //
+        // `.principal` rather than a `Spacer`-balanced `HStack`: the date is centred on the **screen**,
+        // not in whatever room Back and Share leave over, so it does not drift as Back's word changes
+        // between "Notes", "Search", and "Calendar" (`EditorOrigin`).
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { close() } label: {
-                    HStack(spacing: 2) {
-                        Image(systemName: "chevron.left").fontWeight(.semibold)
-                        Text("Notes")
-                    }
-                    .foregroundStyle(Color.ds.accent)
+                    // The chevron alone, from every origin (2026-08-26). The mark is a complete back
+                    // button on this platform, and the word beside it was the header describing the
+                    // room the reader is leaving rather than the note in front of them. Nothing is
+                    // lost that a screen reader needs: `backAccessibilityLabel` still names the
+                    // destination, and it still differs by origin (RULES.md §4).
+                    Image(systemName: "chevron.left")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.ds.accent)
                 }
-                .accessibilityLabel("Back to notes")
+                .accessibilityLabel(origin.backAccessibilityLabel)
             }
+            ToolbarItem(placement: .principal) {
+                Text(dateText)
+                    .font(.footnote)
+                    .foregroundStyle(Color.ds.textTertiary)
+                    .lineLimit(1)
+                    .accessibilityLabel("Last edited \(dateText)")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { if let model { share(model) } } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .foregroundStyle(Color.ds.accent)
+                }
+                // Visible but disabled on an empty note, rather than absent: a control that appears and
+                // disappears as the first character is typed is the header moving while somebody writes.
+                .disabled(model.flatMap(currentPayload) == nil)
+                .accessibilityLabel("Share note")
+                .accessibilityIdentifier("Share")
+            }
+        }
+        .sheet(item: $sharing) { payload in
+            NoteShareSheet(payload: payload) { sharing = nil }
         }
         .sheet(isPresented: $showsWritingHelp) { WritingHelpSheet() }
         .fullScreenCover(item: $openedTable) { table in
@@ -133,7 +269,6 @@ struct EditorView: View {
             isEditable: !isCapturing,   // recording/transcription owns the anchor
             keyboardAppearance: themeStore.theme.keyboardAppearance(inheriting: colorScheme),
             actions: bodyActions,
-            dateText: dateText,
             title: Binding(get: { model.title }, set: { model.title = $0 }),
             titleFocused: $titleFocused,
             openTable: { openedTable = $0 },
@@ -166,7 +301,8 @@ struct EditorView: View {
             RecordingPanel(model: voice) { endVoice() }
                 .padding(.vertical, DSSpacing.s4)
         } else if WritingToolbar.Mode.resolve(bodyFocused: bodyFocused,
-                                              titleFocused: titleFocused) != .hidden
+                                              titleFocused: titleFocused,
+                                              inCode: caretIsInCode(model)) != .hidden
                     || education.showsVoiceStructureTip {
             // Nothing shown means nothing reserved: while the *title* has the keyboard there is no bar,
             // and the body below it must not be inset for a bar that is not there.
@@ -178,7 +314,8 @@ struct EditorView: View {
                     VoiceStructureTip { education.dismissVoiceStructureTip() }
                 }
                 WritingToolbar(
-                    mode: .resolve(bodyFocused: bodyFocused, titleFocused: titleFocused),
+                    mode: .resolve(bodyFocused: bodyFocused, titleFocused: titleFocused,
+                                   inCode: caretIsInCode(model)),
                     current: BlockStyle.current(in: model.body, selection: bodySelection),
                     appendsToEnd: !bodyFocused,
                     onStyle: { bodyActions.apply($0) },
@@ -194,6 +331,16 @@ struct EditorView: View {
         }
     }
 
+    /// Whether the caret is inside a code fence, where structure does not apply.
+    ///
+    /// Read from the document rather than tracked as state: the fence that encloses the caret can open
+    /// or close from an edit anywhere in the note — a paste, an undo, a transcript landing — and a flag
+    /// would go stale the moment it did.
+    private func caretIsInCode(_ model: EditorModel) -> Bool {
+        guard model.body.contains(CodeBlock.fence) else { return false }
+        return MarkupDocument(model.body).isLiteral(atSource: bodySelection.location)
+    }
+
     private func startVoice(_ model: EditorModel) {
         // Where the transcript will land is decided *now*, before recording, and the recording owns
         // that anchor (docs/04-voice-transcription.md §8):
@@ -204,13 +351,24 @@ struct EditorView: View {
             ? bodySelection.location
             : (model.body as NSString).length
 
-        let service = TranscriptionConfig.makeService()   // real relay if configured, else fake
+        var service = TranscriptionConfig.makeService()   // real relay if configured, else fake
+        var recorder: AudioRecording = AVAudioRecorderService()
+        #if DEBUG
+        // The retained-failure surface, drivable by a UI test without a microphone or a network.
+        if let stand_in = DebugVoice.service(), let mic = DebugVoice.recorder() {
+            service = stand_in
+            recorder = mic
+        }
+        #endif
         // Captured now: the tip teaches a round trip that actually happened, so the offline fake must
         // not trigger it (`WritingEducation.voiceTranscriptionSucceeded`).
         let sendsOffDevice = service.sendsAudioOffDevice
         let capture = VoiceCaptureModel(
-            recorder: AVAudioRecorderService(),
-            service: service
+            recorder: recorder,
+            service: service,
+            // Carried only so a recording recovered *after* this editing session is gone can say,
+            // before it is retried, that its transcript will arrive as a new note.
+            origin: .note
         ) { text in
             let cursor = model.insertVoiceTranscript(text, atUTF16: capturedInsertOffset)
             bodySelection = NSRange(location: cursor, length: 0)

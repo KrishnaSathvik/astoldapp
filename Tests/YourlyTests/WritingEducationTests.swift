@@ -101,6 +101,12 @@ private final class TipSequencingRecorder: AudioRecording {
     var onInterruption: (() -> Void)?
     func requestPermission() async -> Bool { true }
     func start() throws -> URL { startURL }
+    /// Pause/resume are not what these tests are about; they record the calls so a capture that
+    /// pauses can still be driven through them.
+    private(set) var pauses = 0
+    private(set) var resumes = 0
+    func pause() { pauses += 1 }
+    func resume() { resumes += 1 }
     func stop() -> URL? { startURL }
     func cancel() {}
     func cleanup(_ url: URL) {}

@@ -44,9 +44,9 @@
 
 @media (min-width: 900px) {
   .grid {
-    /* The device gets close to half the frame — it is the hero element here,
+    /* The device gets more than half the frame — it is the hero element here,
        not an illustration parked beside the copy. */
-    grid-template-columns: 1fr 0.98fr;
+    grid-template-columns: 0.92fr 1fr;
     gap: clamp(40px, 4vw, 64px);
   }
 

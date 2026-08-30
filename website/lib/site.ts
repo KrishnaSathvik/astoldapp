@@ -16,15 +16,30 @@ export const TAGLINE = 'Write it. Say it. Keep it.';
 export const PROMISE = 'Anything you want to put into words.';
 
 /**
- * The header owns product discovery, so these links live in exactly one place.
- * The footer is utility/legal only and never repeats them.
+ * One link, and the CTA.
+ *
+ * It was `Product · Voice · Privacy · Support` until 2026-08-29, which is a
+ * documentation portal's header, not a product's: the wordmark already *is*
+ * Product, and Privacy and Support are utility destinations that the footer has
+ * carried the whole time. Repeating them up top made every page — including the
+ * legal ones — open with a site directory.
+ *
+ * `Voice` stays because it is the only secondary page that is product, and it is
+ * the half of As Told a visitor cannot see from the homepage's first screen.
+ *
+ * `Multilingual` was a top-level item until 2026-08-29 as well, which made a
+ * capability of voice read as one of the four things As Told is. It isn't a
+ * pillar — it is how voice behaves — so it lives inside `/voice` now, and
+ * `/languages` stays a reachable page rather than a destination the site
+ * advertises (`RULES.md` §7, "Language claims").
  */
-export const PRIMARY_NAV = [
-  { href: '/#writing', label: 'Product' },
-  { href: '/voice', label: 'Voice' },
-  { href: '/languages', label: 'Languages' },
-] as const;
+export const PRIMARY_NAV = [{ href: '/voice', label: 'Voice' }] as const;
 
+/**
+ * Legal and support, and the only place they appear. The header used to carry
+ * Privacy and Support as well; a link that exists twice on every page is not
+ * twice as findable, it just makes the header look like a table of contents.
+ */
 export const UTILITY_NAV = [
   { href: '/privacy', label: 'Privacy' },
   { href: '/support', label: 'Support' },

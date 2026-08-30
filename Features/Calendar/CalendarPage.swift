@@ -47,7 +47,7 @@ struct CalendarPage: View {
         .navigationBarTitleDisplayMode(.inline)
         // Opening a note from here pushes onto the same stack, so Back returns to this screen.
         .navigationDestination(item: $editingNote) { note in
-            EditorView(note: note, onClose: { editingNote = nil })
+            EditorView(note: note, onClose: { editingNote = nil }, origin: .calendar)
         }
         // `.task(id:)` alone would not re-run after returning from a note that changed while open.
         .onAppear { reloadDots() }

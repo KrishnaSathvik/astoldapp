@@ -241,17 +241,30 @@ struct TableSourceHidingTests {
         #expect(total > 190 && total <= 200)
     }
 
-    /// Editing: nothing is hidden. The writer is entitled to see the characters they are editing, and
-    /// a caret inside text that is not drawn is the bug this replaced.
-    @Test func aTableBeingEditedShowsItsSourceUntouched() {
+    /// Editing: the rows are shown exactly as typed, and the **delimiter row alone** is not drawn.
+    ///
+    /// This read `hidden == 0` until 2026-08-23, when the delimiter row stopped being shown to the
+    /// writer as well as to the reader: it records which row is the header, and nobody typed it to be
+    /// read. Its concern — "a caret inside text that is not drawn is the bug this replaced" — is still
+    /// exactly right, and is now answered by `TableBlock.caretEscape`, which keeps the caret off that
+    /// line in both directions rather than by drawing a line nobody wants to see.
+    @Test func aTableBeingEditedShowsEveryRowButItsDelimiter() {
         let store = storage(source)
         StructuredTextStyler.apply(to: store, textColor: .label, availableWidth: 353)
 
-        var hidden = 0
+        var hiddenRanges: [NSRange] = []
         store.enumerateAttribute(.astHiddenMarker, in: tableLines) { value, range, _ in
-            if value != nil { hidden += range.length }
+            if value != nil { hiddenRanges.append(range) }
         }
-        #expect(hidden == 0)
+        let delimiter = (source as NSString).range(of: "| --- | --- |")
+        #expect(hiddenRanges.count == 1)
+        #expect(hiddenRanges.first?.location == delimiter.location)
+        // The row's own characters, and **not** the newline that ends its line. A hidden character is
+        // drawn as a zero-advancement control glyph, which overrides the line break a newline exists
+        // to perform: hiding it too put the first data row into the delimiter's collapsed fragment and
+        // squashed it to three points of nothing. The newline draws nothing in the first place — only
+        // the line's height needs collapsing, and that is the paragraph style's job.
+        #expect(hiddenRanges.first?.length == delimiter.length)
     }
 
     /// One container behind the whole block rather than one per line — per-line runs stacked rounded

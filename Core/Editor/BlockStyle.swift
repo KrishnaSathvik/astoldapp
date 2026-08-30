@@ -79,7 +79,11 @@ enum BlockStyle: String, CaseIterable, Identifiable, Equatable {
     /// answer, and picking a style from that state still converts every selected line.
     static func current(in text: String, selection: NSRange) -> BlockStyle? {
         let doc = MarkupDocument(text)
-        let styles = doc.lineIndices(touchedBy: selection).map { BlockStyle(doc.lines[$0].kind) }
+        let indices = doc.lineIndices(touchedBy: selection)
+        // Code has no block style to claim. A `#` on a line of Python is a comment, and a checkmark
+        // against "Heading" there would be describing something the note does not mean (RULES.md §7).
+        guard !indices.contains(where: { doc.lines[$0].isLiteral }) else { return nil }
+        let styles = indices.map { BlockStyle(doc.lines[$0].kind) }
         guard let first = styles.first, styles.allSatisfy({ $0 == first }) else { return nil }
         return first
     }

@@ -92,8 +92,14 @@ enum RichPasteImport {
         // list its own `NSTextList`, and restarting at each item would number a list "1. 1. 1.".
         var previousFormat: NSTextList.MarkerFormat?
 
+        // A `.link` attribute is a hyperlink the source *stated* — not an appearance guessed at from
+        // blue underlined type — so it is structure that travels (RULES.md §4).
+        let carriesLinks = attributed.hasLink(in: NSRange(location: 0, length: text.length))
+
         for paragraph in paragraphRanges(in: text) {
-            let content = text.substring(with: paragraph)
+            let content = carriesLinks
+                ? linked(attributed, paragraph: paragraph, text: text)
+                : text.substring(with: paragraph)
             let style = paragraph.length > 0
                 ? attributed.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
                 : nil
@@ -127,6 +133,27 @@ enum RichPasteImport {
         }
 
         return blocks
+    }
+
+    /// One paragraph's text, with every `.link` run written as canonical link source.
+    private static func linked(_ attributed: NSAttributedString, paragraph: NSRange,
+                               text: NSString) -> String {
+        guard paragraph.length > 0 else { return "" }
+        var out = ""
+        var index = paragraph.location
+        let end = NSMaxRange(paragraph)
+
+        while index < end {
+            var run = NSRange(location: 0, length: 0)
+            let value = attributed.attribute(.link, at: index, longestEffectiveRange: &run,
+                                             in: NSRange(location: index, length: end - index))
+            guard run.length > 0 else { break }
+            let words = text.substring(with: run)
+            let destination = (value as? URL)?.absoluteString ?? (value as? String)
+            out += destination.map { LinkSpan.source(label: words, destination: $0) } ?? words
+            index = NSMaxRange(run)
+        }
+        return out
     }
 
     /// `NSTextList` has two marker formats that *are* checkboxes. A list that names one is stating
@@ -357,6 +384,8 @@ extension RichPasteImport {
             case .line(let line): kinds[String(describing: BlockStyle(line.kind)), default: 0] += 1
             case .table(let table): kinds["table(\(table.rows.count)×\(table.rows.map(\.count).max() ?? 0))",
                                           default: 0] += 1
+            case .codeBlock(let code):
+                kinds["code(\(code.code.components(separatedBy: "\n").count) lines)", default: 0] += 1
             }
         }
         return kinds.isEmpty ? "nothing" : kinds.sorted { $0.key < $1.key }
@@ -364,3 +393,15 @@ extension RichPasteImport {
     }
 }
 #endif
+
+private extension NSAttributedString {
+    /// Whether any run in `range` carries a `.link`. Answers the common case — rich text with no
+    /// hyperlink in it — without walking the string run by run.
+    func hasLink(in range: NSRange) -> Bool {
+        var found = false
+        enumerateAttribute(.link, in: range, options: .longestEffectiveRangeNotRequired) { value, _, stop in
+            if value != nil { found = true; stop.pointee = true }
+        }
+        return found
+    }
+}

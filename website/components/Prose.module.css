@@ -1,7 +1,13 @@
 /* The reading column is the container's job now (--wrap-read), so prose fills
-   whatever column it is given instead of capping itself a second time. */
+   whatever column it is given instead of capping itself a second time.
+
+   A privacy policy is allowed to be long. It is not allowed to be exhausting —
+   so the document voice is set a step larger than the site's body copy (18px on
+   a 736px measure, ~68 characters a line) and given more leading than a
+   marketing paragraph gets. */
 .prose {
   color: var(--ink-soft);
+  font-size: 1.03rem;
 }
 
 .prose h2 {
@@ -16,14 +22,23 @@
   margin-top: 0;
 }
 
+/* Subsections inside a long section. `Voice & transcription` is the only part
+   of this document that anyone reads twice, and it was nine consecutive
+   paragraphs with nothing to aim at. */
 .prose h3 {
-  margin-top: 2rem;
+  margin-top: 2.4rem;
+  font-size: 1.12rem;
   color: var(--ink);
+  scroll-margin-top: calc(var(--header-h) + 28px);
+}
+
+.prose h2 + h3 {
+  margin-top: 1.6rem;
 }
 
 .prose p {
-  margin-top: 1rem;
-  line-height: 1.68;
+  margin-top: 1.05rem;
+  line-height: 1.7;
 }
 
 .prose strong {
@@ -42,7 +57,7 @@
 .prose ul li {
   position: relative;
   padding-left: 1.5rem;
-  line-height: 1.62;
+  line-height: 1.66;
 }
 
 .prose ul li::before {

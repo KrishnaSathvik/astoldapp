@@ -33,6 +33,17 @@ enum VoiceLimits {
     /// record a meeting (changed 2026-08-21 from 10 minutes).
     static let maxRecordingSeconds = 300
     static var maxRecordingDuration: Duration { .seconds(maxRecordingSeconds) }
+
+    /// How long a recording kept after a retryable transcription failure may live before it is
+    /// deleted unretried — **24 hours**, locked 2026-08-27 (`RULES.md` §2, `docs/10-voice-v2.md`
+    /// §13, where the rule names this constant `voiceRetryLifetime`).
+    ///
+    /// Long enough for temporary network or service trouble to clear and for somebody to come back
+    /// to it later the same day; short enough that As Told is never quietly accumulating audio. It
+    /// lives here, beside the recording cap, because the alternative is the number appearing in a
+    /// view — and a retention period written into a button is a retention period nobody can find.
+    static let retryLifetimeSeconds = 24 * 60 * 60
+    static var retryLifetime: Duration { .seconds(retryLifetimeSeconds) }
 }
 
 /// Domain errors mapped to concise human copy by the UI — never raw provider errors (RULES.md §5).
@@ -61,6 +72,35 @@ enum TranscriptionError: Error, Equatable, Sendable {
 }
 
 extension TranscriptionError {
+    /// Whether sending **this same recording** again could plausibly succeed — the one question that
+    /// decides whether the audio survives the failure (`docs/10-voice-v2.md` §13, `RULES.md` §2).
+    ///
+    /// One classification, in one place, because the alternative is each surface deciding for itself
+    /// and the two disagreeing about whether a user's words still exist. A retained recording is
+    /// allowed **only** where this is `true`; everything else deletes its audio immediately, which is
+    /// what keeps `RULES.md` §3's deletion contract intact rather than quietly widened.
+    ///
+    /// Classified by what the failure *means*, not by how transient the name sounds:
+    ///
+    /// - `offline`, `timedOut`, `rateLimited` — the connection or the moment was wrong, not the audio.
+    /// - `serviceUnavailable` — also carries a rejected attestation, which re-registers and then works.
+    /// - `invalidResponse` — the ambiguous one. It covers a garbled answer (retrying helps) as well as
+    ///   a file the relay could not measure (it will not). Resolved in the recording's favour: the
+    ///   cost of being wrong is one tap that fails, against deleting words somebody already spoke.
+    /// - `noSpeech` — the relay heard the file. It will hear the same thing again.
+    /// - `monthlyLimitReached`, `recordingTooLong`, `requestTooLarge` — a limit this audio cannot get
+    ///   under by being sent a second time.
+    /// - `microphonePermissionDenied`, `cancelled` — no completed recording exists to retry.
+    var isRetryableVoiceFailure: Bool {
+        switch self {
+        case .offline, .timedOut, .rateLimited, .serviceUnavailable, .invalidResponse:
+            return true
+        case .noSpeech, .monthlyLimitReached, .recordingTooLong, .requestTooLarge,
+             .microphonePermissionDenied, .cancelled:
+            return false
+        }
+    }
+
     /// One mapping of URLSession transport failures, shared by every network hop in the voice flow
     /// (attestation handshake and the upload itself), so both report the same thing to the user.
     static func transport(_ error: URLError) -> TranscriptionError {

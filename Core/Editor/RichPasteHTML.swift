@@ -60,6 +60,23 @@ extension RichPasteHTML {
         private var lists: [ListContext] = []
         private var preDepth = 0
         private var skipping: String?
+        /// The open `<a href>`, and how much of `buffer` was already there when it opened — the label
+        /// is whatever text arrives between the two.
+        private var link: (href: String, mark: Int)?
+        /// Whether the last thing to end a line of code was an element boundary rather than text.
+        /// A `<br>` immediately after one is the same break stated twice — `<div><br><br></div>` between
+        /// two lines is one blank line, not two — so the first one is absorbed and the rest count.
+        private var preBoundaryEndedLine = false
+        /// The language a `<code class="language-…">` named inside the open `<pre>`.
+        private var codeLanguage: String?
+        /// Whether a `<code>` was seen inside the open `<pre>` at all.
+        ///
+        /// This is the whole difference between a diagram and a program, and HTML states it outright:
+        /// `<pre>` says "these characters are preformatted", `<code>` says "these characters are code".
+        /// A `<pre>` with no `<code>` in it declared the first and not the second, so it lands as a
+        /// plain-text block rather than an unlabelled code one (added 2026-08-25). Nothing reads the
+        /// characters to decide — as everywhere else here, a claim is translated, never made.
+        private var preHeldCode = false
 
         // A table is collected whole and emitted at </table>.
         private var tableDepth = 0
@@ -73,6 +90,13 @@ extension RichPasteHTML {
         private static let skipTags: Set<String> = [
             "script", "style", "head", "title", "noscript", "svg", "template", "iframe", "object"
         ]
+
+        /// Elements that end a line **inside a `<pre>`** — the block tags, plus the few tags that end
+        /// a line without being block tags out here. A highlighter may reach for any of them to mark up
+        /// one line of code, and all that matters inside a `<pre>` is where the lines are.
+        private static var endsLineInsidePre: Set<String> {
+            blockTags.union(["h1", "h2", "h3", "h4", "h5", "h6", "li", "tr", "ul", "ol", "table"])
+        }
 
         /// Elements that end the line they are on. Anything not listed is inline: its text joins the
         /// line being built, with the styling dropped.
@@ -177,6 +201,37 @@ extension RichPasteHTML {
                 return
             }
 
+            // Inside a `<pre>`, the only structure is lines.
+            //
+            // Every syntax highlighter on the web wraps each line of code in its own element and each
+            // token in a `<span>`, so the copy that arrives from a docs site, a code host, or an answer
+            // in a chat is `<pre><code><div>…</div><div>…</div></code></pre>` — not the literal
+            // newlines a hand-written page has. Letting those tags run through the switch below sent a
+            // `<div>` to `flushBlock`, which emptied the code buffer into ordinary paragraphs on its way
+            // past; by the time `</pre>` closed there was nothing left and no code block was ever
+            // emitted. The `<pre>` had *stated* that these characters are literal, and the paste threw
+            // that statement away (RULES.md §7).
+            //
+            // So while a `<pre>` is open, a tag that would end a line ends a **line of the code**, and
+            // everything else is markup around the words — dropped, exactly as styling always is. Only
+            // `pre` and `code` still mean what they mean, because they open and close the block itself.
+            if preDepth > 0, name != "pre", name != "code" {
+                if name == "br" {
+                    // An explicit break is a break — two of them are the blank line the author left —
+                    // unless an element boundary has just ended this line already.
+                    if !isEnd {
+                        if preBoundaryEndedLine { preBoundaryEndedLine = false } else { lineBreak() }
+                    }
+                } else if Self.endsLineInsidePre.contains(name) {
+                    // An element boundary is one boundary between two lines, and a line that has
+                    // already ended does not end twice: `<div>a</div><div>b</div>` is two lines of
+                    // code, not two lines with a gap between them.
+                    if !buffer.isEmpty, !buffer.hasSuffix("\n") { buffer += "\n" }
+                    preBoundaryEndedLine = !buffer.isEmpty
+                }
+                return
+            }
+
             switch name {
             case "br":
                 if !isEnd { lineBreak() }
@@ -249,9 +304,35 @@ extension RichPasteHTML {
                     if name == "th" { rowIsHeader = true }
                 }
 
+            case "a":
+                // A link inside code is code, and a link inside a table cell would put its syntax in a
+                // rendered cell — both keep the words and drop the destination, which is what the
+                // paste rule has always done with styling As Told does not hold.
+                guard preDepth == 0, !inCell else { return }
+                if isEnd {
+                    closeLink()
+                } else if let href = attributes["href"], LinkSpan.isAbsoluteWebURL(href) {
+                    link = (href, (buffer as NSString).length)
+                }
+
+            case "code":
+                // Only meaningful inside a `<pre>`: that is where a language name is stated. Inline
+                // `<code>` is a styling As Told does not have, and keeps its characters as words.
+                guard !isEnd, preDepth > 0 else { return }
+                preHeldCode = true
+                codeLanguage = codeLanguage ?? language(from: attributes)
+
             case "pre":
-                flushBlock()
-                preDepth = isEnd ? max(0, preDepth - 1) : preDepth + 1
+                if isEnd {
+                    preDepth = max(0, preDepth - 1)
+                    if preDepth == 0 { flushCode() }
+                } else {
+                    flushBlock()
+                    preDepth += 1
+                    buffer = ""
+                    codeLanguage = nil
+                    preHeldCode = false
+                }
 
             case "h1":
                 flushBlock()
@@ -333,6 +414,51 @@ extension RichPasteHTML {
             headerRow = nil
         }
 
+        // MARK: Links and code
+
+        /// Closes the open `<a>`, turning the words it wrapped into a link.
+        ///
+        /// An anchor with no words of its own contributes nothing: there is no text to preserve, and
+        /// writing the bare href would put a URL in the note that the source never showed.
+        private mutating func closeLink() {
+            guard let link else { return }
+            self.link = nil
+            let ns = buffer as NSString
+            guard link.mark <= ns.length else { return }
+            let label = ns.substring(from: link.mark)
+            guard !label.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+            buffer = ns.substring(to: link.mark) + LinkSpan.source(label: label, destination: link.href)
+        }
+
+        /// `class="language-python"` / `class="lang-python"` → `"python"`.
+        private func language(from attributes: [String: String]) -> String? {
+            for token in classTokens(attributes) {
+                for prefix in ["language-", "lang-"] where token.hasPrefix(prefix) {
+                    let name = String(token.dropFirst(prefix.count))
+                    if !name.isEmpty { return name }
+                }
+            }
+            return nil
+        }
+
+        /// Emits everything the closed `<pre>` held as one code block, indentation and blank lines
+        /// intact. `<pre>` is the one place HTML says outright "these characters are literal", which is
+        /// exactly what a fence says (RULES.md §7 — preserve declared structure, never guess it).
+        private mutating func flushCode() {
+            var lines = buffer.components(separatedBy: "\n")
+            while lines.first?.trimmingCharacters(in: .whitespaces).isEmpty == true { lines.removeFirst() }
+            while lines.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { lines.removeLast() }
+            buffer = ""
+            startsElement = true
+            // A `<pre>` that never opened a `<code>` declared preformatted text and nothing more.
+            let language = codeLanguage ?? (preHeldCode ? nil : CodeBlock.preformattedLanguage)
+            codeLanguage = nil
+            preHeldCode = false
+            guard !lines.isEmpty else { return }
+            blocks.append(.codeBlock(ImportedCode(code: lines.joined(separator: "\n"),
+                                                  language: language)))
+        }
+
         // MARK: Text
 
         private mutating func appendText(_ raw: String) {
@@ -342,6 +468,7 @@ extension RichPasteHTML {
             let decoded = Entities.decode(raw)
             if preDepth > 0, !inCell {
                 buffer += decoded
+                preBoundaryEndedLine = false
                 return
             }
 
@@ -410,6 +537,7 @@ extension RichPasteHTML {
                 return
             }
 
+            closeLink()
             let raw = buffer
             let kind = pendingKind
             let newElement = startsElement

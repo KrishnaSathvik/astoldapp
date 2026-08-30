@@ -10,8 +10,6 @@ struct RecordingPanel: View {
     @Bindable var model: VoiceCaptureModel
     var onClose: () -> Void
 
-    @State private var elapsed: Int = 0
-    @State private var tickCount: Int = 0
     @State private var levels: [Float] = Array(repeating: 0.05, count: 32)
     @State private var ticker: Timer?
     @State private var wasActive = false
@@ -20,16 +18,22 @@ struct RecordingPanel: View {
         VStack(spacing: DSSpacing.s5) {
             switch model.phase {
             case .recording:
-                recording
+                capture(paused: false)
+            case .paused:
+                capture(paused: true)
+            case .finishing:
+                TranscribingIndicator(ground: .darkPanel)
             case .needsConsent:
                 consentRequest
             case .transcribing:
-                TranscribingIndicator()
+                TranscribingIndicator(ground: .darkPanel)
             case .failed(let error):
                 failure(error)
             case .permissionDenied:
                 permissionDenied
-            case .idle:
+            case .idle, .requestingPermission:
+                // Nothing of ours to draw: before the first state, and while the system's own
+                // microphone prompt is the thing on screen.
                 EmptyView()
             }
         }
@@ -42,9 +46,15 @@ struct RecordingPanel: View {
         .onDisappear { ticker?.invalidate() }
         // Subtle haptics at the state changes the user is waiting on (docs/02-features.md, Voice).
         .sensoryFeedback(trigger: model.phase) { Self.haptic(from: $0, to: $1) }
-        .onChange(of: model.phase) { _, new in
+        .onChange(of: model.phase) { old, new in
+            // Said out loud as well as drawn. A reader who cannot see the word or the glyph has no
+            // other way to tell a paused capture from a running one (§6, RULES.md §4).
+            if let said = VoiceCaptureModel.Phase.announcement(from: old, to: new) {
+                UIAccessibility.post(notification: .announcement, argument: said)
+            }
             switch new {
-            case .recording, .needsConsent, .transcribing, .failed, .permissionDenied:
+            case .requestingPermission, .recording, .paused, .finishing,
+                 .needsConsent, .transcribing, .failed, .permissionDenied:
                 wasActive = true
             case .idle:
                 if wasActive { onClose() }   // capture completed → dismiss
@@ -54,12 +64,23 @@ struct RecordingPanel: View {
 
     // MARK: States
 
-    private var recording: some View {
+    /// One surface, two states. A pause is not a different screen — it is the same capture, not
+    /// counting (`docs/10-voice-v2.md` §5). The state is said in a **word** as well as in the control's
+    /// glyph, because §6 forbids a control that communicates its state through colour or shape alone.
+    private func capture(paused: Bool) -> some View {
         VStack(spacing: DSSpacing.s4) {
             WaveformView(levels: levels)
                 .frame(height: 48)
+                // Decorative — it answers "is this hearing me?" and nothing a reader needs (§6).
+                .accessibilityHidden(true)
             Text(timeString)
                 .font(.system(.body, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.8))
+                .monospacedDigit()
+                // Announced at state changes, never once a second (§6).
+                .accessibilityHidden(true)
+            Text(paused ? "Paused" : "Listening")
+                .font(.ds.caption)
                 .foregroundStyle(.white.opacity(0.8))
             ZStack {
                 // Done is the primary target, centred under the waveform.
@@ -88,6 +109,14 @@ struct RecordingPanel: View {
                         .frame(minWidth: 44, minHeight: 44)
                         .accessibilityHint("Discards this recording and leaves the note unchanged")
                     Spacer()
+                    Button(paused ? "Resume" : "Pause") {
+                        if paused { model.resume() } else { model.pause() }
+                    }
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityHint(paused
+                        ? "Continues this recording where it stopped"
+                        : "Holds the recording without ending it")
                 }
             }
         }
@@ -120,8 +149,16 @@ struct RecordingPanel: View {
         .accessibilityElement(children: .contain)
     }
 
+    /// The failure, and — when the recording survived it — the two controls that decide what happens
+    /// to the audio. Same substance as Quick Voice's, in this panel's clothes: one retained recording,
+    /// one **Retry**, one **Delete Recording** (`docs/10-voice-v2.md` §13).
+    ///
+    /// The note underneath is untouched throughout. A failed capture never writes to it, and a Retry
+    /// that succeeds inserts through the same ordinary path the first attempt would have used — one
+    /// insertion, one undo step.
     private func failure(_ error: TranscriptionError) -> some View {
-        VStack(spacing: DSSpacing.s4) {
+        let retained = model.retainedRecording != nil
+        return VStack(spacing: DSSpacing.s4) {
             if let title = Self.title(for: error) {
                 Text(title)
                     .font(.ds.preview)
@@ -133,22 +170,45 @@ struct RecordingPanel: View {
                 .font(.ds.preview)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
+            if retained {
+                Text(VoiceErrorCopy.retainedNotice)
+                    .font(.ds.preview)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+            }
             HStack(spacing: DSSpacing.s6) {
-                if case .monthlyLimitReached = error {
+                if retained {
+                    Button(VoiceErrorCopy.deleteRecordingLabel) { model.deleteRecording(); onClose() }
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(minHeight: 44)
+                        .accessibilityHint("Deletes this recording from this iPhone and leaves the note unchanged")
+                    Button(VoiceErrorCopy.retryLabel) { model.retry() }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .frame(minHeight: 44)
+                        .accessibilityHint("Sends this recording to be transcribed again")
+                } else if error == .noSpeech {
+                    // Nothing was heard, so nothing was kept: **Try Again** opens the microphone
+                    // rather than re-sending silence.
+                    Button("Cancel") { model.discard(); onClose() }
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(minHeight: 44)
+                    Button(VoiceErrorCopy.recordAgainLabel) { Task { await model.begin() } }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .frame(minHeight: 44)
+                        .accessibilityHint("Starts a new recording")
+                } else {
                     // Nothing to retry — the same upload would be refused again — and nothing to
                     // upsell, because there is no Pro tier to sell (RULES.md §1).
                     Button("OK") { model.discard(); onClose() }
                         .fontWeight(.semibold)
                         .foregroundStyle(.white)
-                } else {
-                    Button("Discard") { model.discard(); onClose() }
-                        .foregroundStyle(.white.opacity(0.8))
-                    Button(retryLabel(for: error)) { model.retry() }
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.white)
+                        .frame(minHeight: 44)
                 }
             }
         }
+        .accessibilityElement(children: .contain)
     }
 
     private var permissionDenied: some View {
@@ -176,61 +236,41 @@ struct RecordingPanel: View {
     private static func haptic(from old: VoiceCaptureModel.Phase,
                                to new: VoiceCaptureModel.Phase) -> SensoryFeedback? {
         switch (old, new) {
+        // Pause and resume are marked, and marked *quietly* (§6) — and they are matched before the
+        // start/stop rules below, so resuming does not fire the same haptic as beginning a recording.
+        case (.recording, .paused), (.paused, .recording): return .selection
         case (_, .recording): return .start
-        // Recording has stopped in both cases; the disclosure just sits between stop and send.
-        case (.recording, .transcribing), (.recording, .needsConsent): return .stop
+        // Recording has stopped in every case; the disclosure just sits between stop and send.
+        case (.finishing, .transcribing), (.finishing, .needsConsent): return .stop
         case (.transcribing, .idle): return .success
         case (_, .failed), (_, .permissionDenied): return .error
         default: return nil
         }
     }
 
+    /// The **recorded** time, read from the capture rather than counted here. A second counter beside
+    /// the model's own is how a paused timer keeps ticking (`docs/10-voice-v2.md` §5).
     private var timeString: String {
-        String(format: "%02d:%02d", elapsed / 60, elapsed % 60)
+        let seconds = Int(model.elapsedRecording.components.seconds)
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 
+    // Failure copy is shared with Home's Quick Voice capture, which is the same capture in a
+    // different presentation — see `VoiceErrorCopy`. These forward rather than restate.
     private func message(for error: TranscriptionError) -> String {
-        switch error {
-        case .offline: return "A connection is needed to transcribe this recording."
-        case .timedOut: return "The transcription service isn't responding. Your recording is safe — try again."
-        case .noSpeech: return "No speech was detected."
-        case .rateLimited: return "Too many requests. Try again in a moment."
-        case .requestTooLarge: return "That recording is too large to send."
-        case .recordingTooLong(let maxSeconds): return Self.lengthLimitMessage(maxSeconds: maxSeconds)
-        case .monthlyLimitReached(let resetsAt): return Self.allowanceMessage(resetsAt: resetsAt)
-        default: return "Couldn't transcribe that recording."
-        }
+        VoiceErrorCopy.message(for: error)
     }
 
-    /// Only the monthly allowance gets a title. It is the one failure that is not about *this*
-    /// recording, and reading it as "something went wrong" would be the wrong thing to believe.
     static func title(for error: TranscriptionError) -> String? {
-        if case .monthlyLimitReached = error { return "Voice will be back soon" }
-        return nil
+        VoiceErrorCopy.title(for: error)
     }
 
-    /// The date comes from the relay and is rendered in the reader's own time zone — the app never
-    /// works out when the month turns over. Without one, the sentence simply stops early rather than
-    /// guessing a date (`docs/04-voice-transcription.md` §12).
     static func allowanceMessage(resetsAt: Date?) -> String {
-        let used = "You've used this month's included voice transcription."
-        guard let resetsAt else { return "\(used) You can keep writing normally." }
-        let day = resetsAt.formatted(.dateTime.month(.wide).day())
-        return "\(used) You can keep writing normally, and voice will be available again on \(day)."
+        VoiceErrorCopy.allowanceMessage(resetsAt: resetsAt)
     }
 
-    /// "Recordings can be up to 5 minutes." — stated in the relay's units, not a hard-coded number,
-    /// so changing the server limit changes the copy with it.
     static func lengthLimitMessage(maxSeconds: Int) -> String {
-        let minutes = maxSeconds / 60
-        guard minutes >= 1, maxSeconds % 60 == 0 else {
-            return "Recordings can be up to \(maxSeconds) seconds."
-        }
-        return "Recordings can be up to \(minutes) minute\(minutes == 1 ? "" : "s")."
-    }
-
-    private func retryLabel(for error: TranscriptionError) -> String {
-        error == .noSpeech ? "Try Again" : "Retry"
+        VoiceErrorCopy.lengthLimitMessage(maxSeconds: maxSeconds)
     }
 
     private func startTicker() {
@@ -241,8 +281,6 @@ struct RecordingPanel: View {
                 model.refreshLevel()
                 levels.removeFirst()
                 levels.append(max(0.05, model.level))
-                tickCount += 1
-                if tickCount % 10 == 0 { elapsed += 1 }   // 10 × 0.1s = 1s
             }
         }
     }

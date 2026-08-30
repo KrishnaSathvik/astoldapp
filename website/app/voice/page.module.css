@@ -11,11 +11,13 @@
 .para {
   margin-top: 1.15rem;
   color: var(--ink-soft);
+  font-size: var(--body-sm);
 }
 
 .note {
   max-width: var(--measure);
   color: var(--muted);
+  font-size: var(--body-xs);
 }
 
 .afterLink {
@@ -23,14 +25,67 @@
   margin-top: 1.6rem;
 }
 
+/* Three principles across the section, in the display face. This is what the
+   five language chips became: a row that describes behaviour cannot be read as
+   a list of which languages are allowed. */
+.principles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(14px, 2.4vw, 44px);
+  margin-top: clamp(30px, 3.4vw, 44px);
+  padding-block: clamp(20px, 2.4vw, 28px);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.principles span {
+  font-family: var(--font-serif);
+  font-size: clamp(1.2rem, 2.1vw, 1.55rem);
+  letter-spacing: -0.018em;
+  color: var(--ink);
+}
+
+.principles span:nth-child(2) {
+  color: var(--accent);
+}
+
+.principles span:nth-child(3) {
+  color: var(--muted);
+}
+
+/* The accuracy footnote under the principles row, which is the last thing in
+   that section now that it carries no device. */
+.principles + .note {
+  margin-top: clamp(22px, 2.4vw, 30px);
+}
+
+/* The verbatim contract, closing the spoken-structure section rather than
+   holding a band of its own. It sat under the multilingual heading until
+   2026-08-29, where a *said → written* comparison made a claim about languages
+   look like a language demo. What it demonstrates is that nothing gets
+   rewritten, which is the other half of "structure only when you ask". */
 .fidelity {
   display: grid;
-  gap: clamp(32px, 4vw, 64px);
+  gap: clamp(24px, 3vw, 56px);
   align-items: start;
+  margin-top: clamp(40px, 4.4vw, 60px);
+  padding-top: clamp(32px, 3.6vw, 48px);
+  border-top: 1px solid var(--line);
+}
+
+.subhead {
+  margin: 0;
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
+  letter-spacing: -0.018em;
+  color: var(--ink);
 }
 
 @media (min-width: 1000px) {
   .fidelity {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1.15fr 1fr;
   }
+}
+
+.fidelity .para {
+  margin-top: 1rem;
 }

@@ -33,16 +33,25 @@ enum RichPasteMarkdown {
             lines = lines.dropFirst()
 
             if let fence = fenceMarker(raw) {
-                // Everything to the closing fence is the writer's own characters, indentation included.
-                // (Accepted V1 limitation, RULES.md §4: a literal line that itself begins with a
-                // canonical marker still renders as that structure — `body` has no escape syntax.)
-                var first = true
+                // Everything to the closing fence is the writer's own characters, indentation included
+                // — and it arrives as a **code block**, so those characters stay literal. This is what
+                // retires the V1 limitation recorded here: a fenced line beginning with `# ` used to
+                // land in `body` as a heading, because `body` had no way to say "this is code". A
+                // fence is that way (RULES.md §7).
+                let info = raw.trimmingCharacters(in: .whitespaces)
+                    .dropFirst(fence.count).trimmingCharacters(in: .whitespaces)
+                var code: [String] = []
                 while let next = lines.first, fenceMarker(next) != fence {
                     lines = lines.dropFirst()
-                    blocks.append(.line(ImportedLine(kind: .paragraph, text: next, startsElement: first)))
-                    first = false
+                    code.append(next)
                 }
                 if lines.first != nil { lines = lines.dropFirst() }
+                if !code.isEmpty {
+                    blocks.append(.codeBlock(ImportedCode(
+                        code: code.joined(separator: "\n"),
+                        language: info.split(separator: " ").first.map(String.init)
+                    )))
+                }
                 counters = []
                 previousWasListItem = false
                 continue
@@ -239,16 +248,23 @@ enum RichPasteMarkdown {
                 }
             }
 
-            // `[Major Marine](https://…)` and `![alt](…)`: the words stay, the address goes with the
-            // styling. Writing the URL into the note would be adding text the source never showed.
+            // `[Major Marine](https://…)` keeps **both halves** now that As Told holds links: the
+            // words the source showed, and the destination it stated. `![alt](…)` still keeps only its
+            // words — As Told has no images, and an image's address is not something a reader can use.
             if character == "!" || character == "[" {
-                let opening = character == "!" ? text.index(after: index) : index
+                let isImage = character == "!"
+                let opening = isImage ? text.index(after: index) : index
                 if opening < text.endIndex, text[opening] == "[",
                    let label = matching("]", from: text.index(after: opening), in: text) {
                     let after = text.index(after: label)
                     if after < text.endIndex, text[after] == "(",
                        let close = matching(")", from: text.index(after: after), in: text) {
-                        out += inlineText(text[text.index(after: opening)..<label])
+                        let words = inlineText(text[text.index(after: opening)..<label])
+                        let destination = markdownDestination(text[text.index(after: after)..<close])
+                        // `LinkSpan.source` hands back the words untouched when the destination is not
+                        // an absolute http(s) URL, so a relative or `mailto:` link keeps its text and
+                        // loses nothing else.
+                        out += isImage ? words : LinkSpan.source(label: words, destination: destination)
                         index = text.index(after: close)
                         continue outer
                     }
@@ -274,6 +290,16 @@ enum RichPasteMarkdown {
     }
 
     static func inlineText(_ text: String) -> String { inlineText(text[...]) }
+
+    /// The address out of a Markdown destination: `<https://x>` loses its brackets, and
+    /// `https://x "Title"` loses the title, which is a tooltip As Told has nowhere to show.
+    private static func markdownDestination(_ raw: Substring) -> String {
+        var text = raw.trimmingCharacters(in: .whitespaces)
+        if text.hasPrefix("<"), text.hasSuffix(">"), text.count >= 2 {
+            text = String(text.dropFirst().dropLast())
+        }
+        return text.split(separator: " ").first.map(String.init) ?? text
+    }
 
     private static func matching(_ character: Character, from start: Substring.Index,
                                  in text: Substring) -> Substring.Index? {

@@ -16,21 +16,27 @@
 /* The size lives in a custom property so both the device and the <figure> that
    wraps it resolve to the same width. Without a width on the figure, a flex
    item shrinks to nothing until its image has loaded. */
+/* Every size went up a step on 2026-08-29. A 268px device on a 1440px screen is
+   a thumbnail: the UI in it cannot be read, which defeats the only reason a
+   screenshot is on the page. `sm` is now the smallest a device is ever drawn,
+   and it is only used where three of them share a row. */
 .sm {
-  --device-w: 268px;
-}
-
-.md {
   --device-w: 300px;
 }
 
-.lg {
-  --device-w: 356px;
+.md {
+  --device-w: 336px;
 }
 
-/* Hero only. The device is the hero element, not an illustration beside it. */
+.lg {
+  --device-w: 400px;
+}
+
+/* Hero only. The device is the hero element, not an illustration beside it,
+   so it is drawn as large as the column will hold — 460px on 2026-08-29, and
+   still small enough that the note titles in it had to be squinted at. */
 .xl {
-  --device-w: 404px;
+  --device-w: 510px;
 }
 
 .shot {

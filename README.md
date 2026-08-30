@@ -19,6 +19,44 @@ These decisions should be treated as product constraints unless intentionally ch
 
 - Product name is **As Told** (locked 2026-08-17). Full marketing name: **As Told — Private Notes**. App Store name and home-screen icon label: **As Told**. The internal Xcode target/module stays `Yourly`; the bundle id is `com.astold.app` (changed 2026-08-18, before any App Store Connect record existed — it is permanent now that one does). **Reviewed and approved 2026-08-26**: Apple ID `6804007726`, listing at `https://apps.apple.com/us/app/as-told/id6804007726`. The id lives in two places that feed everything else — `APP_STORE_ID` in `website/lib/site.ts` and `AppLinks.appStoreID` in `Features/Profile/PrivacyView.swift`.
 - Primary descriptor: **A private place for anything you want to put into words.** Brand promise: **Your words, as told by you.** (Repositioned 2026-08-18 from the thoughts-only *"Private notes, in your own words."* framing. This **widens the invitation, not the product**: V1 shipped scope, the do-not-build fences, and all shipped-feature marketing claims are unchanged; structured writing and voice-structure commands are sequenced roadmap, not V1. Tagline is unchanged. Full brand / ASO / SEO / website direction: `docs/08-positioning-marketing.md`.)
+- **Links and code blocks live inside `body` (added 2026-08-23 — V2 Phases 1–2, both free).** `body`
+  stays one plain `String`. A link is a bare `http(s)` URL exactly as written, or `[text](url)` written
+  only by paste when a clipboard states a hyperlink whose text differs from its href; `http`/`https` are
+  the only schemes As Told will open. A code block is a complete ` ``` ` fence pair whose interior is
+  **literal** — a `#` there is a comment, not a heading. Both are read back, never written over the
+  writer's own characters, and both follow the table rule of two presentations: a real view while
+  reading, canonical source while editing. This retires three V1 exclusions one at a time, as
+  `docs/09-v2-roadmap.md` §8.1.3 requires — see the links and code-block exceptions in `RULES.md` §7 and
+  the storage contract in §5.
+- **Code cards carry syntax colour and a language label (added 2026-08-24).** The line above read
+  "syntax highlighting is deliberately **not** in this pass", which was right for the pass that built
+  the card and wrong to keep: a monochrome block does not meet that exception's own bar, *code pasted
+  into As Told should still look like code*. Colour is applied **only inside the rendered card**, only
+  for a language the fence **named** (a closed list — a language is never inferred from the code), and
+  only as colour: five tokens, semantic Light/Dark, each measured at or above 4.5:1 on `CodeSurface`.
+  `body` is untouched, Copy Code still copies the original code, and editing still shows the plain
+  fenced source — there is no syntax-aware editor. A block that named no language shows no label
+  rather than "Plain text". See `RULES.md` §7 and `docs/03-design-system.md`.
+- **Paste infers code, and only code** (amended 2026-08-24, by the product owner). The locked rule was
+  "never infer structure from prose"; it now reads *never infer document structure from plain prose,
+  **except high-confidence programming/code detection on paste***. Plain text a detector is certain is
+  code is fenced automatically and arrives as a labelled, coloured card; anything short of certain stays
+  prose, with **Paste as Code** as the manual override. This is the only inference from prose anywhere in
+  the app. Bounds and rationale: `RULES.md` §4, `Core/Editor/CodeDetection.swift`.
+- **The editor header is Back · date · Share (changed 2026-08-26).** The note's date moved from inside
+  the scrolling page into the navigation bar, centred, and a native Share button joined it on the right.
+  Sharing opens the **system share sheet** — no destination picker of our own, no overflow menu, and no
+  second timestamp anywhere on the screen. This supersedes two earlier decisions on purpose: the
+  2026-08-20 "the date scrolls with the document" fix (which was about a header pinned *inside* the
+  page; a navigation bar reserves its own height, so the clipping it prevented cannot return through
+  it — the **title** still scrolls, for that original reason), and the "no prominent timestamp" line in
+  `RULES.md` §4. The date is `updatedAt`, in the reader's locale.
+- **Sharing one note is free, and is not Export (added 2026-08-26).** One note, two representations —
+  HTML for destinations that negotiate for it and UTF-8 text for the rest — both produced by
+  `StructuredTextExport`, the same exporter the pasteboard uses. It is Copy with a destination attached.
+  The Pro **Export & Restore** feature (`docs/09-v2-roadmap.md` §2.2) is a different thing and is still
+  unbuilt: selected notes, a versioned backup format, a restore path. `native Share Sheet` was already a
+  §7 P1 candidate; `share extension` — As Told appearing inside *other* apps' sheets — stays excluded.
 - iPhone only, **portrait only** (locked 2026-08-18). No iPad, Mac Catalyst, or visionOS.
 - No account or sign-in.
 - No onboarding carousel.
@@ -53,7 +91,11 @@ These decisions should be treated as product constraints unless intentionally ch
   rows in `body`, styled as a table in the note, and openable full-screen with real columns and
   VoiceOver. There is no way to create or graphically edit one: no toolbar button, no row/column
   controls, no spreadsheet behavior, and voice never makes a table. Editing a table means editing its
-  text. (`tables` was on the do-not-build list until this date; it now reads *table editing*.)
+  text. (`tables` was on the do-not-build list until this date; it now reads *table editing*.) **The
+  delimiter row is never drawn** (2026-08-23): `| --- | --- |` records which row is the header and
+  nobody typed it to be read, so it is absent from the card *and* from the source the writer edits. It
+  is not removed — `body` keeps every character — so the caret is kept off that invisible line, and
+  Backspace at the start of the first row joins that row to the header.
 - Voice and typing are two input methods for the same note.
 - Voice transcript becomes ordinary editable text.
 - **Voice is free, with a quiet fair-use ceiling** (locked 2026-08-21). No subscription and no Pro
@@ -113,7 +155,10 @@ Specifications (`docs/`):
 | `docs/07-build-plan.md` | Implementation order, phases, and definition of done |
 | `docs/08-positioning-marketing.md` | Long-term positioning, brand/messaging hierarchy, App Store (ASO), SEO, website, screenshots, and the marketing-lags-implementation rule |
 | `docs/09-v2-roadmap.md` | **Proposed** V2 direction: the Free / Pro split, the eight-phase build order, and the rule amendments each phase would require (nothing in it is built or locked) |
+| `docs/10-voice-v2.md` | Voice V2 — **direction locked 2026-08-27, not built**: Home Quick Capture, pause/resume, recording durability, table-cell voice, the App Intent, and the seven-phase build order. Marks what already shipped in V1, and refuses self-corrections and the voice dictionary outright (`RULES.md` §2) |
 | `docs/design-reference/screens-overview.png` | Canonical 10-screen visual reference for V1 |
+| `docs/appstore/README.md` | The 6.9" screenshot set: what each frame shows, how it is composed, and the measurements it must pass |
+| `docs/appstore/release-notes.md` | Per-version **What's New** text and what each submitted build contained |
 
 Marketing site (`website/`):
 

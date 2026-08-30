@@ -9,11 +9,11 @@ import { AppStoreButton } from './AppStoreButton';
 import styles from './SiteHeader.module.css';
 
 /**
- * Three links and a CTA. That is not enough navigation to justify a hamburger,
- * a scrim, and a slide-over sheet — so on a phone the header simply becomes two
- * rows and keeps everything visible. Nothing here is ever hidden behind a tap.
+ * The wordmark, one link, and the CTA — one row at every width, on a phone
+ * included. There is nothing here to hide behind a hamburger, and nothing that
+ * needs a second row.
  *
- * Product discovery only; Privacy / Support / Terms live in the footer.
+ * The wordmark is Product; Privacy, Support and Terms are the footer's.
  */
 export function SiteHeader() {
   const pathname = usePathname();

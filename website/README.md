@@ -15,12 +15,25 @@ npm run typecheck
 
 | Route | What it is |
 |---|---|
-| `/` | The product story: hero → write → structure → paste → voice → multilingual → timeline & privacy → light/dark → CTA |
-| `/voice` | How voice capture works, end to end |
-| `/languages` | Telugu, Hindi, English and the mix — a tabbed example switcher, then fidelity |
+| `/` | The product story: hero → write or speak → voice → writing → paste & code → share + privacy → light/dark → CTA |
+| `/voice` | How voice capture works, end to end — six sections |
+| `/languages` | A search landing page for multilingual voice: a hero, three principles, the accuracy note. **Nothing on the site links to it** — see "Language framing" below |
 | `/privacy` | The privacy document |
 | `/support` | FAQ, grouped: writing, paste, voice, privacy & storage, recovery |
 | `/terms` | The terms document |
+
+Primary navigation is **Voice**, plus the CTA — one link, one row, at every width.
+
+It was `Product · Voice · Privacy · Support` until 2026-08-29. The wordmark already is Product, and
+Privacy, Support and Terms are utility destinations the footer has carried the whole time; a header
+that repeats them opens every page — the legal ones included — with a site directory instead of a
+product. `Voice` stays because it is the only secondary page that is *product*, and it is the half
+of As Told a visitor cannot see from the homepage's first screen.
+
+`Multilingual` was a top-level item until 2026-08-29 as well; how voice treats languages is a
+property of voice, not a fourth thing the product is, so `/languages` keeps its URL and its place in
+the sitemap, is reached from neither `/` nor `/voice`, and is linked only from the Support answer
+that names the tested groups.
 
 Old URLs are redirected permanently in `next.config.ts` — `/voice-notes` → `/voice`,
 `/multilingual` → `/languages`, `/private-notes` → `/privacy`, and the `.html` spellings of
@@ -73,9 +86,10 @@ lib/site.ts          canonical URL, nav, App Store listing, support contact, met
 public/              screenshots, icons, og.png, site.webmanifest
 ```
 
-Only three components ship JavaScript: `SiteHeader` (the mobile menu), `RevealObserver`
-(the fade-in), and `LanguageSwitcher` (the `/languages` example tabs). Everything else is a
-server component.
+Only three components ship JavaScript: `SiteHeader` (the sticky/scrolled state), `RevealObserver`
+(the fade-in), and `DocLayout` (the table of contents' active heading). Everything else is a server
+component. `LanguageSwitcher` and `LanguageExample` were deleted on 2026-08-29 with the tabbed
+language specimens they existed for.
 
 ### Things worth knowing before you edit
 
@@ -90,9 +104,11 @@ server component.
   job is proving the editor does structure — and a −34px overlap in the device pair was covering the
   calendar's back button, its weekday header, and its entire Sunday column. If a device makes
   a section too tall, use a smaller `size` or write a fuller copy column. Never hide app UI.
-- **Device sizes** are `sm` 268px / `md` 300px / `lg` 356px / `xl` 404px, set as `--device-w`.
-  At `lg` a 1206×2622 capture renders 774px tall; that is what a section beside it has to
-  accommodate. `PhoneShot` declares the intrinsic size once — update it there if the capture
+- **Device sizes** are `sm` 300px / `md` 336px / `lg` 400px / `xl` 460px, set as `--device-w`.
+  Every one went up a step on 2026-08-29: a 268px device on a 1440px screen is a thumbnail whose
+  UI cannot be read, which defeats the only reason a screenshot is on the page. At `lg` a 1206×2622
+  capture now renders 869px tall; that is what a section beside it has to accommodate. `PhoneShot`
+  declares the intrinsic size and the `sizes` attribute once — update them there if the capture
   device ever changes.
 - **`PhonePair stagger`** steps the second device *down* (72px), never sideways.
 - **`PhoneFigure` needs its size class on the `<figure>` too** — a flex item with no width
@@ -104,14 +120,18 @@ server component.
   it feeds the iOS Safari smart banner (`itunes.appId` in `app/layout.tsx`). There is no pre-launch
   state any more: the constant is not nullable, and the "Coming to the App Store" span and its
   `.pending` style were deleted when the app shipped.
-- **The language specimens carry no linguistic gloss.** "English nouns taking Telugu case
-  endings" is true, academic, and worth nothing to a reader who already speaks that way. Show
-  the sentence; let them recognise themselves. Captions say what the *product* does.
-- **`LanguageSwitcher` renders every panel into the DOM** and hides the inactive ones with the
-  `hidden` attribute — those Telugu and Hindi sentences are what the page ranks for, so they
-  must not sit behind a click. A `<noscript>` block reveals all five and drops the tab bar.
-  Never toggle its panels with an inline `style={{display}}`: that outranks the media query
-  that makes the open panel a two-column grid.
+- **Language framing: name no language outside the Support answer.** `RULES.md` §7 ("Language
+  claims") is binding on this site, and was tightened on 2026-08-29 because the previous pass
+  changed the words and left the framing. The public claim is the capability — *multilingual voice
+  transcription*, *speak naturally across languages*, *no language picker*, *switch naturally*,
+  *no forced translation*. The five benchmark groups are named in exactly one place, the Support
+  answer for "Which languages can I speak?", and described there as release test groups. They must
+  not appear in a hero, a chip or pill row, a tab bar, a `figcaption`, an image `alt`, a feature
+  grid, or a CTA. A screenshot of a mixed-language note is welcome; **captioning it "Telugu +
+  English" is what made a capability read as a catalogue**, and is what the redesign removed.
+  `scripts/audit-shots.mjs` cannot catch this — reading the page can.
+- **Never say** "all languages", "every language", a language count, "perfect transcription", or
+  "understands any accent". None of those is measured.
 
 ## Deploying
 
@@ -156,41 +176,91 @@ Every file has exactly one job:
 
 | File | Launch arguments | Where it appears |
 |---|---|---|
-| `home-light` | `-resetStore -seedSampleNotes` | `/` hero, `/` Light/Dark, `og.png` |
-| `home-dark` | same store, `-appTheme dark` | `/` Light/Dark |
-| `structure-light` | `-resetStore -seedSeattleDemo` then `-openSeededNote` | `/` Write |
-| `toolbar-light` | same, `-openSeededNote -caretAtEnd` | `/` Structure |
-| `table-light` | `-resetStore -seedBudgetDemo` then `-openSeededNote` | `/` Paste |
-| `recording-light` | `-voiceTranscriptionConsent YES -openSeededNote -autoStartVoice` | `/` Voice, `/voice` hero |
+| `home-light` | `-resetStore -seedShowcaseNotes` | `/` hero, `/` Write-or-speak, `/voice`, `og.png` |
+| `home-dark` | same store, `-appTheme dark` | (held) |
+| `quickvoice-light` | `-openQuickVoice -voiceDemoLevels`, waited to ~00:17 | `/` Write-or-speak, `/voice` hero |
+| `quickvoice-paused-light` | `-voicePauseAfter 18 -openQuickVoice -voiceAutoPause -voiceDemoLevels` | `/` Voice, `/voice` Pause and resume |
+| `recording-light` | `-openSeededNote -autoStartVoice -voiceAutoPause` | (held) |
+| `retry-light` | `-openSeededNote -autoStartVoice -voiceFakeFailure` | `/voice` If something goes wrong |
 | `consent-light` | `-openSeededNote -autoStartVoice`, consent **not** granted | `/voice` |
-| `voice-light` | `-resetStore -seedVoiceDemo` then `-openSeededNote` | `/` Multilingual, `/voice`, `/languages` |
-| `hindi-light` | `-resetStore -seedHindiDemo` then `-openSeededNote` | `/` Multilingual |
-| `search-light` | `-searchQuery Seward` | `/` Timeline |
-| `calendar-light` | `-openCalendar` | `/` Timeline |
-| `lock-light` | `-forceLocked` | `/` Privacy |
+| `structure-light` | `-resetStore -seedSeattleDemo` then `-openSeededNote` | `/` Light/Dark |
+| `structure-dark` | same, `-appTheme dark` | `/` Light/Dark |
+| `toolbar-light` | same, `-openSeededNote -caretAtEnd` | `/` Writing |
+| `table-light` | `-resetStore -seedBudgetDemo` then `-openSeededNote` | `/` Paste |
+| `code-light` | `-resetStore -seedQueryDemo` then `-openSeededNote` | `/` Code |
+| `note-light` | `-resetStore -seedSundayDemo` then `-openSeededNote` | `/` Write-or-speak |
+| `search-light` | `-searchQuery Seward` | (held) |
+| `calendar-light` | `-openCalendar` | (held) |
+| `lock-light` | `-forceLocked` | (held) |
 
-Three of these need care:
+**`hindi-light` and `voice-light` were deleted from `public/` on 2026-08-29, and no capture
+replaces them.** Neither was ever captioned by language and neither `alt` named one — and they were
+still the wrong pictures. A note in a particular script *is* the language claim whatever the words
+beside it say, and with a Telugu/English note closing the homepage sequence and a Hindi/English one
+illustrating the multilingual section, the page taught every visitor that As Told is an English +
+Telugu + Hindi app (`RULES.md` §7, "Language claims"). The multilingual argument is carried by the
+recording screen now: there is no language control on it, and the absence is the proof.
 
-- **`recording-light`** — with consent ungranted the panel lives well under a second before the
-  consent sheet covers it, which is why this one passes `-voiceTranscriptionConsent YES`. The level
-  meter reads flat because a simulator in a quiet room has no input; that is the app telling the
-  truth, and the alt text says "level meter" rather than claiming a live waveform.
+`note-light` (`42-writing-sunday`, an ordinary English note) took the sequence's closing slot, which
+is the better picture for what that step claims — *what you end up with is just a note*. The raw
+captures are kept at `docs/appstore/raw/26-hindi.png` and `raw/32-voice-multilingual.png` for
+testing; nothing on the site may reference them.
+
+**Nine captures carry the homepage, in ten places**, every one at `lg` or larger. `home-light` is
+the only file drawn twice — as the hero, then as the first step of the write-or-speak sequence.
+The page showed fourteen devices before 2026-08-29 and eleven after it, several at 268px and nearly
+all annotated, which is how a marketing page starts reading as documentation. The library keeps
+every held file — a held capture is current, correct, and one section change away from being
+wanted.
+
+Four of these need care:
+
+- **`quickvoice-light` / `quickvoice-paused-light`** — Quick Voice lives behind a tap on Home, so
+  `-openQuickVoice` exists to present it on launch and `-voiceAutoPause` calls the same `pause()`
+  the button calls. Neither finishes on a timer, so the state is held as long as the capture needs.
+  Both were replaced on 2026-08-29 by the raw-library pair (`31-quickvoice-listening` /
+  `40-quickvoice-paused`): the timer is the recorder's own elapsed time, so **the wait is the number
+  on the clock**, and 00:01 over a flat meter read as staged. They are now one recording seen twice
+  — 00:17 listening, 00:18 paused — and `-voiceDemoLevels` moves the waveform, because a simulator
+  in a quiet room has no input and the real meter draws flat.
+- **`recording-light`** — `-autoStartVoice` alone finishes the recording after 1.5s, which no
+  screenshot can outrun; `-voiceAutoPause` holds the in-note panel open instead. This capture is
+  therefore the **Paused** panel over a real note, and the alt text says so.
 - **`consent-light`** — the opposite: it only appears while `voiceTranscriptionConsent` is unset, so
   capture it before granting, or after `xcrun simctl erase`.
-- **`home-light` / `home-dark`** — the Light/Dark pair must be the *same* store at the *same* scroll
-  position, so take them back to back without `-resetStore` in between. The sample timeline is dated
-  relative to now, so a pair taken on different days will not match.
+- **`toolbar-light`** — the only capture that needs the **software** keyboard, and a Mac with a
+  hardware keyboard attached does not raise one. Set
+  `defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO`, open Simulator.app so
+  the setting takes, capture, then **set it back to YES** — a UI test asserts on `app.keyboards`
+  and breaks while it is off.
+- **`structure-light` / `structure-dark`** — the Light/Dark pair must be the same note, so seed once
+  and take them back to back, changing only `-appTheme`.
 
-The seeds are marketing fixtures, not test fixtures: `-seedSeattleDemo`, `-seedBudgetDemo`, and
-`-seedHindiDemo` exist so the captures look like notes somebody wrote rather than a feature list
-being exercised. `-seedStructuredDemo` and `-seedTableDemo` stay as they are — `TablePresentationUITests`
-launches the latter.
+The seeds are marketing fixtures, not test fixtures: `-seedSeattleDemo`, `-seedBudgetDemo`,
+`-seedQueryDemo`, and `-seedHindiDemo` exist so the captures look like notes somebody wrote rather
+than a feature list being exercised. `-seedStructuredDemo`, `-seedTableDemo` and `-seedCodeDemo` stay
+as they are — the UI tests launch them, and `-seedCodeDemo` is a parser fixture that reads like one,
+which is why the marketing code card has its own seed.
+
+Seed and open are **separate launches**, and so is a theme change: the theme is read once at launch,
+and reusing a session that was started dark has produced a "light" capture in dark. Terminate between
+every shot, and look at what came out.
 
 ### Known gaps
 
+- **The Share sheet has no capture, and cannot have one from a simulator.** `-openShare` presents the
+  real sheet, but a simulator has no Messages, Mail, or AirDrop, so the sheet it draws offers
+  Reminders and Save to Files — which would read as a claim that those are the only places a note can
+  go. The Share section on `/` is deliberately copy-only until this is captured **on a device**, and
+  its copy names no destinations for the same reason: a note goes to "whichever apps and services are
+  already available on your iPhone", not to a fixed list of four.
 - There is no **blank-editor** capture. `structure-light` is a note that already has structure in it.
-- There is no **dark editor** capture. Light/Dark uses the two home-screen shots.
 - The recording **level meter is flat** in every capture, for the reason above.
+- `home-dark`, `recording-light`, `search-light`, `calendar-light` and `lock-light` are current and
+  unused. The Light/Dark pair is the editor; `/voice` shows the Quick Voice paused panel rather than
+  the in-note one; and the homepage dropped its timeline and lock devices when it went from fourteen
+  screenshots to nine, then its consent and retry devices at seven. All are kept because they are
+  captured, correct, and one section change away from being wanted.
 
 ## Regenerating the social card
 
@@ -198,9 +268,15 @@ launches the latter.
 capture changes rather than being a mystery binary:
 
 ```sh
-npm run build && npx next start -p 3100 &
-npm run og -- http://localhost:3100
+cd public && python3 -m http.server 3200 &
+npm run og -- http://localhost:3200
 ```
+
+**Point it at a plain static server, not `next start`.** The script copies the template into `public/`
+for the length of the render, and `next start` builds its static-file manifest at boot — so a file
+added afterwards 404s and the card comes out as a screenshot of the **404 page**. It looks plausible
+until you open it. A server rooted at `public/` has everything the template asks for: the icon, and
+the current `home-light` capture.
 
 It uses the production app icon (`public/android-chrome-512x512.png`, which is
 `Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png` resized) and the current

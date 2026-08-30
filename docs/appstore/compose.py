@@ -153,17 +153,25 @@ def night_panel(canvas, x0, y0, radius=64):
 
 
 def wrap(draw, text, fnt, maxw):
-    words, lines, cur = text.split(), [], ""
-    for w in words:
-        t = (cur + " " + w).strip()
-        if draw.textlength(t, font=fnt) <= maxw or not cur:
-            cur = t
-        else:
-            lines.append(cur)
-            cur = w
-    if cur:
-        lines.append(cur)
-    return lines
+    """Greedy wrap, except that a literal newline is honoured as a hard break.
+
+    Greedy alone breaks "Write it. Or just say it." after "Or", which reads as a
+    typo at poster size. A headline is four words of copy, not a paragraph, so
+    where it breaks is a design decision — `\n` is how a frame states one.
+    """
+    out = []
+    for para in text.split("\n"):
+        words, cur = para.split(), ""
+        for w in words:
+            t = (cur + " " + w).strip()
+            if draw.textlength(t, font=fnt) <= maxw or not cur:
+                cur = t
+            else:
+                out.append(cur)
+                cur = w
+        if cur:
+            out.append(cur)
+    return out
 
 
 def text_block(canvas, spec):
@@ -192,10 +200,19 @@ def text_block(canvas, spec):
         return {"center": (W - tw) / 2, "right": W - M - tw, "left": M}[align]
 
     y = spec["ttop"]
+    last_top = y
     for ln in hl:
         d.text((x_for(ln, hf), y), ln, font=hf, fill=ink)
+        last_top = y
         y += int(size * 1.02)
-    y += 26
+
+    # The rule clears the *glyph box*, not the line advance. `size * 1.02` is
+    # tighter than New York's ascent+descent, so measuring the gap from the
+    # advance put the rule through the descender of "actually speak." — it read
+    # as an underline on the "y". Ascent + descent is where the last line
+    # actually ends, whatever it happens to end with.
+    ascent, descent = hf.getmetrics()
+    y = last_top + ascent + descent + 24
     rw = 84
     rx = {"center": (W - rw) / 2, "right": W - M - rw, "left": M}[align]
     d.rectangle([rx, y, rx + rw, y + 5], fill=rule)
@@ -206,47 +223,81 @@ def text_block(canvas, spec):
 
 
 # Each frame gets its own composition; one shared type and colour system.
+#
+# Rebuilt 2026-08-29 for V2. The previous eight frames told the V1 story and frame 5 headlined
+# "Telugu. Hindi. English." — the benchmark groups, not the product boundary (RULES.md §7, "Language
+# claims"). This set leads with the two ways into a note, repositions voice as multilingual, and adds
+# the work that shipped after the old raws were taken: Quick Voice, pause/resume, code cards, and the
+# retained recording.
+#
+# Ten frames, which is Apple's maximum. The Share sheet is deliberately absent: a simulator has no
+# Messages, Mail or AirDrop, so its sheet offers Reminders and Save to Files, and a frame implying
+# those are the destinations is worse than no frame. Capture it on a device and it replaces whichever
+# frame is weakest by then — `alt-daynight` is composed but unshipped and is the natural swap.
 SHOTS = [
-    dict(name="01-write", bg=PAPER, seed=3, align="center", lines=2, ttop=196,
-         head="Write it. Say it. Keep it.",
-         sup="Private notes, in your own words.",
-         art=lambda c: device(c, "10-editor-toolbar.png", 960, 780)),
+    dict(name="01-words", bg=PAPER, seed=3, align="center", lines=2, ttop=196,
+         head="Anything you want to put into words.",
+         sup="Write it. Say it. Keep it.",
+         art=lambda c: device(c, "01-hero.png", 960, 820)),
 
-    dict(name="02-voice", bg=CHARCOAL, dark=True, seed=9, align="center", lines=1, ttop=210,
-         head="Or just say it.",
-         sup="Your words return right where you left off.",
-         art=lambda c: device(c, "14-voice-dark.png", 1000, 790, dark=True)),
+    # Dark, and cropped tight. The Quick Voice screen is mostly empty canvas by design — shown as a
+    # full device that emptiness reads as a bug, and cropped to the timer it reads as focus.
+    dict(name="02-voice", bg=CHARCOAL, dark=True, seed=9, align="center", lines=2, ttop=210,
+         head="Write it.\nOr just say it.",
+         sup="Tap the mic and talk. There is no note to create first.",
+         art=lambda c: device(c, "21-quickvoice-dark.png", 1000, 790, dark=True)),
 
-    dict(name="03-paste", bg=CHALK, seed=15, align="center", lines=2, ttop=196,
+    dict(name="03-languages", bg=STONE, seed=15, align="center", lines=2, ttop=196,
+         head="Speak the way you actually speak.",
+         sup="Switch languages mid-sentence. Your words stay in the language you used.",
+         art=lambda c: device(c, "04-multilingual.png", 1090, 830)),
+
+    dict(name="04-pause", bg=PAPER, seed=21, align="center", lines=2, ttop=196,
+         head="Pause. Think. Keep going.",
+         sup="A recording waits while you find the next sentence.",
+         art=lambda c: device(c, "22-voice-paused.png", 920, 810)),
+
+    dict(name="05-structure", bg=PAPER, seed=27, align="left", lines=2, ttop=196,
+         head="Structure without the complexity.",
+         sup="Headings, lists and checklists. No block picker.",
+         # The crop starts at the "Before we go" heading, not below it: the support line
+         # promises headings, lists and checklists, and this way one frame carries a
+         # heading, a checklist, a numbered list, a bulleted list and the toolbar.
+         art=lambda c: card(c, "10-editor-toolbar.png", (0, 850, 1320, 2868),
+                            1240, 40, 958, radius=48)),
+
+    dict(name="06-code", bg=CHARCOAL, dark=True, seed=33, align="center", lines=2, ttop=196,
+         head="Code that still looks like code.",
+         sup="Syntax colour, monospaced, and Copy Code.",
+         art=lambda c: device(c, "25-code-dark.png", 1000, 830, dark=True)),
+
+    dict(name="07-paste", bg=CHALK, seed=39, align="center", lines=2, ttop=196,
          head="Paste it. Keep the structure.",
          sup="Headings, lists and tables arrive intact.",
-         art=lambda c: (device(c, "05-paste.png", 1040, 806),
-                        card(c, "05-paste.png", (40, 930, 1290, 1645), 1150, 85, 1512))),
+         art=lambda c: (device(c, "05-paste.png", 1040, 846),
+                        card(c, "05-paste.png", (40, 930, 1290, 1645), 1150, 85, 1552))),
 
-    dict(name="04-structure", bg=PAPER, seed=21, align="left", lines=2, ttop=196,
-         head="Structure when you need it.",
-         sup="Headings, lists and checklists. Nothing more.",
-         art=lambda c: card(c, "10-editor-toolbar.png", (0, 1180, 1320, 2868),
-                            1240, 40, 1150, radius=48)),
+    dict(name="08-durable", bg=PAPER, seed=45, align="center", lines=2, ttop=196,
+         head="Your words shouldn't disappear.",
+         sup="A dropped connection never costs you the recording.",
+         art=lambda c: device(c, "23-retry.png", 920, 810)),
 
-    dict(name="05-languages", bg=STONE, seed=27, align="center", lines=2, ttop=196,
-         head="The mix stays the mix.",
-         sup="Telugu. Hindi. English. Together when you want them.",
-         art=lambda c: device(c, "04-multilingual.png", 1090, 806)),
-
-    dict(name="06-find", bg=PAPER, seed=33, align="left", lines=1, ttop=196,
+    dict(name="09-find", bg=PAPER, seed=51, align="left", lines=1, ttop=210,
          head="Find it again.",
          sup="Search what you remember. Or start with the day.",
          art=lambda c: (device(c, "01-hero.png", 700, 1020, xoff=-290),
                         card(c, "12-calendar.png", (40, 150, 1280, 2400), 520, 760, 1040),
                         card(c, "11-search.png", (40, 2560, 1280, 2840), 1040, 140, 2440))),
 
-    dict(name="07-privacy", bg=PAPER, seed=39, align="center", lines=1, ttop=210,
-         head="Your notes stay yours.",
-         sup="No account. Local by default. Face ID when you want it.",
-         art=lambda c: device(c, "06-lock.png", 1000, 866)),
+    dict(name="10-privacy", bg=STONE, seed=57, align="center", lines=1, ttop=210,
+         head="Private by default.",
+         sup="No account. Your notes stay on your iPhone.",
+         art=lambda c: device(c, "06-lock.png", 1000, 886)),
 
-    dict(name="08-daynight", bg=PAPER, seed=45, align="center", lines=1,
+    # Composed, not shipped: the carousel is already at Apple's ten. Kept because it is the natural
+    # swap when the Share frame arrives, and because dark mode otherwise appears only behind a
+    # recorder and a code card.
+    dict(name="alt-daynight", bg=PAPER, seed=63, align="center", lines=1,
          ttop=210, head="Yours, day or night.",
          art=lambda c: (night_panel(c, 660, 902),
                         device(c, "13-seattle-dark.png", 700, 1150, xoff=300, dark=True),

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     template: '%s · As Told',
   },
   description:
-    'A private writing space for iPhone. Write it or speak it — in English, Telugu or Hindi — shape it with headings and lists, and keep it on your device.',
+    'A private writing space for iPhone. Write it or say it — multilingual voice transcription, headings, lists, tables and code — and keep it on your device.',
   applicationName: SITE_NAME,
   /* Renders <meta name="apple-itunes-app">, which is the Safari smart banner on
      iOS — the one place a visitor already holding the right device can install

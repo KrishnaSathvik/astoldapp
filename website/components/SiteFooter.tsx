@@ -4,8 +4,9 @@ import { PROMISE, UTILITY_NAV } from '@/lib/site';
 import styles from './SiteFooter.module.css';
 
 /**
- * Utility and legal only. Product discovery belongs to the header, and
- * repeating it here is what made the old footer feel like a sitemap.
+ * Utility and legal only. The product story belongs to the header and the page;
+ * listing every section down here is what made the old footer feel like a
+ * sitemap.
  */
 export function SiteFooter() {
   return (

@@ -8,7 +8,7 @@ import { pageMetadata } from '@/lib/site';
 export const metadata = pageMetadata({
   title: 'Support',
   description:
-    'Help with As Told: structure and the writing toolbar, pasting from other apps, adding text by voice, supported languages, where notes are stored, Face ID, and Light / Dark.',
+    'Help with As Told: the writing toolbar, pasting from other apps, code blocks and tables, speaking a note, multilingual voice, sharing, where notes are stored, Face ID, and Light / Dark.',
   path: '/support',
 });
 
@@ -37,11 +37,18 @@ const WRITING: readonly FaqItem[] = [
   {
     q: 'What formatting does As Told have?',
     a: (
-      <p>
-        Six structures: Paragraph, Heading, Subheading, Bulleted list, Numbered list, and Checklist.
-        That is the whole vocabulary — there is deliberately no bold, italic, underline, colour,
-        highlight, font or alignment control. A note is meant to stay a note.
-      </p>
+      <>
+        <p>
+          Six shapes on the toolbar: Paragraph, Heading, Subheading, Bulleted list, Numbered list,
+          and Checklist. Three more arrive with your text rather than from a button —{' '}
+          <strong>links</strong>, <strong>tables</strong> and <strong>code blocks</strong> — because
+          those are things you paste or type, not styles you apply.
+        </p>
+        <p>
+          That is the whole vocabulary. There is deliberately no bold, italic, underline, colour,
+          highlight, font or alignment control. A note is meant to stay a note.
+        </p>
+      </>
     ),
   },
   {
@@ -116,6 +123,39 @@ const PASTE: readonly FaqItem[] = [
     ),
   },
   {
+    q: 'What happens when I paste code?',
+    a: (
+      <>
+        <p>
+          It stays code. A fenced block is drawn as a card — monospaced, indented exactly as it was
+          written, syntax-coloured, with the language named and <strong>Copy Code</strong> in the
+          corner. Long lines scroll sideways instead of wrapping.
+        </p>
+        <p>
+          If a plain-text paste is obviously code, As Told will recognise it and fence it for you.
+          When it isn&rsquo;t certain the text is left exactly as it arrived, and{' '}
+          <strong>Paste as Code</strong> is there when you want it anyway. Aligned text — a
+          directory tree, an ASCII diagram — is kept as a plain-text block so its columns stay lined
+          up.
+        </p>
+        <p>
+          As Told does not run, compile, lint, or complete code. It just refuses to destroy it.
+        </p>
+      </>
+    ),
+  },
+  {
+    q: 'Do links still work?',
+    a: (
+      <p>
+        Yes. A web address you type or paste stays tappable, and a link you copied with its own
+        wording keeps that wording. There is no link button, no URL sheet, and no link previews —
+        editing a link means editing its text, like every other line. Copying a note out again keeps
+        both the words and the destination.
+      </p>
+    ),
+  },
+  {
     q: 'Why did bold or italic styling disappear when I pasted?',
     a: (
       <p>
@@ -130,6 +170,17 @@ const PASTE: readonly FaqItem[] = [
 ];
 
 const VOICE: readonly FaqItem[] = [
+  {
+    q: 'Can I start a note just by speaking?',
+    a: (
+      <p>
+        Yes. Tap the microphone in the header on Home and As Told starts listening straight away —
+        no blank note first, no keyboard rising. When you tap Done, the transcript arrives as an
+        ordinary note. Cancel, silence, or a failure leave your timeline exactly as it was, because
+        no note is created until there are words to put in one.
+      </p>
+    ),
+  },
   {
     q: 'How do I add text by voice?',
     a: (
@@ -158,24 +209,40 @@ const VOICE: readonly FaqItem[] = [
         &ldquo;Bullet list&rdquo;, &ldquo;Checklist&rdquo;, &ldquo;Next item&rdquo;, &ldquo;New
         paragraph&rdquo;, &ldquo;End list&rdquo; — shapes what you say next. Ordinary speech that
         merely mentions one of those words (&ldquo;my checklist is getting too long&rdquo;) is left
-        alone.{' '}
+        alone — a missed command is recoverable, a phantom one rewrites your note.{' '}
         <Link className="textlink" href="/voice">
-          See the full list →
+          See how voice works →
         </Link>
       </p>
     ),
   },
   {
-    q: 'Which languages are supported?',
+    /* The one place on the site where the benchmark groups are named.
+       They are release test groups, not a supported-language list, and putting
+       them anywhere a visitor meets first — hero copy, a chip row, a screenshot
+       caption — turns measured evidence into a product boundary
+       (`RULES.md` §7, "Language claims"). */
+    q: 'Which languages can I speak?',
     a: (
-      <p>
-        English, Telugu, and Hindi — plus the natural mix between them, like Telugu + English or
-        Hindi + English. You can switch languages mid-sentence, and each language comes back in its
-        own script.{' '}
-        <Link className="textlink" href="/languages">
-          See multilingual voice →
-        </Link>
-      </p>
+      <>
+        <p>
+          As Told does not ask you to choose a language before recording. Voice transcription is
+          designed for multilingual speech and code-switching: speak in one language, switch
+          mid-sentence, or mix them the way you normally do, and each language comes back in its
+          own script rather than being translated. Accuracy does vary by language, accent,
+          recording conditions, and how much the languages are mixed.
+        </p>
+        <p>
+          Before each release, As Told is measured against a set of representative single-language
+          and mixed-language flows — currently <strong>English</strong>, <strong>Telugu</strong>,{' '}
+          <strong>Hindi</strong>, <strong>English + Telugu</strong> and{' '}
+          <strong>English + Hindi</strong>. Those are quality benchmarks, not the only languages
+          you can speak.{' '}
+          <Link className="textlink" href="/languages">
+            See multilingual voice →
+          </Link>
+        </p>
+      </>
     ),
   },
   {
@@ -189,13 +256,41 @@ const VOICE: readonly FaqItem[] = [
     ),
   },
   {
+    q: 'Can I pause a recording?',
+    a: (
+      <p>
+        Yes. Tap <strong>Pause</strong>, take as long as you need, then <strong>Resume</strong> —
+        it stays one continuous recording, and only the time you were actually speaking counts
+        towards the five-minute limit. A call, Siri, leaving the note, or the app going to the
+        background all finish the recording and transcribe it rather than throwing it away.
+      </p>
+    ),
+  },
+  {
+    q: 'What happens if transcription fails?',
+    a: (
+      <>
+        <p>
+          As Told keeps that recording on your iPhone and offers <strong>Retry</strong> or{' '}
+          <strong>Delete Recording</strong>, so a dropped connection is not how a thought gets
+          lost. If the app closes before you answer, you are offered it once more the next time you
+          open As Told.
+        </p>
+        <p>
+          Nothing is uploaded in the background while it waits, and there is still no recordings
+          library. The recording is removed as soon as a transcript arrives, as soon as you delete
+          it, and in any case within 24 hours.
+        </p>
+      </>
+    ),
+  },
+  {
     q: 'Will I be warned before my recording is sent?',
     a: (
       <p>
         Yes. The first time you finish a recording, As Told explains that the audio goes to OpenAI
-        to be turned into text, that nothing else from your note is sent, and that the recording
-        isn&rsquo;t kept — then waits for you to continue or cancel. You answer once and it
-        doesn&rsquo;t ask again.{' '}
+        to be turned into text and that nothing else from your note is sent — then waits for you to
+        continue or cancel. You answer once and it doesn&rsquo;t ask again.{' '}
         <Link className="textlink" href="/privacy">
           Read the full privacy detail →
         </Link>
@@ -232,6 +327,39 @@ const VOICE: readonly FaqItem[] = [
         won&rsquo;t need to think about it. If you reach the limit, As Told will tell you when
         voice becomes available again, and everything else &mdash; typing, editing, search, the
         calendar &mdash; keeps working normally.
+      </p>
+    ),
+  },
+];
+
+const SHARING: readonly FaqItem[] = [
+  {
+    q: 'How do I send a note to someone?',
+    a: (
+      <p>
+        Open the note and tap <strong>Share</strong> in the top-right corner. The iPhone&rsquo;s own
+        share sheet appears, so a note can go to whichever apps and services are already available
+        on your device. As Told adds no destination picker of its own.
+      </p>
+    ),
+  },
+  {
+    q: 'Does the formatting survive?',
+    a: (
+      <p>
+        Where the destination can take it, yes: headings, lists, checklists, tables, links and code
+        arrive as themselves. Somewhere that only accepts plain text gets plain text, with links
+        written out so the destination isn&rsquo;t lost. Sharing never changes the note you shared.
+      </p>
+    ),
+  },
+  {
+    q: 'Does sharing upload my note anywhere?',
+    a: (
+      <p>
+        No. There is no As Told link, nothing hosted, and no record kept of what you shared or where
+        it went. The note is handed to the sheet, and where it goes from there is between you and
+        the app you chose.
       </p>
     ),
   },
@@ -319,6 +447,7 @@ export default function SupportPage() {
           <FAQ title="Writing" items={WRITING} openFirst />
           <FAQ title="Pasting from other apps" items={PASTE} />
           <FAQ title="Voice" items={VOICE} />
+          <FAQ title="Sharing a note" items={SHARING} />
           <FAQ title="Privacy & storage" items={PRIVACY} />
           <FAQ title="If something goes wrong" items={RECOVERY} />
         </div>

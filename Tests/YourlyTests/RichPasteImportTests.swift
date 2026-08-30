@@ -84,18 +84,26 @@ struct RichPasteHTMLStructureTests {
                 == "# T\nfirst\n\nsecond")
     }
 
+    /// Amended with V2 code blocks: `<pre>` still keeps every line and every space of indentation, and
+    /// now says outright that those characters are code. Before fences existed, `body` had no way to
+    /// say so, and a preformatted `# comment` arrived as a heading.
     @Test func preformattedTextKeepsEveryLineAndItsIndentation() {
         let html = "<h1>Code</h1><pre>let a = 1\n    let b = 2</pre>"
-        #expect(RichPasteHTML.source(from: html) == "# Code\nlet a = 1\n    let b = 2")
+        #expect(RichPasteHTML.source(from: html)
+                == "# Code\n```text\nlet a = 1\n    let b = 2\n```")
     }
 }
 
 struct RichPasteHTMLFidelityTests {
 
+    /// Bold and italic are styling As Told does not have, and lose the styling while keeping every
+    /// character of their text. A **link** left this category with V2: a destination is not an
+    /// appearance, and it is now structure the clipboard stated and the note keeps.
     @Test func inlineStylingIsDroppedAndItsTextKept() {
         let html = "<h1>T</h1><p>This is <strong>really</strong> <em>important</em> " +
                    "<a href=\"https://example.com\">right now</a></p>"
-        #expect(RichPasteHTML.source(from: html) == "# T\nThis is really important right now")
+        #expect(RichPasteHTML.source(from: html)
+                == "# T\nThis is really important [right now](https://example.com)")
     }
 
     @Test func wordingSpellingAndPunctuationSurviveExactly() {
@@ -373,9 +381,12 @@ struct RichPasteMarkdownTests {
                 == "# T\nA bold and quiet line.")
     }
 
-    @Test func aLinkKeepsItsWordsAndNotItsAddress() {
+    /// Amended with V2 links. This read `aLinkKeepsItsWordsAndNotItsAddress` while `body` had nowhere
+    /// to put an address; it now has one, and dropping the destination would be losing something the
+    /// clipboard stated outright.
+    @Test func aLinkKeepsItsWordsAndItsAddress() {
         #expect(RichPasteMarkdown.source(from: "# T\nRead [Major Marine](https://example.com) first.")
-                == "# T\nRead Major Marine first.")
+                == "# T\nRead [Major Marine](https://example.com) first.")
     }
 
     @Test func anUnpairedDelimiterIsACharacterTheWriterTyped() {
@@ -383,10 +394,12 @@ struct RichPasteMarkdownTests {
                 == "# T\n2 * 3 = 6, see file_name.txt")
     }
 
+    /// Amended with V2 code blocks: the fence the writer declared now survives into `body` instead of
+    /// being unwrapped into paragraphs, which is what keeps a `#` inside it a comment.
     @Test func aFencedBlockKeepsEveryLineAndItsIndentation() {
         let markdown = "# Code\n```python\ndf = df.sort_values(\"amount\")\n    total = 1\n```"
         #expect(RichPasteMarkdown.source(from: markdown)
-                == "# Code\ndf = df.sort_values(\"amount\")\n    total = 1")
+                == "# Code\n```python\ndf = df.sort_values(\"amount\")\n    total = 1\n```")
     }
 
     /// A Markdown table arrives as a table and leaves as one, in the canonical spelling `TableBlock`

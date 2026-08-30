@@ -51,7 +51,9 @@ A per-screen walkthrough lives in `docs/design-reference/README.md`.
   offers `Today` and the most recent note date.
 - The voice recording surface is the only place using a dark system-material panel; the writing surface
   stays solid (see §10).
-- Settings About row reads `About As Told` and `Version 1.0.0`.
+- Settings About row reads `About As Told` and `Version` followed by the shipping marketing version
+  — read from `CFBundleShortVersionString`, never hard-coded, so a version bump in `project.yml` is
+  the only place it is written (`1.1.0` as of 2026-08-29).
 
 ---
 
@@ -617,7 +619,7 @@ ABOUT
 
 Privacy                              >
 About As Told                      >
-Version 1.0.0
+Version 1.1.0
 ```
 
 No appearance setting in V1 because appearance follows system.
@@ -943,6 +945,107 @@ spreadsheet: what separates two columns is the space between them.
 
 Never on the card: pipes, a delimiter row, a caret, sorting, resizing, or any control at all. A card that
 can be typed into has become the spreadsheet RULES.md §7 excludes.
+
+**When a card gives way to its source (amended 2026-08-23).** Only the block the caret is inside. Not
+"whenever the keyboard is up" — that made one edit anywhere turn every table and code block in the note
+into raw syntax at once, which is how a long note came to look broken while someone added a sentence to
+the end of it.
+
+| The caret is… | This table | Other tables and code blocks |
+|---|---|---|
+| nowhere (reading) | card | card |
+| in prose elsewhere | **card** | **card** |
+| inside this table | source | **card** |
+| spanning the whole note | source | source |
+
+The caret's position **on screen** is held across the height change, so a block changing shape above the
+caret does not move the words out from under the writer's finger.
+
+**The source, while the caret is in it (added 2026-08-23).** It is the note's own characters, in the body
+font, under the same quiet container the card used — nothing is re-spaced and nothing is aligned. The
+pipes recede to `TextSecondary` so the words carry the line, and **the delimiter row is not drawn at
+all**: its glyphs are hidden and its line keeps no height, so the source the writer edits is the header
+and the rows, with no rule of dashes cutting it in half. The characters stay in `body` (RULES.md §7), so
+copy and search are unchanged — and because the line cannot be seen, the caret is never left on it, and
+Backspace at the start of the first row joins that row to the header rather than to something invisible.
+
+## Links (added 2026-08-23 — V2 Phase 1)
+
+A link reads as a destination without turning a page of writing into a web page.
+
+| Element | Treatment |
+|---|---|
+| Colour | `Color.ds.link` — a muted teal-blue, **not** browser blue. Light `#1D5E7E`, Dark `#8FC2DE` |
+| Measured contrast | 6.6:1 on `Canvas` / 7.1:1 on `SurfaceElevated` (Light); 9.9:1 / 9.0:1 (Dark) |
+| Underline | **off by default**; on when Differentiate Without Color is on — and it follows the setting **live** (2026-08-25). An open note restyles the moment the preference changes; before that it waited for the next keystroke, which is a guarantee arriving late |
+| VoiceOver | announced as "Link, «the words»" (`StructuredTextExport.spokenText`) |
+| Bare vs labelled | identical treatment — a reader never learns how the note stored it |
+| Tap | opens while **reading**; while editing a tap places the caret, as it does on a table |
+
+Colour is never the only signal: the underline setting and the VoiceOver announcement are the other two,
+which is what keeps this inside the §4 rule that state is never carried by a mark alone.
+
+## Note header (navigation bar)
+
+Three things, and the platform's own bar to hold them (changed 2026-08-26 — the date was inside the
+scrolling page until then; see `RULES.md` §4).
+
+| Element | Placement | Treatment |
+|---|---|---|
+| Back | `.topBarLeading` | chevron + where it goes ("Notes" / "Search" / "Calendar" — `EditorOrigin`), `Accent` |
+| Date | `.principal` | `updatedAt`, reader's locale, long date + short time ("August 24, 2026 at 10:16"), `.footnote`, `TextTertiary`, one line |
+| Share | `.topBarTrailing` | `square.and.arrow.up`, `Accent`, opens the **system** sheet |
+
+- `.principal` rather than spacers: the date is centred on the **screen**, so it does not drift as
+  Back's word changes length.
+- Share is **visible and disabled** on an empty note. A control that appears as the first character is
+  typed is the header moving while somebody writes.
+- Share stays present while reading **and** while editing.
+- No `…`. No second timestamp — the date is drawn here and nowhere else.
+- The **title** still lives in the scrolling page, above the first line of body. Only the date moved.
+
+## Code block card (reading a note)
+
+The mirror of the table card, and for the same reason: fences are how the note *stores* code, and a
+reader should never have to look past them.
+
+| Element | Treatment |
+|---|---|
+| Container | `Color.ds.codeSurface` — Light `#EFEDE6`, Dark `#1C1D20` — 12 pt corner radius |
+| Code | `UIFont.monospacedSystemFont` at 92% of body size, Dynamic Type applies, `TextPrimary` |
+| Long lines | **scroll horizontally**; they never wrap — a wrapped line of code is a different line. A clearly horizontal drag over the card scrolls it, on **code and preformatted cards alike** (`CardPanRule`, 2026-08-25 — first built for preformatted only, which left a wide code card drawing an indicator no finger could move). Ties go to the note: anything not clearly sideways scrolls the page as usual |
+| Indentation | exact, including tabs and blank lines |
+| Header | language name at `TextSecondary` (**only** when the fence named one), **Copy Code** at `Accent` |
+| Copy Code | copies the code **without** its fences, and confirms with "Copied" for ~1.6 s |
+| Preformatted | a fence naming `text` is the **same card**, headed **Plain text** with **Copy Text**, and never syntax-coloured (added 2026-08-25) |
+| Selection | **not** selectable in place — the card is inert except Copy Code, so a tap reaches the source underneath and puts the caret in the code. Selecting part of a block means tapping into it |
+| Air around the card | 10 pt above and below |
+| Editing | the card goes; the fenced source returns, monospaced, on the same quiet ground |
+
+Never on the card: a run button, a console, a caret, or any edit mode. Never on a preformatted card:
+anything that redraws or interprets the drawing — no shapes, no arrows As Told generated, no colours per
+box, no Mermaid.
+
+**Syntax colour (added 2026-08-24).** Only inside the rendered card, and only when the fence *named* a
+language As Told knows — a language is never inferred from the code, and an unknown one is drawn in
+`TextPrimary` exactly as before. Five tokens, each measured against `codeSurface` rather than the
+canvas, because that is the ground it is read on:
+
+| Token | Light | Dark | On `codeSurface` |
+|---|---|---|---|
+| Keyword | `#7A2E4E` | `#E3A0BE` | 7.7:1 / 8.1:1 |
+| String | `#2F6042` | `#9CC9A4` | 6.2:1 / 9.1:1 |
+| Comment | `#6B6459` | `#9A948A` | 5.0:1 / 5.6:1 |
+| Number | `#8A4B1F` | `#E0A579` | 5.8:1 / 7.9:1 |
+| Type / call | `#3A4E8C` | `#A8B8E8` | 6.8:1 / 8.6:1 |
+
+The comment is the quietest on purpose and still clears the 4.5:1 floor every glyph in this app clears:
+recede, do not disappear. No token pair is closer than ΔE 26, so the five read as five colours rather
+than as one palette smeared across a block. The **label** shows the source's language in the reader's
+spelling (`sql` → `SQL`); a block that named no language shows no label at all — never "Plain text".
+
+Editing is unchanged: the card goes, the fenced source returns in one colour. There is no
+syntax-aware editing surface, and there will not be one (RULES.md §7).
 
 ## User-selectable (Profile → Settings → Theme)
 

@@ -25,10 +25,15 @@ struct WritingToolbar: View {
         case voiceOnly
         /// The body has the caret.
         case writing
+        /// The body has the caret and it is sitting inside a code fence. Structure is withdrawn —
+        /// applying a marker there would write `# ` into someone's Python — and voice stays, because
+        /// dictating a line of anything is still dictating (RULES.md §7, code blocks are literal).
+        case code
 
-        static func resolve(bodyFocused: Bool, titleFocused: Bool) -> Mode {
+        static func resolve(bodyFocused: Bool, titleFocused: Bool, inCode: Bool = false) -> Mode {
             if titleFocused { return .hidden }
-            return bodyFocused ? .writing : .voiceOnly
+            guard bodyFocused else { return .voiceOnly }
+            return inCode ? .code : .writing
         }
     }
 

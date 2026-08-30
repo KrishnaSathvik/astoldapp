@@ -33,7 +33,7 @@ export function PhoneShot({ src, alt, size = 'md', priority = false }: Props) {
         width={SHOT_WIDTH}
         height={SHOT_HEIGHT}
         priority={priority}
-        sizes="(max-width: 820px) 92vw, 400px"
+        sizes="(max-width: 820px) 92vw, 510px"
         className={styles.shot}
       />
     </div>

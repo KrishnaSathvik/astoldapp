@@ -423,22 +423,24 @@ Do not repeatedly show the system permission request once denied.
 Message:
 
 `A connection is needed to transcribe this recording.`
+`Your recording is still on this iPhone.`
 
 Actions:
 
 - Retry
-- Discard
+- Delete Recording
 
 ### Timeout/service failure
 
 Message:
 
 `Couldn't transcribe that recording.`
+`Your recording is still on this iPhone.`
 
 Actions:
 
 - Retry
-- Discard
+- Delete Recording
 
 ### Empty/no speech
 
@@ -449,7 +451,11 @@ Message:
 Actions:
 
 - Try Again
-- Discard
+- Cancel
+
+`Try Again` records again rather than re-sending: nothing was heard in the file, so the same upload
+would come back the same way, and the audio is deleted when the failure arrives (`docs/10-voice-v2.md`
+§13 — only a **retryable** failure keeps its recording).
 
 ### Monthly voice allowance reached
 

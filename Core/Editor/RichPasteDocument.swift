@@ -29,9 +29,17 @@ struct ImportedLine: Equatable {
     var startsElement: Bool
 }
 
+/// Code exactly as the source stated it, before any decision about how to write it down.
+struct ImportedCode: Equatable {
+    var code: String
+    /// The language the source named, when it named one. Carried for display only.
+    var language: String?
+}
+
 enum ImportedBlock: Equatable {
     case line(ImportedLine)
     case table(ImportedTable)
+    case codeBlock(ImportedCode)
 }
 
 enum RichPasteDocument {
@@ -45,12 +53,14 @@ enum RichPasteDocument {
             switch block {
             case .line(let line): lines.append(line)
             case .table(let table): lines.append(contentsOf: written(table))
+            case .codeBlock(let code): lines.append(contentsOf: written(code))
             }
         }
 
         while lines.first?.text.isEmpty == true { lines.removeFirst() }
         while lines.last?.text.isEmpty == true { lines.removeLast() }
-        guard lines.contains(where: { $0.kind != .paragraph }) || carriedATable(blocks),
+        guard lines.contains(where: { $0.kind != .paragraph })
+                || carriedATable(blocks) || carriedCode(blocks) || carriedALink(lines),
               !lines.isEmpty
         else { return nil }
 
@@ -73,6 +83,34 @@ enum RichPasteDocument {
 
     private static func carriedATable(_ blocks: [ImportedBlock]) -> Bool {
         blocks.contains { if case .table = $0 { return true } else { return false } }
+    }
+
+    private static func carriedCode(_ blocks: [ImportedBlock]) -> Bool {
+        blocks.contains { if case .codeBlock = $0 { return true } else { return false } }
+    }
+
+    /// A paste whose only structure is a hyperlink is still structure the clipboard *stated*, and
+    /// falling through to the system's plain-text paste would drop the destination it stated.
+    private static func carriedALink(_ lines: [ImportedLine]) -> Bool {
+        lines.contains { line in
+            MarkupDocument(line.text).links.contains(where: \.isLabelled)
+        }
+    }
+
+    // MARK: Code
+
+    /// Code is preserved **as code**: a fenced block in `body`, where the fences are ordinary
+    /// characters and the lines between them are exactly what the source held (RULES.md §7).
+    ///
+    /// Every line after the first says it continues the same element, so the blank-line rule that
+    /// separates two pasted paragraphs never lands inside somebody's function.
+    private static func written(_ code: ImportedCode) -> [ImportedLine] {
+        CodeBlock.source(code: code.code, language: code.language)
+            .components(separatedBy: "\n")
+            .enumerated()
+            .map { index, line in
+                ImportedLine(kind: .paragraph, text: line, startsElement: index == 0)
+            }
     }
 
     // MARK: Tables

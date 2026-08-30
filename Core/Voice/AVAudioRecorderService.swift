@@ -12,6 +12,7 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
     private var recorder: AVAudioRecorder?
     private var currentURL: URL?
     private var interruptionObserver: NSObjectProtocol?
+    private var routeObserver: NSObjectProtocol?
 
     var onInterruption: (() -> Void)?
 
@@ -56,11 +57,24 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
         self.recorder = recorder
         self.currentURL = url
         observeInterruptions()
+        observeRouteChanges()
         return url
     }
 
+    /// `AVAudioRecorder.pause()` holds the file open, and `record()` continues writing into it — so a
+    /// paused-and-resumed capture is one container whose duration is the audio actually recorded, which
+    /// is what the relay measures and what `docs/10-voice-v2.md` §5 requires. Nothing is concatenated,
+    /// because nothing is ever split.
+    func pause() {
+        recorder?.pause()
+    }
+
+    func resume() {
+        _ = recorder?.record()
+    }
+
     func stop() -> URL? {
-        endInterruptionObservation()
+        endSessionObservation()
         recorder?.stop()
         let url = currentURL
         recorder = nil
@@ -69,7 +83,7 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
     }
 
     func cancel() {
-        endInterruptionObservation()
+        endSessionObservation()
         recorder?.stop()
         if let url = currentURL { cleanup(url) }
         recorder = nil
@@ -95,8 +109,10 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
 
     /// A phone call or Siri stops the recorder for us. Rather than losing what was already spoken,
     /// hand control back to the capture model so it can finish with the audio captured so far.
-    /// A route change (AirPods connecting/disconnecting) is deliberately *not* an interruption —
-    /// AVAudioRecorder keeps recording on the new input.
+    ///
+    /// Only `.began` is acted on. An interruption that has *ended* deliberately does nothing: the
+    /// microphone is never reopened without the user asking for it (`docs/10-voice-v2.md` §14), and a
+    /// capture that resumed itself after a phone call would be recording a room nobody meant to record.
     private func observeInterruptions() {
         endInterruptionObservation()
         interruptionObserver = NotificationCenter.default.addObserver(
@@ -120,15 +136,75 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
         interruptionObserver = nil
     }
 
+    // MARK: - Audio routes
+
+    /// AirPods connecting or disconnecting, a headset unplugged, the system moving the input
+    /// (`docs/10-voice-v2.md` §14).
+    ///
+    /// The policy is `AudioRouteChange`'s, not this method's: all this one does is read the
+    /// notification and ask. Losing the input the recording was using finishes the capture through the
+    /// same path a phone call takes — the audio recorded so far is already on disk, and it goes on to
+    /// transcription rather than being thrown away. Everything else is left alone, so one continuous
+    /// container stays one continuous container.
+    private func observeRouteChanges() {
+        endRouteObservation()
+        routeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] note in
+            let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            let system = raw.flatMap(AVAudioSession.RouteChangeReason.init(rawValue:)) ?? .unknown
+            let reason = AudioRouteChange.Reason(system)
+            let hasInput = !AVAudioSession.sharedInstance().currentRoute.inputs.isEmpty
+            MainActor.assumeIsolated {
+                guard let self, self.recorder != nil else { return }
+                guard AudioRouteChange.decision(for: reason, hasInput: hasInput) == .finishSafely
+                else { return }
+                self.onInterruption?()
+            }
+        }
+    }
+
+    private func endRouteObservation() {
+        if let routeObserver {
+            NotificationCenter.default.removeObserver(routeObserver)
+        }
+        routeObserver = nil
+    }
+
+    /// Both observations end together: they are two halves of one question — is this recorder still
+    /// listening? — and a stopped recorder must answer neither.
+    private func endSessionObservation() {
+        endInterruptionObservation()
+        endRouteObservation()
+    }
+
     // MARK: - Abandoned temp audio
 
     /// Deletes recordings left behind by a crash or force-quit. Called once at launch so raw audio
     /// never lingers on disk beyond the capture it belongs to (RULES.md §3).
-    static func purgeAbandonedRecordings(in directory: URL = FileManager.default.temporaryDirectory) {
+    ///
+    /// `keeping` names the recordings a live capture is still offering back through **Retry** — the
+    /// only audio this sweep may spare, and only while it is inside `VoiceLimits.retryLifetime`. Past
+    /// that, a retained recording is deleted exactly like an abandoned one: the 24 hours are a ceiling
+    /// on how long audio may exist, not a promise to keep it (`docs/10-voice-v2.md` §13).
+    ///
+    /// At launch the list is empty, and deliberately so. Nothing in As Told can offer a recording back
+    /// after the process has died — there is no recovered-recordings surface, and inventing one is not
+    /// part of this phase — so every temporary recording found at launch is abandoned by definition.
+    /// That is stricter than the 24-hour ceiling, which is the direction this rule is allowed to err in.
+    static func purgeAbandonedRecordings(in directory: URL = FileManager.default.temporaryDirectory,
+                                         now: Date = .now,
+                                         keeping retained: [RetainedVoiceRecording] = []) {
         let fm = FileManager.default
+        let spared = Set(
+            retained.filter { !$0.hasExpired(at: now) }.map { $0.url.standardizedFileURL }
+        )
         guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
         else { return }
         for file in files where file.lastPathComponent.hasPrefix(tempPrefix) && file.pathExtension == "m4a" {
+            guard !spared.contains(file.standardizedFileURL) else { continue }
             try? fm.removeItem(at: file)
         }
     }

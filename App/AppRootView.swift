@@ -36,8 +36,13 @@ struct AppRootView: View {
         // `onChange(of: scenePhase)` never fires for the scene's *initial* active value, so a cold
         // launch needs its own prompt — otherwise the lock screen would just sit there waiting.
         .task {
-            // Sweep audio left behind by a crash/force-quit during a recording (RULES.md §3).
-            AVAudioRecorderService.purgeAbandonedRecordings()
+            // Sweep audio left behind by a crash/force-quit during a recording (RULES.md §3) —
+            // **except** the one recording a failed capture kept and the user can still retry, while
+            // it is inside its 24 hours. `recoverable` is what tells the two apart, and it forgets an
+            // expired or missing one on the way past, so the sweep and the memory of it agree
+            // (`docs/10-voice-v2.md` §13).
+            let recoverable = UserDefaultsRetainedRecording().recoverable()
+            AVAudioRecorderService.purgeAbandonedRecordings(keeping: recoverable.map { [$0] } ?? [])
             await lock.didBecomeActive()
         }
         .onChange(of: lock.enabled) { _, isOn in

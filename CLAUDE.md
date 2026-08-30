@@ -48,6 +48,7 @@ there, surface the conflict instead of silently overriding it.
 | `docs/06-tech-stack.md` | Exact technologies and the reasoning for each |
 | `docs/07-build-plan.md` | Phase-by-phase build order and Definition of Done |
 | `docs/09-v2-roadmap.md` | Proposed V2 roadmap (Free/Pro split, build order) — **not built, not locked; `RULES.md` still wins** |
+| `docs/10-voice-v2.md` | Voice V2 (Quick Capture, pause/resume, durability, build order) — **direction locked 2026-08-27; Phase 1 and Phase 2A built, the rest is not; `RULES.md` §2 still wins**. Read its §2 before "adding" voice behavior that already shipped, and its §25 before assuming anything is open |
 | `docs/design-reference/screens-overview.png` | **Canonical 10-screen visual reference** — match it |
 
 ## How to work here

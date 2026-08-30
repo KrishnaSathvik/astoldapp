@@ -59,6 +59,11 @@ export default function PrivacyPage() {
               its own transcription service to OpenAI. Nothing else from your note goes with it.
             </li>
             <li>
+              <strong>The recording is deleted once the words come back.</strong> If transcription
+              fails on a dropped connection, As Told can keep that one recording on your iPhone so
+              you can retry it — and removes it within 24 hours either way.
+            </li>
+            <li>
               <strong>Your content isn&rsquo;t logged.</strong> No audio, transcript, note text,
               or search query is written to As Told&rsquo;s logs. Ordinary connection information
               is handled by the service that hosts it.
@@ -83,11 +88,14 @@ export default function PrivacyPage() {
           service, and As Told does not keep a separate cloud copy of your notes.
         </p>
         <p>
-          Keeping your notes on the device also means iOS controls their lifetime. If you delete
-          As Told, iOS deletes the app&rsquo;s local data, and the notes in it, along with the app;
-          As Told has no copy elsewhere to restore them from. Offloading the app instead of
-          deleting it keeps that data in place. Whether a device backup or a transfer to a new
-          iPhone brings your notes back depends on your own Apple backup settings.
+          Keeping your notes on the device also means iOS controls their lifetime. If you delete As
+          Told, iOS deletes the app&rsquo;s local data — and the notes in it — along with the app,
+          and As Told has no copy elsewhere to restore them from.
+        </p>
+        <p>
+          Offloading the app instead of deleting it, from iPhone Storage in Settings, keeps that
+          data in place. Whether a device backup or a transfer to a new iPhone brings your notes
+          back depends on your own Apple backup settings.
         </p>
         <p>
           If a future version adds optional device-to-device sync, it will be exactly that —{' '}
@@ -96,62 +104,101 @@ export default function PrivacyPage() {
 
         <h2 id="voice">Voice &amp; transcription</h2>
         <p>
-          Recording a voice note keeps the audio on your iPhone. It leaves the device only when
-          you choose to transcribe it — and the first time that would happen, As Told tells you
-          and waits for your answer. If you decline, the recording is deleted and nothing is sent.
+          Plenty of apps say &ldquo;nothing ever leaves your device&rdquo; and quietly mean
+          &ldquo;except this.&rdquo; Voice is the one place where something does, so the rest of
+          this section says exactly what, when, and for how long.
+        </p>
+
+        <h3 id="voice-leaves">What leaves your iPhone</h3>
+        <p>
+          Recording a voice note keeps the audio on your iPhone. It leaves the device only when you
+          choose to transcribe it — and the first time that would happen, As Told tells you and
+          waits for your answer. If you decline, the recording is deleted and nothing is sent.
         </p>
         <p>
           When you continue, As Told sends that recording securely to <strong>OpenAI</strong>,
           through the As Told transcription service, for one purpose: turning your speech into
-          text.{' '}
+          text.
+        </p>
+        <p>
           <strong>
-            No title, existing note text, search history, or other note content is included
+            No title, existing note text, search history, or other note content is included.
           </strong>{' '}
-          — the service receives the recording, a fixed set of transcription instructions, and
+          The service receives the recording, a fixed set of transcription instructions, and
           allowed-language hints, and nothing else.
         </p>
+
+        <h3 id="voice-local">What stays local</h3>
         <p>
           The recording on your iPhone is deleted once the transcript arrives. As Told does not
           keep the recording or the transcript on its side after the request finishes.
+        </p>
+        <p>
           OpenAI&rsquo;s API documentation states that its audio transcription endpoint does not
           retain customer content for abuse monitoring or application state.
         </p>
+
+        <h3 id="voice-retry">Recordings kept for a retry</h3>
         <p>
-          <strong>What is written down.</strong> As Told&rsquo;s transcription service logs only
-          technical metadata needed to run reliably — a request identifier, the response status,
-          how long it took, the model used, and the size and length of the audio. It does not log
-          your audio, your transcript, your note title, your note text, or your search queries.
-          The infrastructure that hosts the service handles ordinary connection information, such
-          as an IP address, to keep it available and to prevent abuse.
+          If transcription fails for a reason worth trying again — no connection, a request that
+          timed out, the service briefly unavailable — As Told keeps that recording in its own
+          temporary storage on your iPhone and offers you <strong>Retry</strong> or{' '}
+          <strong>Delete Recording</strong>.
         </p>
         <p>
-          <strong>Keeping the service from being abused.</strong> Transcription requests are
-          checked with Apple&rsquo;s App Attest to confirm they come from a genuine copy of As
-          Told. That check identifies the app, not you, and is not linked to your notes.
+          Nothing is sent while it waits, and nothing is uploaded in the background. A failure that
+          retrying cannot fix, such as a recording with no speech in it, keeps nothing at all.
+        </p>
+
+        <h3 id="voice-24h">How long temporary audio remains</h3>
+        <p>
+          A recording kept for a retry is removed as soon as a transcript arrives, as soon as you
+          delete it, and in any case within <strong>24 hours</strong> — whether you come back to it
+          or not.
+        </p>
+
+        <h3 id="voice-logs">What is written down</h3>
+        <p>
+          As Told&rsquo;s transcription service logs only technical metadata needed to run
+          reliably: a request identifier, the response status, how long it took, the model used,
+          and the size and length of the audio.
         </p>
         <p>
-          <strong>The fair-use counter.</strong> Voice transcription is free and costs As Told
-          money to run, so each installation includes up to 60 minutes of transcription a month.
-          Counting that is the one thing the transcription service keeps between requests: a
-          scrambled, one-way form of the App&nbsp;Attest installation identifier, the current
-          calendar month, and a number of seconds. That is the whole record. It holds no audio, no
-          transcript, no note text, no name, and no email, and it cannot be traced back to you or
-          to anything you wrote &mdash; it is a duration, not a history of what you said. If you
-          reach the limit, As Told tells you when voice becomes available again; everything else in
-          the app keeps working.
+          It does not log your audio, your transcript, your note title, your note text, or your
+          search queries. The infrastructure that hosts the service handles ordinary connection
+          information, such as an IP address, to keep it available and to prevent abuse.
         </p>
+        <p>
+          Transcription requests are also checked with Apple&rsquo;s App Attest, to confirm they
+          come from a genuine copy of As Told. That check identifies the app, not you, and is not
+          linked to your notes.
+        </p>
+
+        <h3 id="voice-allowance">The fair-use counter</h3>
+        <p>
+          Voice transcription is free and costs As Told money to run, so each installation includes
+          up to 60 minutes of transcription a month. Counting that is the one thing the
+          transcription service keeps between requests: a scrambled, one-way form of the
+          App&nbsp;Attest installation identifier, the current calendar month, and a number of
+          seconds.
+        </p>
+        <p>
+          That is the whole record. It holds no audio, no transcript, no note text, no name, and no
+          email, and it cannot be traced back to you or to anything you wrote &mdash; it is a
+          duration, not a history of what you said. If you reach the limit, As Told tells you when
+          voice becomes available again; everything else in the app keeps working.
+        </p>
+
+        <h3 id="voice-words">Your words, unchanged</h3>
         <p>
           Your speech is transcribed <strong>in your own words</strong>. Natural punctuation,
           capitalization, and paragraph breaks are added so a spoken thought reads like written
           language — but As Told does not translate, summarize, rewrite, polish, or grammar-correct
-          what you said. The transcript is meant to be what you actually spoke — in English,
-          Telugu, Hindi, or a natural mix — inserted directly into your note as ordinary, editable
-          text.
+          what you said.
         </p>
         <p>
-          Plenty of apps say &ldquo;nothing ever leaves your device&rdquo; and quietly mean
-          &ldquo;except this.&rdquo; Voice is the one place where something does, so it is said
-          plainly, at the only honest moment: before the audio is sent.
+          The transcript is meant to be what you actually spoke — in whichever language or mix of
+          languages you spoke it — inserted directly into your note as ordinary, editable text.
         </p>
 
         <h2 id="face-id">Face ID &amp; the app switcher</h2>
@@ -159,9 +206,12 @@ export default function PrivacyPage() {
           You can optionally require Face ID (or your device passcode) to open As Told. It is off
           unless you turn it on. Authentication is handled by Apple&rsquo;s Local Authentication
           framework — As Told is told whether you succeeded, and never receives your biometric
-          data. When the lock is on and the app leaves the screen, your note content is covered
-          before iOS takes its app-switcher snapshot, so your writing isn&rsquo;t left visible
-          behind the lock.
+          data.
+        </p>
+        <p>
+          When the lock is on and the app leaves the screen, your note content is covered before
+          iOS takes its app-switcher snapshot, so your writing isn&rsquo;t left visible behind the
+          lock.
         </p>
 
         <h2 id="settings">Your name and settings</h2>

@@ -263,6 +263,11 @@ Selecting a day does not navigate: that day's notes are listed under the grid, a
 it from the calendar, so Back returns to the calendar with the day still selected. _(Changed
 2026-08-19 — this replaced a mode where choosing a day sent the reader back to a filtered Home.)_
 
+A note opened this way shows **‹ Calendar**, not ‹ Notes (`EditorOrigin`, fixed 2026-08-25). The
+navigation was always right — the editor is pushed onto whichever stack the reader is standing in — but
+the label named a screen the tap does not lead to, which is the one promise a back button makes. The
+spoken label matches the written one: "Back to calendar".
+
 ### Month view
 
 - standard month grid
@@ -392,12 +397,19 @@ Required in V1.
 
 Never invent replacement text.
 
-Provide concise actions such as:
+Provide concise actions. Where the recording survived the failure — a dropped connection, a timeout,
+a service that did not answer — those are **Retry** and **Delete Recording**, above the sentence that
+says so: *"Your recording is still on this iPhone."* Where it did not, the screen makes no promise
+about audio that has already been deleted.
 
-- Retry
-- Discard
+Keep temporary audio only as long as required for explicit Retry: after a retryable transcription
+failure, for at most 24 hours (`VoiceLimits.retryLifetime`), deleted immediately on success, on
+`Delete Recording`, and on every failure the same upload could not get past
+(`TranscriptionError.isRetryableVoiceFailure`, `docs/10-voice-v2.md` §13).
 
-Keep temporary audio only as long as required for explicit Retry.
+Leaving the note and closing the app are neither of those. A retained recording survives both, and is
+offered back once — from Home, on one surface, with the same **Retry** / **Delete Recording** and
+nothing else. Never a list, never playback, never a queue that uploads on its own.
 
 The monthly allowance is the one case that is not a failure of the recording, and it behaves
 differently: it gets its own title ("Voice will be back soon"), a single `OK`, and no Retry — the
@@ -597,6 +609,50 @@ Structure is one of the most visible things the editor does, so it MUST be as un
   the newline), so a structural edit suppresses UIKit's registration and registers its exact inverse.
 - Undo restores the styling and never leaves the caret inside a hidden marker; redo reapplies the edit.
 
+### Tables — a table stays a table
+
+Amended 2026-08-24 (Item 4). A table is drawn as a grid at all times; `| pipes |` and the `| --- |` rule
+are storage and are never shown.
+
+| What you are doing | What you see |
+|---|---|
+| reading the note | the grid |
+| typing in prose above or below it | the grid |
+| tapping the table | the grid — and the cell you tapped becomes editable in place |
+| leaving the table | the grid |
+
+Navigation is deliberately small: **tap** a cell to edit it, **tap another** to commit and move, **Return**
+to commit and move to the next cell (A1 → B1 → C1 → A2), hardware **Tab** / **Shift-Tab** to walk that
+order, **tap outside a cell** to commit and leave. Past the last cell, editing ends.
+
+A cell is one line — a pasted newline becomes a space, and a typed `|` is escaped so it stays a character
+rather than a column. `Note.body` keeps canonical pipe rows underneath, and a cell edit is one undo step.
+
+Wide or tall tables keep their existing behavior: a **preview** card with the full grid one tap away in
+the reader. Previews are not edited in place.
+
+Not in this pass: adding or removing rows and columns, resizing, sorting, formulas, merged cells,
+multiline cells. **There is currently no way to add a row from the editor** — that needs insertion UI,
+which is designed separately.
+
+### Code blocks — one appearance, read or written
+
+A code block looks like a code block the whole time (`RULES.md` §7, amended 2026-08-24 — Item 5).
+
+| What you are doing | What you see |
+|---|---|
+| reading the note | the code card: label, ground, monospace, syntax colour, Copy Code |
+| typing in prose above or below it | unchanged — the card stays |
+| tapping into the code | the same card, and the code is now editable in place |
+| leaving the block | the card, exactly as before |
+
+The ```` ``` ```` fences are never drawn. They stay in `Note.body` as the canonical storage — the same
+bargain a table's `| --- |` row strikes — and the caret cannot land on one. Editing happens in the note's
+own text view: there is no second editor, no sheet, no code document, and nothing runs.
+
+One difference between the two presentations: a long line **scrolls sideways** in a block being read and
+**wraps** in one being edited, because in-place editing means the note's own text container lays it out.
+
 ### Copy, cut & paste
 
 Structure is stored as hidden line markers inside `body`, so nothing that leaves the editor may carry
@@ -606,7 +662,82 @@ them (`RULES.md` §4).
 |---|---|
 | As Told → another app | the page as it reads: `Shopping`, `• Eggs`, `☐ Call Ravi`, `☑ Done`, `1. one` |
 | As Told → As Told | the raw source, via a private pasteboard type (`com.astold.structured-text`) |
-| another app → As Told | the structure that app *states* — heading, list, checklist, table — and otherwise the plain text, exactly as pasted |
+| another app → As Told | the structure that app *states* — heading, list, checklist, table, code, **preformatted text**, link — and otherwise the plain text, exactly as pasted |
+| plain text As Told is *certain* is code | a fenced block in the detected language, with a label and syntax colour (see below) |
+
+**High-confidence code detection (amended 2026-08-24, `RULES.md` §4).** The single exception to "never
+infer structure from prose". After every stated flavor has declined, plain text is scored by
+`CodeDetection`; when it is certain, the paste arrives as a fenced block in the detected language:
+
+| Clipboard | Result |
+|---|---|
+| `import pandas as pd` … | `Python` card, label, syntax colour |
+| `SELECT * FROM Employee …` | `SQL` card, label, syntax colour |
+| a grocery list, a note, `Name: Krishna` | prose, untouched |
+| anything the detector is unsure of | prose, untouched — **Paste as Code** is the manual override |
+
+Only the eight languages `CodeHighlighting` can colour are ever named, so a detected block is never a
+label with nothing behind it. Detection needs a decisive signature (one that cannot occur in a sentence)
+or three supporting ones, a prose guard overrules any score, and a single line is never detected unless
+its signature is decisive. Nothing about the clipboard's characters changes — detection adds fences and
+nothing else. The asymmetry is deliberate: code left as prose costs one tap, prose turned into a card is
+the note being rewritten.
+
+### Preformatted blocks — text whose alignment is its content (added 2026-08-25, `RULES.md` §7)
+
+An architecture diagram, a directory tree, a column of aligned figures. Pasted as ordinary prose these
+collapse: proportional type throws the columns out, wrapping breaks the arrows, and what the author drew
+is gone. A preformatted block keeps every space exactly where it was put.
+
+It is **not a new structure**. It is the fenced block As Told already holds, whose fence declared `text`:
+
+| In the note | On the page |
+|---|---|
+| ` ```text ` … ` ``` ` | the code card, labelled **Plain text**, monospaced, scrolling sideways, with **Copy Text** |
+
+| Clipboard | Result |
+|---|---|
+| `<pre>` with no `<code>` inside | **Plain text** block — `<pre>` is HTML's own word for preformatted |
+| `<pre><code class="language-text">` | **Plain text** block |
+| `<pre><code class="language-python">` | `Python` card, label, syntax colour — unchanged |
+| `<pre><code>` with no language | code card with no label — unchanged |
+| a declared ` ```text `, ` ```plaintext `, ` ```txt ` fence | **Plain text** block (written back as `text`) |
+| a plain-text diagram whose box-drawing characters make it certain | **Plain text** block (see below) |
+| anything short of certain | **prose, untouched** — **Paste as Preformatted** is the manual override |
+
+**High-confidence diagram detection (added 2026-08-25, `RULES.md` §4).** The second and last exception
+to "never infer structure from prose", on the same argument as code and a stricter bar. Only **real
+Unicode box-drawing characters** count — `│ ├ └ ─ ┌ ┐ ┬ ┼ ┤` — never ASCII `|`, `-`, or `+`:
+
+| Clipboard | Result |
+|---|---|
+| `repo/` … `├── apps/` … `│   └── api/` | **Plain text** card |
+| a vertical pipeline of `│` and `▼` in one column | **Plain text** card |
+| `┌──────┼──────┐` over aligned `▼` arms | **Plain text** card |
+| `A` / `\|` / `B` — ASCII pipe | prose |
+| a grocery list, a bulleted list, a Markdown rule, a pipe table | prose |
+| prose containing one `\|` or one `→` | prose |
+
+Three lines and two independent signals are required, never one. The asymmetry that justifies inferring
+this at all runs the opposite way from code: code left as prose costs one tap, while **a diagram left as
+prose is unreadable**, because its alignment is its content.
+
+**Acceptance criteria**
+
+- every space, tab, blank line, and box character (`│ ├ └ ─ ┌ ┐ ▼ ▲ → ←`) survives paste, edit, copy,
+  and the As Told → As Told round trip, byte for byte
+- a `#`, `- `, `1.`, `- [ ] `, `| … |` or `[text](url)` inside a block is **literal** — never a heading,
+  bullet, number, checklist, table, or link
+- long lines **scroll sideways** while the block is read; they may wrap while it is being edited, and
+  wrapping never changes a stored character
+- the card says **Plain text**; a fence naming nothing still says nothing at all
+- no syntax colour is ever applied to one
+- VoiceOver is told "Plain text block" and then read the characters — the drawing is never interpreted
+- **Copy Text** puts the drawing on the clipboard without its fences
+- a normal paste of an unmarked diagram leaves it as prose
+
+Java is **not** detected: the highlighter does not know it, and a `java` label with no colour behind it
+is worse than leaving the text as prose. Adding it means teaching `CodeHighlighting` first.
 
 - Copying a visibly complete list item copies the item: the selection expands over that line's hidden
   marker, and cutting takes the marker with it rather than leaving an orphan.
@@ -713,14 +844,26 @@ structure As Told already has wins:
     horizontal scrolling, cells that wrap rather than truncate, and VoiceOver that reads each cell with
     the column it belongs to ("Park, Kenai Fjords"). It reads and never writes. The cut-off is whether
     the words fit at this width and text size — never a column count someone picked.
-  - **Writing the note, the table is its source.** Taking the keyboard puts every table back into pipe
-    rows, under a quiet container; giving it up puts the tables back. A table being edited is text being
-    edited, and the caret has to be somewhere the writer can see it (RULES.md §7).
+  - **Writing the note, the table the caret is in is its source.** The table whose lines the caret or
+    selection touches shows its pipe rows under a quiet container; every other table in the note stays a
+    card, and this one returns to a card the moment the caret leaves (amended 2026-08-23 — this used to
+    depend on the keyboard being up at all, so one sentence typed anywhere turned every table in the
+    note back into raw syntax at once). A table being edited is text being edited, and the caret has to
+    be somewhere the writer can see it (RULES.md §7).
+  - **The delimiter row is never drawn — reading or writing** (2026-08-23). `| --- | --- |` records
+    which row is the header; nobody typed it to be read, and it is the one line of the source that says
+    nothing about the table's contents. It stays in `body` untouched — the parser, copy, search and
+    every existing note are unaffected — it is simply not drawn, and its line keeps no height. Two
+    behaviours follow: the caret is never left on it (it moves on to the row the writer was heading
+    for, in whichever direction they were going), and Backspace at the start of the first row joins
+    that row to the **header**, taking the hidden line with it rather than welding data onto the header
+    rule.
   - **Rejected: re-spacing the source in place.** Laying the pipes out as invisible tab stops and
     painting a hairline over the delimiter row *looked* like rendering and was not: stray closing pipes,
     a banded grey block, columns aligned by spacing, and a caret that could land inside what looked like
     a rendered table. Hiding some characters and repositioning others is not a presentation
-    (2026-08-21).
+    (2026-08-21). Not drawing the delimiter row is the opposite move and is allowed: one line stops
+    being drawn, nothing is repositioned, and nothing is dressed up to look like what it is not.
   - **A one-column table is just its cells**, one per line. There is no grid to draw.
   - **Known limitation:** a cell whose source held several lines arrives as one line of words. Every
     word survives; the line breaks inside that cell do not, because a row is a line and a line cannot

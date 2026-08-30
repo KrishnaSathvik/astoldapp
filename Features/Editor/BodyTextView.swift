@@ -12,10 +12,24 @@ import UniformTypeIdentifiers
 @MainActor
 final class BodyEditorActions {
     fileprivate var applyStyle: ((BlockStyle) -> Void)?
+    fileprivate var commitAndRead: (() -> String?)?
 
     /// Applies `style` to every line the body's current selection touches. A no-op before the text
     /// view exists, or while the body is not editable (a recording owns the anchor).
     func apply(_ style: BlockStyle) { applyStyle?(style) }
+
+    /// Closes any edit still open inside the body and returns the text view's own current text.
+    ///
+    /// For Share, and for the one case where the note in `body` is genuinely behind what is on screen:
+    /// a **table cell** being edited lives in the card's own field until it commits, so someone who
+    /// changes `Anchorage` to `Fairbanks` and taps Share immediately would otherwise send `Anchorage`.
+    /// Typing in the body itself has no such gap — every keystroke reaches the binding — but the text
+    /// view is read back anyway, because "what is on screen" is the thing being shared and there is no
+    /// reason to ask a copy of it.
+    ///
+    /// Returns `nil` before the text view exists. Committing a cell is the writer's own edit landing
+    /// through the ordinary undoable path; nothing here is a change Share invented.
+    func commitPendingEdits() -> String? { commitAndRead?() ?? nil }
 }
 
 /// UITextView-backed body editor. The backing store holds the raw source string (with lightweight
@@ -54,8 +68,6 @@ struct BodyTextView: UIViewRepresentable {
     // `@Binding`) so the pure-logic tests can keep building a `BodyTextView` with the five arguments
     // they care about.
 
-    /// The note's creation date, already formatted. Empty hides the line.
-    var dateText: String = ""
     /// The optional note title.
     var title: Binding<String> = .constant("")
     /// Two-way keyboard focus for the title, exactly as `isFocused` is for the body.
@@ -64,6 +76,9 @@ struct BodyTextView: UIViewRepresentable {
     /// the editor opens the reader on it. Never while editing: a tap in a table you are writing is a
     /// tap that places the caret, exactly as it does in any other line.
     var openTable: (TableBlock) -> Void = { _ in }
+    /// Opening a link is the page's job, not the text view's. Only http(s) destinations ever reach
+    /// here — `LinkSpan` refuses anything else, so a note can never carry a tappable `javascript:`.
+    var openLink: (URL) -> Void = { url in UIApplication.shared.open(url) }
     /// Called when the title field gives up first responder — the only moment the title may be tidied
     /// (`EditorModel.endTitleEditing`). Nothing touches those characters while they are being typed.
     var titleEditingEnded: () -> Void = {}
@@ -97,8 +112,27 @@ struct BodyTextView: UIViewRepresentable {
 
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         tap.delegate = context.coordinator
+        // A code card is a real subview with a real button in it. Left cancelling, this recognizer
+        // sends the button `touchesCancelled` the moment it recognizes, and Copy Code never fires.
+        // The text view's own tap still yields to this one, so claiming a touch is still what
+        // suppresses caret placement — see `gestureRecognizerShouldBegin`.
+        tap.cancelsTouchesInView = false
         tv.addGestureRecognizer(tap)
         context.coordinator.checkboxTap = tap
+
+        // A wide preformatted card is the only thing on this surface that wants a sideways drag, and it
+        // cannot ask for one itself: the card hands every touch through so a tap can still reach the
+        // source underneath (`CodeBlockView.hitTest`). So the drag is claimed here, on the text view,
+        // and only when it is clearly horizontal and there is something to scroll (`CardPanRule`).
+        //
+        // `cancelsTouchesInView = false` for the same reason the tap sets it: a card holds a real
+        // button, and cancelling would take Copy Text away mid-touch.
+        let pan = UIPanGestureRecognizer(target: context.coordinator,
+                                         action: #selector(Coordinator.handleCardPan(_:)))
+        pan.delegate = context.coordinator
+        pan.cancelsTouchesInView = false
+        tv.addGestureRecognizer(pan)
+        context.coordinator.cardPan = pan
         // The text view's own single-tap (caret placement) yields to ours, so tapping a checkbox toggles
         // without also placing a caret / raising the keyboard. Elsewhere ours declines and the default runs.
         for recognizer in tv.gestureRecognizers ?? [] {
@@ -118,10 +152,15 @@ struct BodyTextView: UIViewRepresentable {
             view.setNeedsDisplay()
         }
 
+        // Same argument, one preference over: Differentiate Without Color decides whether a link carries
+        // an underline as well as its colour, and it is a notification rather than a trait — so an editor
+        // sitting open while the reader turns it on kept un-underlined links until the next keystroke.
+        // Registered here for symmetry with the line above; owned and torn down by the coordinator.
+        context.coordinator.observeDifferentiateWithoutColor(for: tv)
+
         context.coordinator.bind(actions, to: tv)
 
         let page = NotePageView(textView: tv)
-        page.dateText = dateText
         page.placeholderText = bodyPlaceholder
         let field = page.header.titleField
         field.delegate = context.coordinator
@@ -145,7 +184,6 @@ struct BodyTextView: UIViewRepresentable {
     func updateUIView(_ page: NotePageView, context: Context) {
         context.coordinator.parent = self
         let tv = page.textView
-        page.dateText = dateText
         page.placeholderText = bodyPlaceholder
         updateTitle(page.header.titleField, context: context)
 
@@ -222,6 +260,14 @@ struct BodyTextView: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate, UITextFieldDelegate, UIGestureRecognizerDelegate {
         var parent: BodyTextView
         var checkboxTap: UITapGestureRecognizer?
+        /// The sideways drag that scrolls a wide preformatted card. See `CardPanRule`.
+        var cardPan: UIPanGestureRecognizer?
+        /// The card the drag in flight is scrolling, held so a gesture that began on one card cannot
+        /// wander onto another halfway through.
+        private var panningCard: CodeBlockView?
+        /// Whether the drag in flight turned out to be horizontal. `nil` while the finger has not moved
+        /// far enough to have said.
+        private var panIsHorizontal: Bool?
         /// The page this coordinator's text view lives on, when there is one. Weak because the page
         /// owns the text view that owns this delegate. `nil` in the unit tests, which drive a bare
         /// text view with no chrome around it.
@@ -233,6 +279,78 @@ struct BodyTextView: UIViewRepresentable {
 
         /// The table cards on the page, and where they sit. Reading only — see `TableCardPresenter`.
         let tableCards = TableCardPresenter()
+        /// The code cards, on exactly the same terms — see `CodeCardPresenter`.
+        let codeCards = CodeCardPresenter()
+        /// The lines the last restyle drew as source — the block the caret was in. Kept so a caret
+        /// move only costs a restyle when it actually changes which block is being edited.
+        private var renderedSourceLines: ClosedRange<Int>??
+        /// Where the caret was before this selection change, so a hidden row knows which way to let it
+        /// out — down onto the first row, or back up onto the header.
+        private var previousCaret = 0
+
+        // MARK: Differentiate Without Color
+        //
+        // A link is drawn in `Color.ds.link`, and colour MUST NOT be the only thing that says so
+        // (RULES.md §4). When the reader has asked the system not to rely on colour, links also carry an
+        // underline. That was read once per restyle and never re-read, so toggling the setting with a
+        // note open left the links as they were until the next keystroke moved the caret and paid for a
+        // restyle anyway. Dynamic Type had the same gap and is solved the same way, two screens up
+        // (`registerForTraitChanges`) — this is that fix for the one accessibility preference that is a
+        // notification rather than a trait.
+
+        /// Whether links are underlined as well as coloured.
+        ///
+        /// A closure rather than a `Bool` so a test can answer for it: the real setting is a global the
+        /// process cannot change, and a test that cannot flip it cannot prove the restyle responds. This
+        /// is the whole abstraction — production reads `UIAccessibility` exactly as it did before.
+        var differentiatesWithoutColor: () -> Bool = { UIAccessibility.shouldDifferentiateWithoutColor }
+
+        /// Held so the observer is removed when this coordinator goes.
+        ///
+        /// A token rather than the raw observer because `deinit` is nonisolated and cannot reach a
+        /// `@MainActor` property. Letting the token's *own* deinit do the removal sidesteps that
+        /// entirely: releasing the coordinator releases this, and releasing this removes the observer.
+        private var differentiateObserver: ObserverToken?
+
+        /// Restyles `tv` whenever Differentiate Without Color changes, for as long as this coordinator
+        /// lives.
+        ///
+        /// Attributes only, exactly like every other restyle: not one character of `body` moves, the
+        /// selection is put back where it was, focus is not taken, and nothing else on the page is
+        /// rebuilt. The text view is held weakly — the page owns it, and an observer must never be the
+        /// reason it stays alive.
+        func observeDifferentiateWithoutColor(for tv: UITextView) {
+            guard differentiateObserver == nil else { return }
+            // `queue: nil` — the block runs synchronously on the posting thread. UIKit posts this one
+            // on the main thread, so that is where the restyle happens, and it happens *before* the
+            // next frame rather than a runloop turn later. Anything posting it off the main thread is
+            // hopped rather than trusted, because a restyle touches TextKit.
+            let observer = NotificationCenter.default.addObserver(
+                forName: UIAccessibility.differentiateWithoutColorDidChangeNotification,
+                object: nil, queue: nil
+            ) { [weak self, weak tv] _ in
+                guard Thread.isMainThread else {
+                    DispatchQueue.main.async { [weak self, weak tv] in
+                        guard let self, let tv else { return }
+                        MainActor.assumeIsolated { self.restyle(tv) }
+                    }
+                    return
+                }
+                guard let self, let tv else { return }
+                MainActor.assumeIsolated { self.restyle(tv) }
+            }
+            differentiateObserver = ObserverToken(observer)
+        }
+
+        /// Owns one notification observer and removes it on the way out.
+        ///
+        /// A block-based observer outlives its owner unless it is removed by hand, and a stale one
+        /// restyling a text view nobody is looking at is a leak with a side effect.
+        final class ObserverToken {
+            private let observer: any NSObjectProtocol
+            init(_ observer: any NSObjectProtocol) { self.observer = observer }
+            deinit { NotificationCenter.default.removeObserver(observer) }
+        }
 
         /// Re-applies structure styling (attributes only — never characters), preserving the selection,
         /// and rebuilds the table cards the new styling made room for.
@@ -244,16 +362,103 @@ struct BodyTextView: UIViewRepresentable {
         /// (RULES.md §7, amended 2026-08-21).
         func restyle(_ tv: UITextView) {
             let selection = tv.selectedRange
-            let heights = tableCards.plan(for: tv, showsCards: !tv.isFirstResponder)
+            let editing = tv.isFirstResponder
+            // Only the block the caret is *in* gives up its card. Everything else on the page stays
+            // rendered, keyboard up or down — typing a sentence next to a table must not turn every
+            // table in the note back into pipe rows (RULES.md §7, amended 2026-08-23).
+            let sourceLines: ClosedRange<Int>? = editing
+                ? StructuredText.lineIndices(touchedBy: selection, in: tv.text as NSString)
+                : nil
+            renderedSourceLines = .some(sourceLines)
+
+            // A block flipping between card and source changes the note's height, and the writer is in
+            // the middle of typing somewhere below it. Hold the caret's position **on screen** across
+            // the change, or the words move under their finger.
+            let caretBefore = editing ? caretY(in: tv) : nil
+
+            let heights = tableCards.plan(for: tv, sourceLines: sourceLines)
+            let codeHeights = codeCards.plan(for: tv, sourceLines: sourceLines)
             StructuredTextStyler.apply(to: tv.textStorage,
                                        textColor: UIColor(Color.ds.textPrimary),
                                        secondaryColor: UIColor(Color.ds.textTertiary),
+                                       linkColor: UIColor(Color.ds.link),
                                        availableWidth: tv.textContainer.size.width
                                            - tv.textContainer.lineFragmentPadding * 2,
-                                       tableCards: heights)
+                                       tableCards: heights,
+                                       codeCards: codeHeights,
+                                       codeTokens: CodeBlockView.Palette.ds.tokens,
+                                       underlinesLinks: differentiatesWithoutColor())
             tv.selectedRange = selection
             syncTypingAttributes(tv)
-            tableCards.sync(in: tv, palette: .ds)
+            tableCards.sync(in: tv, palette: .ds) { [weak self] table, position, text in
+                self?.commitCell(table, at: position, to: text, in: tv)
+            }
+            codeCards.sync(in: tv, palette: .ds)
+
+            if let caretBefore, let caretAfter = caretY(in: tv) {
+                let shift = caretAfter - caretBefore
+                // Sub-point drift is TextKit rounding, not a block changing shape; correcting it would
+                // fight the scroll view on every keystroke.
+                if abs(shift) > 0.5 {
+                    tv.contentOffset.y = max(0, tv.contentOffset.y + shift)
+                }
+            }
+        }
+
+        /// One cell of a table, written back into `body`.
+        ///
+        /// The card reports *which* cell changed and to what; turning that into characters is this
+        /// side's job, and it goes through the same edit primitive every other structural operation
+        /// uses — so a cell edit is one undo step, and `body` stays canonical pipe rows (RULES.md §4, §5).
+        ///
+        /// The table is re-read from the note before the edit is computed. The copy the card is holding
+        /// was made when the card was last synced, and a commit can arrive after something else has
+        /// already changed the note underneath it.
+        func commitCell(_ table: TableBlock, at position: TableBlock.CellPosition,
+                        to text: String, in tv: UITextView) {
+            guard let current = TableBlock.tables(in: tv.text)
+                .first(where: { $0.lineRange == table.lineRange }),
+                  let edit = TableBlock.cellEdit(in: tv.text, table: current,
+                                                 at: position, text: text)
+            else { return }
+            // The caret stays where the writer put it: it is in a table cell's field, not in the note's
+            // text, and moving the note's selection would fight the field for the keyboard.
+            let caret = tv.selectedRange
+            _ = apply(edit, to: tv, caret: caret)
+        }
+
+        /// Where the caret sits in the note's content, or `nil` when there is no caret to hold on to.
+        private func caretY(in tv: UITextView) -> CGFloat? {
+            tv.layoutManager.ensureLayout(for: tv.textContainer)
+            guard let position = tv.selectedTextRange?.start else { return nil }
+            let rect = tv.caretRect(for: position)
+            return rect.isNull || rect.isInfinite ? nil : rect.minY
+        }
+
+        /// The link under `point`, when the note is being read. While it is being edited a tap places
+        /// the caret, exactly as it does on a table: a writer reaching into a sentence to fix a word
+        /// must not be sent to Safari instead (RULES.md §7 — editable without fighting the writer).
+        func tappedLink(in tv: UITextView, at point: CGPoint) -> URL? {
+            guard !tv.isFirstResponder, !tv.text.isEmpty else { return nil }
+            var point = point
+            point.x -= tv.textContainerInset.left
+            point.y -= tv.textContainerInset.top
+            guard point.x >= 0, point.y >= 0 else { return nil }
+
+            let manager = tv.layoutManager
+            let glyph = manager.glyphIndex(for: point, in: tv.textContainer,
+                                           fractionOfDistanceThroughGlyph: nil)
+            // `glyphIndex(for:)` clamps to the nearest glyph, so a tap in the margin past the end of a
+            // line would otherwise "hit" the link that ends it.
+            let fragment = manager.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: nil)
+            guard fragment.contains(point) else { return nil }
+
+            let character = manager.characterIndexForGlyph(at: glyph)
+            guard character < (tv.text as NSString).length,
+                  let destination = tv.textStorage.attribute(.astLink, at: character,
+                                                             effectiveRange: nil) as? String
+            else { return nil }
+            return URL(string: destination)
         }
 
         /// Keeps the text view's `typingAttributes` describing the line the caret is actually on.
@@ -334,6 +539,17 @@ struct BodyTextView: UIViewRepresentable {
                 let edit = DocumentAction.setBlockKindEdit(style.kind, text: tv.text, selection: tv.selectedRange)
                 self.apply(edit, to: tv)
             }
+            actions?.commitAndRead = { [weak self, weak tv] in
+                // `nil`, never `""`. An empty string here would be indistinguishable from an empty
+                // note, and the caller would go on to share nothing rather than fall back to the
+                // model's own body.
+                guard let self, let tv else { return nil }
+                // The only edit that can still be open somewhere other than this text view. It commits
+                // synchronously, through the same `TextEdit` any other change uses, so `tv.text` is
+                // current by the time this returns.
+                self.tableCards.commitActiveCellEdits()
+                return tv.text
+            }
         }
 
         /// A body change that arrives from outside the text view — a voice transcript landing at the
@@ -369,9 +585,21 @@ struct BodyTextView: UIViewRepresentable {
             // the marker into the middle of the line, where it stops being hidden and starts being
             // words. It happens *after* the marker instead, and the item keeps its structure.
             if range.length == 0, !text.isEmpty, tv.markedTextRange == nil {
-                let line = MarkupDocument(tv.text).line(containingSource: range.location)
-                if line.markerLength > 0, range.location < line.contentStart {
-                    let caret = NSRange(location: line.contentStart, length: 0)
+                let doc = MarkupDocument(tv.text)
+                let line = doc.line(containingSource: range.location)
+                // A hidden **link** run is the same hazard as a hidden marker, and arrives by the same
+                // routes: a character dropped into the syntax of `](https://…)` does not push a marker
+                // out of place, it dismantles the link — the destination is lost and the brackets the
+                // reader was never meant to see become words. It lands after the link instead, where
+                // the writer could see their caret.
+                var destination: Int?
+                if let escape = doc.caretEscapingHiddenSyntax(from: range.location, movingForward: true) {
+                    destination = escape
+                } else if line.markerLength > 0, range.location < line.contentStart {
+                    destination = line.contentStart
+                }
+                if let destination {
+                    let caret = NSRange(location: destination, length: 0)
                     let edit = text == "\n"
                         ? (DocumentAction.returnEdit(text: tv.text, selection: caret)
                             ?? DocumentAction.insertEdit(text, selection: caret))
@@ -424,6 +652,34 @@ struct BodyTextView: UIViewRepresentable {
             page?.refreshPlaceholder()
         }
 
+        /// The edit menu gains **Paste as Code** and **Paste as Preformatted** whenever the pasteboard
+        /// holds text.
+        ///
+        /// The system menu is where they belong and the only place they could go: a button on the
+        /// writing toolbar is the formatting bar §1 forbids, and a sheet of its own is the editor §7
+        /// excludes. This is the menu the writer already opens to paste — two more verbs in it, next to
+        /// the verb they were reaching for.
+        ///
+        /// Two rather than one because a clipboard carrying only plain text has thrown away two
+        /// different things, and they want different answers. "This is a program" gets a language label
+        /// and syntax colour; "this is a drawing I aligned by hand" gets neither and must simply be left
+        /// alone. Neither is ever inferred — that is the whole reason both verbs exist (RULES.md §4).
+        ///
+        /// `hasStrings` rather than reading the clipboard: asking whether text exists does not open the
+        /// pasteboard, so building a menu never shows iOS's paste prompt and never reads a single
+        /// character the writer did not ask us to (RULES.md §3).
+        func textView(_ tv: UITextView, editMenuForTextIn range: NSRange,
+                      suggestedActions: [UIMenuElement]) -> UIMenu? {
+            guard UIPasteboard.general.hasStrings, let body = tv as? StructuredTextView else { return nil }
+            let code = UIAction(title: "Paste as Code") { [weak body] _ in
+                body?.pasteAsCode()
+            }
+            let preformatted = UIAction(title: "Paste as Preformatted") { [weak body] _ in
+                body?.pasteAsPreformatted()
+            }
+            return UIMenu(children: suggestedActions + [code, preformatted])
+        }
+
         func textViewDidChangeSelection(_ tv: UITextView) {
             // Never let the caret land inside a hidden marker — snap it to the line's content start.
             //
@@ -445,11 +701,53 @@ struct BodyTextView: UIViewRepresentable {
                     let snapped = NSRange(location: line.contentStart, length: 0)
                     if snapped != tv.selectedRange { tv.selectedRange = snapped }
                 }
+                // And never inside a link's hidden syntax, for the same reason and by the same rule —
+                // it leaves the way it came in, so stepping through a link from either side lands on
+                // the words rather than in the brackets around them.
+                if let escape = doc.caretEscapingHiddenSyntax(
+                    from: tv.selectedRange.location,
+                    movingForward: tv.selectedRange.location >= previousCaret
+                ) {
+                    let moved = NSRange(location: escape, length: 0)
+                    if moved != tv.selectedRange { tv.selectedRange = moved }
+                }
             }
+            // A hidden delimiter row is not a place either. It has no glyphs and no height of its own,
+            // so a caret left there would be invisible — and the next keystroke would land inside the
+            // row that tells the parser where the header is, turning `| --- |` into a data row and the
+            // table back into prose (RULES.md §7, amended 2026-08-23).
+            if tv.selectedRange.length == 0,
+               let escape = TableBlock.caretEscape(in: tv.text, from: tv.selectedRange.location,
+                                                   movingForward: tv.selectedRange.location >= previousCaret) {
+                let moved = NSRange(location: escape, length: 0)
+                if moved != tv.selectedRange { tv.selectedRange = moved }
+            }
+            // A fence line is not a place either, and since 2026-08-24 it has no glyphs while the block
+            // is being edited — so a caret left on one is invisible, and the next keystroke would land
+            // inside ```` ```python ```` and break the block back into prose (RULES.md §7).
+            if tv.selectedRange.length == 0,
+               let escape = CodeBlock.caretEscape(in: tv.text, from: tv.selectedRange.location,
+                                                  movingForward: tv.selectedRange.location >= previousCaret) {
+                let moved = NSRange(location: escape, length: 0)
+                if moved != tv.selectedRange { tv.selectedRange = moved }
+            }
+            previousCaret = tv.selectedRange.location
+
             // The caret can reach an empty last line without any text change at all — by tapping, or by
             // opening a note that already ends in one — so this cannot live in `restyle` alone.
             syncTypingAttributes(tv)
             if parent.selectedRange != tv.selectedRange { parent.selectedRange = tv.selectedRange }
+
+            // Moving the caret is what puts a block into — and out of — its source form, and no text
+            // changed, so nothing else would redraw it. Deliberately narrow: only while the keyboard is
+            // up, only in a note that actually holds a block, and only when the caret changed line.
+            // Restyle reassigns the selection, which re-enters here; by then the stored value matches
+            // and this stops.
+            guard tv.isFirstResponder else { return }
+            let text = tv.text as NSString
+            guard tv.text.contains(CodeBlock.fence) || tv.text.contains("|") else { return }
+            let lines = StructuredText.lineIndices(touchedBy: tv.selectedRange, in: text)
+            if renderedSourceLines != .some(.some(lines)) { restyle(tv) }
         }
 
         /// Taking the keyboard puts the tables back into words. The restyle has to happen *here* rather
@@ -503,8 +801,9 @@ struct BodyTextView: UIViewRepresentable {
         /// The table whose preview card is under `point` — the only tap on a table that means something
         /// other than "put the caret here". See `TableCardPresenter.previewTable(at:in:)`.
         private func tappedTable(in tv: UITextView, at point: CGPoint) -> TableBlock? {
-            guard !tv.isFirstResponder else { return nil }
-            return tableCards.previewTable(at: point, in: tv)
+            // No longer gated on the keyboard being down: a preview card is on the page while the note
+            // is being edited too, and it is still holding rows back, so it still opens the reader.
+            tableCards.previewTable(at: point, in: tv)
         }
 
         /// How many lines either side of the touched one can hold a box whose band reaches it. The
@@ -609,26 +908,142 @@ struct BodyTextView: UIViewRepresentable {
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             guard let tv = gesture.view as? UITextView else { return }
-            if let table = tappedTable(in: tv, at: gesture.location(in: tv)) {
+            handleTap(in: tv, at: gesture.location(in: tv))
+        }
+
+        /// The tap, in the text view's coordinates. Split from the recognizer so the rules it applies
+        /// can be checked with a point rather than with a finger.
+        func handleTap(in tv: UITextView, at point: CGPoint) {
+            if let table = tappedTable(in: tv, at: point) {
                 parent.openTable(table)
+                return
+            }
+            if let url = tappedLink(in: tv, at: point) {
+                parent.openLink(url)
+                return
+            }
+            // Under the last thing in a note that ends inside a block: open the paragraph that block
+            // left no room for, and put the caret in it.
+            if let edit = terminalContinuation(in: tv, at: point) {
+                apply(edit, to: tv)
+                // A note being *read* has no caret at all, and the point of this tap is to write.
+                if !tv.isFirstResponder { tv.becomeFirstResponder() }
                 return
             }
             // While recording, the transcript owns the anchor and the body is not editable — a tick then
             // has nowhere to be applied, so the tap does nothing rather than half-happening.
             guard tv.isEditable,
-                  let line = checkboxLine(in: tv, at: gesture.location(in: tv)),
+                  let line = checkboxLine(in: tv, at: point),
                   let edit = DocumentAction.toggleChecklistEdit(text: tv.text, sourceOffset: line.sourceRange.location)
             else { return }
             // Ticking an item must not move the caret — only the box changes.
             apply(edit, to: tv, caret: tv.selectedRange)
         }
 
+        /// The edit a tap at `point` would make to write past a block that ends the note, or `nil`.
+        ///
+        /// Two questions, and both have to be yes: does the note end inside a rendered block
+        /// (`DocumentAction.continuePastTerminalBlockEdit`), and is the tap **below** it. The second is
+        /// asked of the block's own laid-out lines rather than of its card, because a block being
+        /// edited draws only its header there — asking the card would have read every tap on the code
+        /// itself as a tap underneath it.
+        func terminalContinuation(in tv: UITextView, at point: CGPoint) -> TextEdit? {
+            guard tv.isEditable,
+                  let edit = DocumentAction.continuePastTerminalBlockEdit(text: tv.text)
+            else { return nil }
+            let text = tv.text as NSString
+            let last = StructuredText.lineIndex(of: text.length, in: text)
+            guard let characters = StructuredText.characterRange(ofLines: last...last, in: text)
+            else { return nil }
+            tv.layoutManager.ensureLayout(for: tv.textContainer)
+            let glyphs = tv.layoutManager.glyphRange(forCharacterRange: characters,
+                                                    actualCharacterRange: nil)
+            var rect = CGRect.null
+            tv.layoutManager.enumerateLineFragments(forGlyphRange: glyphs) { fragment, _, _, _, _ in
+                rect = rect.union(fragment)
+            }
+            guard !rect.isNull else { return nil }
+            return point.y > rect.maxY + tv.textContainerInset.top ? edit : nil
+        }
+
         // Our tap begins only when it lands on a checkbox; otherwise the text view's own tap runs.
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            // The sideways drag: claimed only when it is clearly horizontal *and* it began over a
+            // rendered preformatted card that is actually wider than its viewport. Everything short of
+            // that declines, and the note scrolls or the caret lands exactly as it always has.
+            if gestureRecognizer === cardPan {
+                guard let pan = gestureRecognizer as? UIPanGestureRecognizer,
+                      let tv = pan.view as? UITextView else { return false }
+                // Position only. Direction is decided on the first real movement instead, in
+                // `handleCardPan` — a pan recognizer is asked this question with **no translation and
+                // no velocity yet**, so every direction test here answers against (0, 0) and refuses
+                // the gesture forever. That cost an afternoon; the log said `trans=(0.0, 0.0)`.
+                return codeCards.horizontallyScrollableCard(at: pan.location(in: tv)) != nil
+            }
             guard gestureRecognizer === checkboxTap,
                   let tv = gestureRecognizer.view as? UITextView else { return true }
             let point = gestureRecognizer.location(in: tv)
-            return checkboxLine(in: tv, at: point) != nil || tappedTable(in: tv, at: point) != nil
+            return checkboxLine(in: tv, at: point) != nil
+                || tappedTable(in: tv, at: point) != nil
+                || tappedLink(in: tv, at: point) != nil
+                // Only Copy Code is a card's own; every other touch on it falls through and puts the
+                // caret in the code, exactly as a tap on a table card does.
+                || codeCards.handlesTouch(at: point)
+                // Claimed rather than left to the text view: its own tap would resolve a touch under a
+                // terminal block to the end of the document — which *is* the closing fence — and the
+                // caret would be pushed straight back inside the block it is trying to leave.
+                || terminalContinuation(in: tv, at: point) != nil
+        }
+
+        /// A wide preformatted card, scrolled sideways under the finger.
+        ///
+        /// Presentation only — the offset lives on the card's own scroll view and never reaches
+        /// `Note.body`. Leaving the note and coming back starts the diagram at its beginning again,
+        /// which is where a diagram is read from.
+        @objc func handleCardPan(_ pan: UIPanGestureRecognizer) {
+            guard let tv = pan.view as? UITextView else { return }
+            switch pan.state {
+            case .began:
+                panningCard = codeCards.horizontallyScrollableCard(at: pan.location(in: tv))
+                panIsHorizontal = nil                       // undecided until the finger says so
+
+            case .changed:
+                guard let card = panningCard else { return }
+
+                // Decide once, on the first movement large enough to have a direction, and never
+                // revisit it — a drag that changes its mind halfway would make the diagram and the page
+                // trade the gesture back and forth under the finger.
+                if panIsHorizontal == nil {
+                    let travelled = pan.translation(in: tv)
+                    guard max(abs(travelled.x), abs(travelled.y)) >= CardPanRule.minimumTravel else {
+                        return                              // still nothing to go on
+                    }
+                    panIsHorizontal = CardPanRule.claimsGesture(translation: travelled, canScroll: true)
+                    // Not ours: let go entirely. The note has been scrolling alongside us the whole
+                    // time (the recognizers run simultaneously), so nothing needs handing back.
+                    if panIsHorizontal == false { panningCard = nil; return }
+                    pan.setTranslation(.zero, in: tv)
+                }
+
+                guard panIsHorizontal == true else { return }
+                // Dragging left reveals what is further right, so the offset moves against the finger.
+                card.scrollHorizontally(by: -pan.translation(in: tv).x)
+                pan.setTranslation(.zero, in: tv)
+
+            default:
+                panningCard = nil
+                panIsHorizontal = nil
+            }
+        }
+
+        /// The sideways drag runs alongside the text view's own recognizers rather than replacing them.
+        ///
+        /// It has already refused every gesture that is not clearly horizontal over a scrollable card,
+        /// so what is left cannot be a page scroll or a caret placement — and letting them coexist is
+        /// how nested scroll views behave everywhere else on iOS.
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            gestureRecognizer === cardPan || other === cardPan
         }
     }
 }
@@ -645,6 +1060,7 @@ final class StructuredTextView: UITextView {
         let layoutManager = StructuredLayoutManager()
         layoutManager.accentColor = UIColor(Color.ds.accent)
         layoutManager.markerColor = UIColor(Color.ds.textSecondary)
+        layoutManager.codeFill = UIColor(Color.ds.codeSurface)
         storage.addLayoutManager(layoutManager)
         let container = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         container.widthTracksTextView = true
@@ -677,12 +1093,71 @@ final class StructuredTextView: UITextView {
         guard let structured = RichPasteImport.source(from: .general), !structured.isEmpty,
               let coordinator = delegate as? BodyTextView.Coordinator
         else {
+            // Nothing on the pasteboard stated structure. This is the one point in the app where
+            // structure may be *inferred* rather than translated, and only for the two things a
+            // detector can be certain about (RULES.md §4, amended 2026-08-24 for code and 2026-08-25
+            // for diagrams). Anything short of certain falls through to the system's plain-text paste,
+            // exactly as it always has, with **Paste as Code** and **Paste as Preformatted** as the
+            // writer's manual overrides.
+            //
+            // Code is asked first and diagrams second, and they are built not to overlap: `CodeDetection`
+            // answers only for the eight languages it can colour, and `PreformattedDetection` requires
+            // real box-drawing characters, which no program contains.
+            if let coordinator = delegate as? BodyTextView.Coordinator,
+               let plain = UIPasteboard.general.string {
+                if let match = CodeDetection.detect(plain),
+                   let edit = DocumentAction.pasteAsCodeEdit(plain, language: match.language,
+                                                             text: text, selection: selectedRange),
+                   coordinator.apply(edit, to: self) {
+                    return
+                }
+                // A diagram pasted as prose is not a disappointment, it is unreadable: proportional
+                // type throws its columns out and the first wrap breaks its arrows. That asymmetry is
+                // the whole justification for inferring it at all.
+                if PreformattedDetection.isDiagram(plain),
+                   let edit = DocumentAction.pasteAsPreformattedEdit(plain, text: text,
+                                                                     selection: selectedRange),
+                   coordinator.apply(edit, to: self) {
+                    return
+                }
+            }
             super.paste(sender)
             return
         }
 
         let edit = DocumentAction.pasteEdit(structured, text: text, selection: selectedRange)
         if !coordinator.apply(edit, to: self) { super.paste(sender) }
+    }
+
+    /// **Paste as Code** — the clipboard's characters, fenced, as a block.
+    ///
+    /// The one thing As Told will not do is decide on its own that four lines of text are a program
+    /// (RULES.md §7). This is the other half of that rule: a clipboard that states nothing is left
+    /// alone, and the person who *knows* it is code has a way to say so. It says nothing about the
+    /// language, because nobody stated one.
+    func pasteAsCode() {
+        guard let coordinator = delegate as? BodyTextView.Coordinator,
+              let pasted = UIPasteboard.general.string,
+              let edit = DocumentAction.pasteAsCodeEdit(pasted, text: text, selection: selectedRange)
+        else { return }
+        _ = coordinator.apply(edit, to: self)
+    }
+
+    /// **Paste as Preformatted** — the clipboard's characters, fenced as plain text, as a block.
+    ///
+    /// The sibling of `pasteAsCode()`, for the case that made it necessary: an ASCII diagram, a
+    /// directory tree, a column of aligned figures. Its alignment is the whole content and a plain-text
+    /// clipboard carries no way to say so. As Told does not read the characters and decide they are a
+    /// drawing — there is no ASCII-art detector and there is not going to be one, because a note
+    /// rewritten into a diagram nobody asked for is the failure this app exists not to have
+    /// (RULES.md §4). This is the person who knows saying so.
+    func pasteAsPreformatted() {
+        guard let coordinator = delegate as? BodyTextView.Coordinator,
+              let pasted = UIPasteboard.general.string,
+              let edit = DocumentAction.pasteAsPreformattedEdit(pasted, text: text,
+                                                                selection: selectedRange)
+        else { return }
+        _ = coordinator.apply(edit, to: self)
     }
 
     /// Writes what the reader sees for other apps, plus the raw source under a private type for As Told.
@@ -693,6 +1168,11 @@ final class StructuredTextView: UITextView {
         var item: [String: Any] = [
             UTType.utf8PlainText.identifier: StructuredTextExport.plainText(from: text, range: selection)
         ]
+        // Only when the selection actually carries a link. A note without one copies exactly as it
+        // always has — no new flavor on the pasteboard to change what a receiving app decides to take.
+        if let html = StructuredTextExport.html(from: text, range: selection) {
+            item[UTType.html.identifier] = html
+        }
         if let structured = StructuredTextExport.structuredText(from: text, range: selection) {
             item[StructuredTextExport.pasteboardType] = Data(structured.utf8)
         }

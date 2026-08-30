@@ -187,8 +187,13 @@ Additional voice rules:
   (`compareArms` in `Core/Voice/TranscriptionBenchmark.swift`), never because a model is newer or
   generically recommended. V1 ships `gpt-4o-transcribe` until a benchmark run says otherwise.
 - A capture interrupted by a call or Siri MUST finish with the audio recorded so far rather than
-  discard the user's words. Leaving the editor mid-recording MUST cancel the capture and delete the
-  temporary audio.
+  discard the user's words. **Leaving the editor mid-recording MUST do the same** — stop the recorder,
+  finalize the file, upload, insert. (Corrected 2026-08-27. This bullet read "MUST cancel the capture
+  and delete the temporary audio" long after `docs/04-voice-transcription.md` §6 reversed it on
+  2026-08-19: deleting audio the user had already spoken was a data-loss bug, and Back was the one
+  exit that still did it. `VoiceCaptureModel.finishOnLeave()` owns the corrected behavior. The one
+  exception is a first recording whose transcription disclosure has not been accepted — that audio may
+  not be sent and may not be kept, so leaving still discards it.)
 - Abandoned temporary recordings (crash / force-quit) MUST be swept at launch.
 
 ### Cursor insertion contract
@@ -238,6 +243,104 @@ contracts apply. They are roadmap: MUST NOT be marketed until shipped (see §7).
   one shared document-action layer rather than two independent formatting systems.
 - Commands may launch in **English** first if that is the cleanest implementation; Telugu/Hindi command
   equivalents are evaluated separately and MUST NOT compromise code-switch transcription quality.
+
+### Voice V2 (direction locked 2026-08-27 — partly built)
+
+Full direction: `docs/10-voice-v2.md`. The scope is settled. **Built so far:** Home Quick Voice
+(Phase 1); the shared recording state machine, pause/resume, recorded-duration accounting, and the
+five-minute cap summed across pauses (Phase 2A, 2026-08-28); and retained recordings with their
+24-hour expiry, Retry / Delete Recording, audio-route and Bluetooth handling, and background and
+interruption durability (Phase 2B, 2026-08-28). **Not built:** voice into table cells, and the App
+Intent. None of it may be marketed before it ships (§7). The contracts below **bind** — they are not
+conditional on a later decision.
+
+**Navigation is not deletion, and neither is a terminated process** (decided 2026-08-28). A retained
+recording outlives the screen it failed on: leaving the note keeps it, and so does the app being
+closed. On the next launch — and on the next return to Home — a valid retained recording younger than
+24 hours is offered back **once**, on **one** surface, with the same two controls and nothing else:
+
+```text
+We saved a recording that couldn't be transcribed.
+
+    Retry            Delete Recording
+```
+
+That surface is the boundary. No recordings list, no playback, no file name or date on screen, no
+history, no rename, no export, no background upload — any of those is the excluded `audio archive` (§7)
+arriving through the back door. What is persisted is the minimum that can identify one file and keep
+its clock honest: the recording's **name**, its `retainedAt`, and which surface it came from
+(`RetainedRecordingStoring`). The name rather than the path, because the temporary directory moves
+between installs.
+
+This covers the upload too. Leaving a note while the transcription is still **in flight** retains the
+recording rather than cancelling and deleting it: the user finished speaking and committed the audio,
+and navigating away is not a decision about it. The order is fixed — claim the recording, *then*
+abandon the attempt — and a late answer from an abandoned attempt MUST NOT insert into the note that
+was left, create a note, delete the retained audio, or clear the recovery record. Each attempt carries
+an identity (`VoiceCaptureModel.isCurrentAttempt`) because cancellation is cooperative and a request
+that already reached the relay answers whether or not anybody is listening. Retry is always a new
+attempt.
+
+A recording captured **inside a note** keeps its captured insertion point only while that editing
+session is alive. Once the session is gone the caret it was aimed at is meaningless — the note may have
+been edited since — so a recovered transcript becomes a **new ordinary note**, and the recovery surface
+says so before the retry rather than after it. Editor internals are never persisted.
+
+- **The recording timer measures recorded audio, never wall-clock time.** A pause does not spend the
+  five-minute cap; the cap applies to the summed recorded duration across any number of pauses, and the
+  relay stays the authority on the file it is given (`docs/04-voice-transcription.md` §7). `recording`
+  and `paused` MUST be distinct states rather than one state and an `isPaused` flag — the flag version
+  is how a paused recorder keeps counting, and a capture cut off by a limit it never spent loses the
+  thought it was taking. Pause/resume MUST leave **one continuous recording**, never segments to
+  reassemble.
+
+- **A voice-created note is an ordinary note.** No voice section, no voice folder, no microphone badge
+  on a row. Nothing in the model, timeline, search, or export may record that a note's words were
+  spoken — the moment one does, voice is a note *type* and As Told has a second document system.
+- **Quick Capture is transient until it earns a note.** A capture started from Home MUST NOT create a
+  `Note` when the microphone opens; a note exists only once a non-empty transcript does. Cancel,
+  denial, no-speech, declined consent, and transcription failure leave **no note** behind. A retryable
+  failure leaves one thing and one thing only: the recording itself, retained under the rule above so
+  the user can still turn it into text.
+- **One Quick Capture implementation, several entry points** (Home, in-note, App Intent). A second
+  capture flow behind the Action Button is how the two drift. An App Intent MUST NOT bypass the app
+  lock (§3).
+- **Voice MUST NEVER summon a keyboard that was not already visible.** Someone who chose to speak has
+  made a choice with their hands; answering it with a keyboard overrides it.
+- **A finished recording is not casually lost.** After a retryable transcription failure the audio is
+  retained on-device for **explicit** retry, for **24 hours** (`VoiceLimits.retryLifetime`, a named
+  constant beside the other voice limits, never a number in the view layer). Which failures qualify is
+  one central classification, `TranscriptionError.isRetryableVoiceFailure`, so the two capture surfaces
+  cannot disagree about whether a user's words still exist. The launch sweep deletes anything older (§3). Never a background queue, never a silent later upload, and deleted immediately on
+  success. `Delete Recording` is the only management affordance — a list, playback, or export is the
+  excluded `audio archive` arriving through the back door (§7).
+- **"One retry" means one affordance, not one attempt.** One retained recording, one Retry control,
+  one Delete control. Retry MAY be tapped again after each further retryable failure until **success**,
+  **explicit deletion**, or the **24-hour expiry** ends it. A single permitted attempt would reintroduce
+  the data loss this rule exists to prevent, one attempt later: a flaky connection is the normal reason
+  a retry is needed, and the second attempt is the one most likely to work.
+- **The vocabulary does not grow.** Voice V2 adds no structure commands to the nine that shipped.
+- **The free voice interaction MUST NOT be made worse to create a Pro upsell.** Pro voice is capacity
+  and nothing else. Pause/resume and interruption recovery are **Free**, which reclassifies them from
+  `docs/09-v2-roadmap.md` §2.4.
+
+**Refused 2026-08-27 — out of Voice V2 entirely, and no amendment is being drafted for either:**
+
+- **Self-correction resolution** ("meeting at six, actually seven" → "meeting at seven"). **Not built.**
+  It deletes words the speaker said, which the forbidden list above prohibits and which §11 of the
+  voice spec puts outside the transport-artifact carve-out. Its trigger words are ordinary content
+  words, its failure mode is *silent* deletion with no error and no trace, and it degrades worst in
+  exactly the code-switched speech As Told exists to get right. As Told stores "Meeting at six —
+  actually seven", and that is a correct outcome. Reopening it requires real user demand and a fresh
+  rule change whose bar is a measured **unwanted-deletion rate** per language group — content WER
+  measures wrong words, not missing ones. That work is not scheduled.
+- **The voice dictionary — the local list UI included, not only the server hints.** **Not built.** A
+  dictionary earns its place only by being sent as a transcription hint (a new category of personal
+  data leaving the device, which §3 does not permit) or by substituting words after transcription (a
+  second word-changing system, which the contract above forbids). Without one of those it is a settings
+  screen that changes nothing while letting people believe it does. Deferred to a separable experiment
+  on the benchmark corpus; if that says hints help, the feature is designed deliberately with an
+  amendment to §3 naming what is sent and disclosure to the user (`docs/10-voice-v2.md` §19).
 
 ---
 
@@ -307,7 +410,9 @@ list before it is added, and neither may be extended to carry note-derived data.
 - Lives only in an app-controlled temporary/application-support location, with iOS file protection and
   randomized names. MUST NEVER go to Photos or shared Documents.
 - MUST be deleted on Cancel, on successful transcription, and on Discard; abandoned files MUST be cleaned
-  on launch beyond the allowed retry lifetime.
+  on launch beyond the allowed retry lifetime. The launch sweep spares exactly one file: the single
+  recording retained after a retryable failure, and only while it is inside `VoiceLimits.retryLifetime`
+  (§2). Everything else in the temporary directory is abandoned by definition and goes.
 
 ### Analytics
 
@@ -365,16 +470,37 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
 
 ### Editor
 
-- Required elements: Back, Style menu, date, optional title field, body text area, mic control —
-  and nothing else. The Style menu is contextual: present only while the body has the caret, gone
-  while reading and while the title is being edited (styling a title means nothing).
+- Required elements: Back, **the note's date**, **Share**, Style menu, optional title field, body text
+  area, mic control — and nothing else. The Style menu is contextual: present only while the body has
+  the caret, gone while reading and while the title is being edited (styling a title means nothing).
+- **The header is Back · date · Share (amended 2026-08-26).** The date **moved into the navigation
+  bar**, centred, and Share joined it on the right. Three things this changes, each deliberate:
+  - **It supersedes the 2026-08-20 scrolling-date decision** for the date only. That decision exists
+    because a header pinned *inside* the page left a long note sliding underneath it, clipped mid-line.
+    A navigation bar is not that: it reserves its own height and the page begins below it, so the
+    clipping cannot come back through it. **The title stays in the scroll** for the original reason,
+    and always will.
+  - **It supersedes "prominent timestamp"** in the forbidden list below, which was written when the
+    only way to show a date was to put it over the writing width. A centred, tertiary, one-line date in
+    the navigation bar is the note saying when it was last written to, and it is what every note app on
+    the platform does.
+  - **The date is drawn exactly once.** It is not in the page and in the bar; a duplicated timestamp
+    reads as a bug and VoiceOver says it twice.
+  - It is `updatedAt`, in the reader's locale, to the minute. Not `createdAt` — the timeline already
+    says when a note was born, and what a reader wants from the note in front of them is when it last
+    changed. Not a hand-written `MMMM d, yyyy` pattern, which is only correct in English.
+  - **Still no overflow menu.** Share is one button because it is one verb. The moment it becomes `…`,
+    duplicate / word count / pin have a door (§7).
 - The editor has **no overflow menu**. Deleting a note happens on the timeline, by swiping it —
   one place, one gesture, still soft-delete + Undo with no confirmation dialog. (Changed 2026-08-19;
   the editor previously held a `Delete Note` overflow. An overflow in the editor is how share /
   export / duplicate / word count / pin arrive, and those are all on the do-not-build list (§7) —
   removing the menu removes the door.)
 - Forbidden default UI: Save button, `Done`, overflow menu, attachment row, AI button, word count,
-  prominent timestamp, and any bar that occupies the writing width or sits above the note's text.
+  and any bar that occupies the writing width or sits above the note's text. (`prominent timestamp`
+  left this list on 2026-08-26 — see the header rule above. The navigation bar is not "a bar that
+  occupies the writing width": it is the bar the platform already draws, and the note begins beneath
+  it.)
   - **The writing toolbar is not that bar** (amended 2026-08-20; this list previously forbade a
     "formatting bar", a "standalone checklist button", and named `H1 H2 • 1. ☑` as the forbidden
     keyboard-accessory row). What ships is a floating island below the note, above the keyboard,
@@ -408,8 +534,11 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
   state any.** Structure may be *translated* from what the clipboard states outright — an HTML heading
   becomes a Heading, a list item becomes a list item, a checkbox becomes a Checklist item — and never
   deduced: a short line is not a title, and large bold type is not a heading. External plain text MUST be
-  inserted character-for-character. Styling As Told does not have (bold, italic, links) loses the styling
-  and keeps every character of its text. See `docs/02-features.md` (Milestone A).
+  inserted character-for-character. Styling As Told does not have (bold, italic) loses the styling
+  and keeps every character of its text. **`links` left this list on 2026-08-23** (V2 Phase 1): a
+  destination is not an appearance, and a stated hyperlink now keeps both its words and its address —
+  see the links exception in §7. A destination As Told will not open (`mailto:`, a relative path,
+  `javascript:`) still keeps only its words. See `docs/02-features.md` (Milestone A).
   - **What counts as *stated* (clarified 2026-08-20; the rule above is unchanged).** A format the
     clipboard names — `public.html`, `public.rtf`, a declared Markdown type — states its own structure,
     and MAY be translated. `public.plain-text` names no format, states no structure, and MUST NOT be read
@@ -418,6 +547,26 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
     item it draws; the identical glyph in a paragraph, in a heading, or anywhere in plain text is a
     character the writer typed and MUST stay one. A list item MUST keep its structure through whatever
     element wraps its words (`<li><p>…</p></li>`).
+  - **Amendment — high-confidence code detection (2026-08-24, decided by the product owner).** The rule
+    above now reads: *never infer document structure from plain prose, **except high-confidence
+    programming/code detection on paste***. Plain text that a detector is **certain** is code MAY be
+    fenced automatically on a normal paste, so obvious Python/SQL/JavaScript/Swift/JSON/Bash/YAML arrives
+    as the code card it is. This is the **only** inference from prose anywhere in As Told, and it is
+    bounded:
+    - It MUST run **only** on `public.plain-text`, and only after every stated flavor has declined. A
+      clipboard that states structure is still translated, never re-read.
+    - It MUST name only a language `CodeHighlighting` can colour, so a detected block always arrives with
+      a real label and real syntax colour. A language that cannot be coloured MUST NOT be detected.
+    - It MUST require a **decisive** signature (one that essentially cannot occur in a sentence) or at
+      least three supporting ones, and a prose guard MUST overrule any score. A single line MUST NOT be
+      detected unless its signature is decisive.
+    - When confidence is short of certain, the text stays prose and **Paste as Code** remains the
+      writer's manual override. Detection MUST NOT alter one character of the clipboard: it adds fences
+      and nothing else.
+    - The asymmetry is the design and MUST be preserved: code left as prose costs one tap; prose turned
+      into a code card is the note being rewritten. When in doubt, do nothing.
+    See `Core/Editor/CodeDetection.swift` and `Tests/YourlyTests/CodeDetectionTests.swift`, whose
+    negative corpus is deliberately larger than its positive one.
   - **Accepted limitation (V1).** Because the canonical source syntax recognizes line-leading markers
     (`# `, `- `, `1. `, `- [ ] `), a pasted line that begins with one renders as that structure. The
     characters are unchanged and nothing else is inferred — the note reads as it was pasted, in the one
@@ -425,6 +574,28 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
     inside preserved literal text — a `<pre>` block, a fenced Markdown block. Fixing it would mean escaping
     or per-line metadata in `body`, which is a storage redesign and MUST NOT be attempted for V1; inventing
     zero-width characters or invisible metadata to beat the renderer is not a smaller version of it.
+
+**Tables — a table stays a table (amended 2026-08-24, Item 4).** The rule was "a table being edited is
+text being edited", and its `| pipes |` and `| --- |` rule came back on screen the moment the caret
+entered. That is storage, and a reader MUST never see it. Now:
+- a table is **always** drawn as its grid — reading, typing elsewhere in the note, or editing the table
+  itself. It MUST NOT flip to pipe rows from where the caret is.
+- **a cell is edited in place, in the grid.** Tap a cell to edit it; tap another to commit and move;
+  **Return** commits and moves to the next cell (A1 → B1 → C1 → A2); hardware **Tab**/**Shift-Tab** walk
+  the same order; a tap outside a cell commits and leaves. Past the last cell, editing ends — a table is
+  not a loop.
+- the header rule is never addressable. Navigation walks the table's `rows`, which does not contain it.
+- a cell is **one line**: a newline in committed text becomes a space, and a typed `|` travels escaped.
+  Multiline cells are out of scope (§7).
+- the card reports *which* cell changed and to what; the editor turns that into one ordinary,
+  **undoable** `TextEdit`. `body` stays canonical pipe rows — the table is still stored as text (§5).
+- a table too wide or too tall to lay out keeps its existing **preview** card and its reader. Preview
+  cards are not editable in place, and their touches still belong to the page.
+- **Still forbidden (§7 unchanged):** row/column insertion UI, drag resizing, sorting, formulas, merged
+  cells, multiline cells, or anything else that makes this a spreadsheet.
+- **Known gap for this pass:** with no source on screen there is no way to *add* a row from the editor.
+  Row/column insertion was deliberately excluded here and MUST be designed before a table can be grown
+  in place.
 
 **Reading vs editing (one screen, no mode toggle):**
 
@@ -535,6 +706,20 @@ Source: `docs/05-architecture.md` (whole file), `docs/06-tech-stack.md`.
 - Structure lives **inside `body`** as canonical line markers (`# `, `## `, `- `, `1. `, `- [ ] `,
   `- [x] `). MUST NOT introduce a block database, a rich-text/attributed-string format, or a second field:
   `body` stays a single plain `String`.
+- **Links and code live inside `body` too (added 2026-08-23, V2 Phases 1–2).** No new model, no second
+  field, no migration — the same bargain tables struck:
+  - a **link** is either a bare `http(s)` URL exactly as written, or `[text](absolute-http(s)-url)`,
+    whose brackets and destination are hidden at the glyph layer and whose words are what the reader
+    sees. A literal `]` in a label escapes as `\]`, as a cell escapes `\|`. Written only by paste.
+  - a **code block** is a complete ` ``` ` fence pair. Every line between the fences is **literal**:
+    `BlockKind.parse` does not run on it, `canonicalized` does not rewrite it, and no link is read out
+    of it. A fence declaring `text` is a **preformatted block** (added 2026-08-25) — the same pair, the
+    same literal lines, the same card; only the label and the absence of syntax colour differ. This is
+    what lets an architecture diagram hold `#`, `- `, `1.`, `| … |` and `[x](y)` without any of them
+    becoming structure.
+  - `MarkupDocument` is the one place both are resolved. It carries `isLiteral` per line and hidden runs
+    at arbitrary offsets, and its source↔visible mapping MUST stay **bit-identical** for any line that
+    holds neither — that is a contract, pinned by tests, not an optimization.
 - Timeline sorting & date grouping use `createdAt`, not `updatedAt`.
 - No `voiceNote` type, no transcript provenance, no audio URL after successful transcription.
 
@@ -637,6 +822,40 @@ extension · widgets · watchOS app · reminders · notifications · journaling 
 streaks · productivity analytics · AI summaries · AI rewriting · AI chat · semantic search · cloud note
 storage · iCloud sync · export · audio archive.
 
+**Sharing one note — a narrow exception (added 2026-08-26).** `export` above still reads exactly as it
+did, and `share extension` still means what it says. What is admitted is neither:
+
+- **`share extension` is the other direction.** It means As Told appearing inside *other* apps' share
+  sheets, receiving content from them. That stays excluded. This is As Told handing **one note the
+  person is looking at** to the system sheet.
+- **`export` means the library.** Selected notes, a versioned backup file, a restore path — the Pro
+  feature in `docs/09-v2-roadmap.md` §2.2, and still unbuilt and still Pro. Sharing the open note is
+  **Copy with a destination attached**, and Copy has always been free (§3: a user who cannot get their
+  own words out does not own them). `native Share Sheet` was already a §7 **P1 candidate**; this is
+  that candidate shipping, not a new direction.
+- **The system sheet, and nothing of our own around it.** No destination picker, no "Export as
+  Markdown", no social buttons, no As Told share menu. iOS decides what appears, and it decides using
+  what it already knows about that phone — which is the only version of that feature this app can have
+  without learning any of it itself (§3).
+- **Two representations of one item, never two attachments.** HTML for destinations that negotiate for
+  it, UTF-8 text for the rest, both generated by `StructuredTextExport` — the exporter the pasteboard
+  already uses. A second exporter would be a second thing to keep in step, and its first divergence
+  would be a note that copies correctly and shares wrongly.
+- **The latest edit is what is shared.** A table cell being edited lives in the card's own field until
+  it commits, so Share MUST commit pending edits and read the **text view's** own text before building
+  the payload. Sharing MUST NOT otherwise change the note: committing a cell is the writer's own edit
+  landing through the ordinary undoable path, and nothing else about the note may move.
+- **Never the placeholder.** An untitled note shares no title; the word `Title` is what an empty field
+  draws to invite one, and it MUST NOT reach anybody's inbox.
+- **An empty note has nothing to share.** Share stays **visible and disabled** rather than appearing
+  and disappearing as the first character is typed — the header must not move while somebody writes.
+  Emptiness is judged on visible text, the same test `Note.isEmptyDraft` applies.
+- **No URL is invented for the sheet's header.** `LPLinkMetadata` gets the note's name and the app's
+  icon. Handing it a fabricated web address would mean a link to nothing and a network request made on
+  behalf of a note that never leaves the device.
+- **Still forbidden:** an As Told account, an upload, a hosted note, a share *link*, collaboration, and
+  any record of what was shared or where. Sharing is local, free, and unlogged.
+
 **Tables — the one narrow exception (amended 2026-08-21).** This list read `tables`, flatly. It now
 reads *table editing*, because those are two different products:
 
@@ -651,19 +870,220 @@ reads *table editing*, because those are two different products:
     no delimiter row, may reach the screen. A table too wide to read on a phone shows a compact preview
     (the first columns and rows, and a line saying how much more there is) that opens the full-screen
     reader. **How a note stores a table is implementation, and a reader MUST NOT have to decode it.**
-  - **Writing** — the canonical source, exactly as typed. A table being edited is text being edited, and
-    the caret has to be somewhere the writer can see it. The note returns to its tables the moment the
-    body gives up the keyboard.
+  - **Writing** — the canonical source, exactly as typed, save for the delimiter row, which is drawn
+    nowhere (below). A table being edited is text being edited, and the caret has to be somewhere the
+    writer can see it.
+  - **Only the table the caret is in shows its source (amended 2026-08-23).** This read "the note returns
+    to its tables the moment the body gives up the keyboard", which made *having the keyboard up at all*
+    the condition — so tapping anywhere to add one sentence turned **every** table in the note back into
+    pipe rows at once. A note of thirteen tables became thirteen blocks of raw syntax because of an edit
+    happening somewhere else entirely, and the note looked broken. The condition is now the caret's
+    position, not the keyboard's state: a table whose lines the caret or selection touches shows its
+    source, every other table stays a card, and it returns to a card the moment the caret leaves.
+  - **The delimiter row is storage, and is never drawn (amended 2026-08-23).** The **Writing** bullet
+    above read "the canonical source, exactly as typed", and `| --- | --- |` was drawn along with it.
+    It is the one line of a table's source that says nothing about the table's contents: it records
+    which row is the header, nobody typed it to be read, and a row of dashes cutting the source in half
+    makes the rows around it harder to read, not easier. So it is not drawn on **any** surface, reading
+    or writing. It is **not removed** — `body` keeps every character, which is what lets the parser go
+    on working, copy go on round-tripping, and every note that already exists get this without being
+    rewritten. Two consequences are part of the rule, not implementation detail:
+    - **A caret MUST NOT be left on it.** The line has no glyphs and no height, so a caret there is
+      invisible, and the next keystroke would land inside the row that tells the parser where the
+      header is — turning `| --- |` into a data row and the table back into prose. This is the §4 rule
+      that keeps a caret out of a hidden block marker, applied to a hidden line.
+    - **Backspace at the start of the first row joins that row to the header**, taking the hidden line
+      with it. Joining it to the delimiter instead welds data onto the header rule
+      (`| --- | --- || 20×30 |`), which stops being a delimiter and takes the table with it. What is
+      left is still a table — two pipe rows without a rule — so the block degrades rather than breaks.
   - The presentation MUST NOT be a re-spacing of the source: hiding some characters and repositioning
     others (invisible tab stops for the pipes, a drawn hairline over the delimiter row) was tried and
     rejected on 2026-08-21 — it leaked stray pipes, banded backgrounds, and space-aligned columns, and
-    the caret could land inside what looked like a rendered table.
+    the caret could land inside what looked like a rendered table. **That rejection is about *moving*
+    things.** The rejected attempt left the source on screen and dressed it up, hiding some characters
+    while repositioning others, so what the writer saw matched neither the text nor a table. Not
+    drawing the delimiter row dresses nothing up and moves nothing: one line stops being drawn, and
+    every other character stays exactly where it was typed.
 - **Still forbidden: everything that makes it a spreadsheet.** No Table button on the writing toolbar,
   no graphical creation, no row/column insertion or deletion UI, no resizing, merged cells, sorting, or
   formulas, no cell-by-cell keyboard navigation, and voice MUST NOT create tables. Editing a table
   means editing its text, like every other line in the note.
 - **The reader reads.** It MUST NOT gain an edit mode. The moment a cell can be typed into on that
   screen, this exception has become the feature it was written to exclude.
+
+**Entering a note MUST NOT de-render a block the writer is not editing (added 2026-08-23).** This binds
+every structured block — tables today, code blocks now, anything with two presentations later. Exactly
+one block may show its source at a time: the one the caret or selection is inside. The change MUST hold
+the caret's position **on screen** across the height difference, because a block flipping shape above the
+caret otherwise moves the words out from under the writer's finger mid-sentence.
+
+**A block MUST NOT be a dead end (added 2026-08-28).** This binds every structured block, for the same
+reason as the rule above. When a rendered block is the **last thing in `body`** there is no line after it
+to put a caret on: the closing fence is the end of the document, a caret may not settle on a fence
+(above), and a table's last row is hidden behind its card — so every tap under the card resolved back
+*inside* the block, and a writer who had just pasted a query could not write the sentence explaining it.
+
+- A tap **below** a block that ends the note MUST open an ordinary paragraph after it and put the caret
+  there, as one ordinary undoable edit against `body`.
+- Exactly **one newline**, made **on demand**. Nothing may append a trailing paragraph to a block in
+  advance: a note that ends in a block is a good note until somebody asks to write past it, and a blank
+  line nobody typed would be in `body`, in Share, and in every copy of it (§5).
+- The block MUST stay rendered across it — fences hidden, card drawn, source never exposed.
+
+**Links — the second narrow exception (amended 2026-08-23, V2 Phase 1).** `full rich text` above still
+reads exactly as it did. A link is admitted because it is not styling:
+
+- **A link is a destination, not an appearance.** Bold and italic say how words should look; a link says
+  where they go. That is why this does not open the door it looks like it opens — there is still no
+  font picker, no colour, no size, no alignment, and no inline formatting of any kind.
+- **Two spellings in `body`, and only two.** A **bare** `http(s)` URL is the characters the writer typed
+  or spoke, read back as a link and never rewritten. A **labelled** `[text](url)` exists only where a
+  clipboard stated a hyperlink whose text differs from its href. `[https://x](https://x)` MUST NOT be
+  written — the app does not invent syntax around words nobody wrote.
+- **Strict, like a table row's opening pipe.** A bare URL needs an explicit scheme (`apple.com` in prose
+  is prose), and `[a](b)` is a link only when `b` is an absolute `http(s)` URL — so "[see](this)" keeps
+  its brackets as words. **`http` and `https` are the only schemes**, and that is a security rule, not a
+  formality: a tappable `javascript:` or `file:` run arriving from a clipboard is a hazard (§3).
+- **The caret rule generalizes.** A caret MUST NOT sit *inside* hidden link syntax, the way it may not
+  sit in front of a hidden marker. It may sit at a hidden run's leading edge — that is the end of the
+  words before it, which is a place a writer is entitled to be.
+- **Colour is never the only signal.** Links carry VoiceOver link semantics (`spokenText` says "Link, …")
+  and gain an underline when Differentiate Without Color is on (§4).
+- **Copy keeps both halves.** Rich-capable apps receive a real `<a href>`; plain-text apps receive
+  `words — url`. "The page as it reads" would destroy a destination the writer put in their own note,
+  and §3 says the note is theirs. This is a documented exception to the copy rule, like a table's source.
+- **Still forbidden:** a link *button*, a URL-entry sheet, link previews, unfurling, favicons, an
+  in-app browser, and link inspection UI. Editing a link means editing its text, like every other line.
+
+**Code blocks — the third narrow exception (amended 2026-08-23, V2 Phase 2).** Fenced code is admitted
+on exactly the terms tables were, plus one that is new and is the whole point:
+
+- **Its characters mean nothing to As Told.** A `#` inside a fence is a comment, not a heading; a `- `
+  is a YAML item, not a bullet. So a fence does not merely render differently — it switches marker
+  parsing **off** for the lines inside it. Nothing may rewrite those lines, including on save.
+- **Both fences required.** An unterminated ` ``` ` is ordinary text, so a stray fence can never swallow
+  the rest of a note into a card.
+- **Two presentations, decided by who is looking**, as with tables. **Reading** — a real `CodeBlockView`:
+  monospaced, a quiet ground, indentation exact, long lines **scrolling** rather than wrapping, with
+  **Copy Code**.
+- **Writing — the block MUST still look like code (amended 2026-08-24, Item 5).** This rule previously
+  read "the canonical fenced source, fences visible". That was honest about the storage and wrong about
+  the note: tapping a code card replaced it with ```` ```python ```` and a wall of unstyled text, so the
+  block visibly broke the moment anyone touched it. **The fences are storage — exactly like a table's
+  `| --- |` row — and a reader MUST never have to look past them.** While a block is being edited:
+  - both fence lines MUST have their glyphs hidden, and they carry **everything the card draws around
+    the code** (amended 2026-08-28): the opening fence keeps the block's top margin, the header strip the
+    language label and **Copy Code** are drawn into, and the card's top padding; the closing fence keeps
+    the bottom padding and the block's bottom margin. It previously kept the header alone, so the editing
+    presentation had no margin above the block while the reading one did, and moving focus to the title
+    slid the whole block down the page. **Moving focus MUST NOT change where a block begins.**
+  - the ground, the monospaced face, the language label, **Copy Code**, indentation, and **syntax colour**
+    MUST all stay on. Colour is applied to the text storage so it survives every keystroke, and is still
+    colour only — it MUST NOT insert, remove, or reorder a character.
+  - the code between the fences MUST be edited **in place, in the note's own text view**. There MUST NOT
+    be a second editor, a sheet, a separate code-document model, execution, autocomplete, or any other
+    IDE behaviour (§7 is unchanged). It is a note that happens to contain code.
+  - the caret MUST NOT be able to settle on a fence line (`CodeBlock.caretEscape`), and the fences and the
+    stored language MUST NOT be editable through the visual surface. `body` stays canonical fenced source.
+  - the language is whatever the fence stored. It MUST NOT be re-detected while typing.
+  - **Accepted difference (V1).** Long lines **wrap** while a block is being edited, where a read block
+    scrolls sideways. In-place editing means the note's own text container lays the code out, and a
+    nested horizontal scroller around live editable text is the second editing surface this rule forbids.
+  - A block with **no code in it yet** keeps its fences on screen: hiding both would leave an empty strip
+    the writer can neither identify nor find their way into.
+- **What a touch on the card does (corrected 2026-08-24).** This bullet read "selectable" flatly. The
+  shipped card is not, and the wording was stale rather than the code being wrong — so this describes
+  what ships: **a card is inert except Copy Code, in both modes.** Every other touch passes through to
+  the editor, which is what puts the caret into the block. That is not a preference: a card that owned
+  its touches while the source was hidden behind it left the block with **no way in** — a tap did
+  nothing and the code could not be reached at all. Selecting part of a block means tapping into it and
+  selecting the source, like every other line in the note; **Copy Code** covers taking the whole block.
+  - **Selection while *reading* is undecided and unbuilt (2026-08-24).** A reader cannot select three
+    lines out of twenty without first tapping in, which turns the card into source. Enabling selection
+    only while reading is a real option — the card knows nothing about mode today, so it is a change to
+    both the view and the presenter, not a flag — but it MUST NOT reintroduce the no-way-in bug, and it
+    is not written down as a requirement until it is decided and built.
+- **Scoped to the block the caret is in**, exactly as tables are (above). Entering the note MUST NOT
+  de-render a block the writer is not editing. While the caret sits in a code card, that card is
+  transparent to touches except **Copy Code**, so a tap reaches the text underneath and puts the caret
+  in the code — otherwise a block whose source is hidden behind a card would have no way in.
+- **Structure controls are withdrawn while the caret is in code.** The Style menu and its shortcuts MUST
+  NOT be reachable there; applying one would write a marker into somebody's program.
+- **Copy Code and copied text drop the fences.** They are storage delimiters, not user content. The
+  private As Told → As Told representation still carries the canonical fenced source.
+- **Syntax colour, and a language label (amended 2026-08-24).** This list read "and — for this pass —
+  syntax highlighting", which was the right call for the pass that built the card and the wrong one to
+  keep: a monochrome block does not meet the bar this exception set itself, because *code pasted into
+  As Told should still look like code*, and code has never looked like one colour. Admitted on these
+  terms, all of which are binding:
+  - **Only inside a rendered `CodeBlockView`.** The editing presentation stays the plain canonical
+    source. There is no syntax-aware editor, and building one would be the IDE this excludes.
+  - **Only a language the source declared**, from a closed list As Told knows (`CodeHighlighting`). A
+    language MUST NOT be inferred from the code's contents — that is the "short line is not a heading"
+    rule (§2, §4) wearing a different hat. An undeclared or unrecognised block is drawn in one colour,
+    exactly as it was before this shipped. ASCII diagrams, logs, and preformatted prose are not
+    programs, and nothing may decide otherwise on their behalf.
+  - **Five tokens, no more:** keywords, strings, comments, numbers, and the names being called
+    (types/functions) — the one such distinction a scanner can make without guessing.
+  - **Semantic adaptive tokens, measured.** Light and Dark are one definition, and every token clears
+    **4.5:1 against `CodeSurface`** — the ground it is actually read on. A syntax colour is not exempt
+    from the floor every other glyph in this app clears (§4). Looking like an IDE is not a reason to
+    be harder to read.
+  - **Colour only.** Highlighting MUST NOT alter `Note.body`, and MUST NOT change, reorder, or insert
+    a single character of the code. **Copy Code still copies the original code**, fences dropped and
+    styling with them.
+  - **The label says what the source said.** A block whose fence named a language shows a quiet name —
+    `SQL`, `Python` — at the top of the card. A block that named none shows **nothing**: not "Code",
+    and not "Plain text" invented on its behalf. A label nobody wrote is a guess, and an empty corner is
+    quieter than a wrong word.
+
+    _(Amended 2026-08-25 — preformatted blocks.)_ "Plain text" is now a label a **source can state**,
+    and stating it is not the same as inventing it. A fence reading `text`, `plaintext`, or `txt`, or a
+    `<pre>` that never opened a `<code>`, has declared its characters preformatted; that block is
+    labelled **Plain text**. The rule above is unchanged where it bites: a fence naming **nothing** —
+    which is what **Paste as Code** writes — still shows no label at all.
+- **Preformatted blocks — the same exception, one axis wider (added 2026-08-25).** An ASCII diagram, a
+  directory tree, a column of aligned figures: text whose **alignment is its content**. It is admitted on
+  exactly the terms above and adds nothing to them, because it is not a new structure — it is a fenced
+  block whose declared language is `text`, read by the same parser, drawn by the same card, edited in
+  place by the same rules, and copied by the same path. What differs is only what is true of it:
+  - **The card says "Plain text" and shows no syntax colour.** `text` is not a language `CodeHighlighting`
+    knows, so there is nothing to colour and nothing is special-cased to prevent it.
+  - **Read three spellings, write one.** `text`, `plaintext`, and `txt` are all understood; every block
+    As Told writes says `text`.
+  - **`<pre>` means preformatted; `<code>` means code.** HTML states both outright, and the importer
+    translates the claim rather than making one. A `<pre>` with no `<code>` inside it lands as plain
+    text; a `<pre><code>` — with or without a language class — lands as code.
+  - **High-confidence detection on paste (amended 2026-08-25, later the same day).** This clause first
+    read "It is never inferred. There is no ASCII-art detector and there MUST NOT be one." That was the
+    right call for the pass that built the card and the wrong one to keep, and the screenshots settled
+    it: a clipboard carrying only `public.utf8-plain-text` — which is what a chat app's Copy button
+    gives — arrived as prose, and proportional type threw its columns out of line immediately. The
+    asymmetry §4 relies on runs the *other* way here. Code left as prose is a small disappointment
+    fixed by one tap; **a diagram left as prose is unreadable**, because its alignment is its content.
+    Admitted on these terms, all binding:
+    - **Only real Unicode box-drawing characters count** — `│ ├ └ ─ ┌ ┐ ┬ ┼ ┤`, U+2500–U+257F. Never
+      ASCII `|`, `-`, or `+`. Nobody types `├──` in a sentence; everybody types `|` and `-`. This one
+      discriminator is what keeps a grocery list, a Markdown rule, `A | B`, and `A`/`|`/`B` out, and it
+      is why a Markdown table can never be caught: its pipes are ASCII.
+    - **Three lines and two independent signals**, never one. Each signal alone is plausible in
+      ordinary writing; their coincidence — connectors that repeat, and repeat *in the same column* —
+      is not something a sentence produces.
+    - **Code is asked first.** `CodeDetection` answers only for languages `CodeHighlighting` can
+      colour, and no program contains box-drawing characters, so the two cannot both claim a paste.
+    - **It answers one question and no others**: "are these characters aligned art?" Nothing about what
+      the art means (§2). It MUST NOT redraw, convert, or interpret the drawing.
+    - **Anything short of certain stays prose**, with **Paste as Preformatted** as the writer's manual
+      override — the same asymmetry, and the same escape hatch, that **Paste as Code** has.
+  - **As Told MUST NOT interpret the drawing.** Not in the card, not in a preview, not to VoiceOver.
+    `│`, `├`, `▼` are read as the characters they are; describing them as "a branch going down to
+    Airflow" is As Told deciding what somebody's diagram means (§2). A screen reader is told **"Plain
+    text block"** and then read the characters — the same courtesy a code block gets, and no more.
+- **Still forbidden:** running code, a console, a terminal, a compiler, autocomplete, linting, an editor
+  sheet of its own, inferred languages, ASCII-to-Mermaid conversion, Mermaid or any other diagram rendering,
+  graphical diagram editing, and a second syntax-aware editing surface. The bar is unchanged:
+  *code pasted into As Told should still look like code*, and a diagram pasted into As Told should still
+  look exactly as its author aligned it — neither like an IDE, nor like a drawing tool.
 
 > _(The manual theme selector was previously excluded but has been added — see §1. "checklists" was
 > previously listed here as permanently excluded; reclassified 2026-08-18 as a guarded milestone, and
@@ -808,6 +1228,47 @@ Preconditions — each is real work against the shipped architecture, not a bolt
   statement the production architecture does not actually guarantee (voice transcription involves server
   processing — see §3).
 
+**Language claims (added 2026-08-28).** Marketing had been describing As Told as an *English / Telugu /
+Hindi* app, which is a claim about the **benchmark**, not about the product. The relay deliberately does
+not send a `language` parameter — forcing one would collapse code-switching (§2) — so the shipped
+pipeline is multilingual, and the five groups in §1 are the ones whose quality is *measured* before a
+release. Both halves of that are binding on copy:
+
+- **MAY say** "multilingual voice transcription", "speak the way you actually speak", "switch languages
+  naturally", "your words stay in the language you used", "no forced translation".
+- **MUST NOT say** "all languages", "every language", a language *count* ("100+ languages"), "perfect
+  transcription", or "understands any accent". None of those is measured, and a count is a promise about
+  languages nobody has benchmarked.
+- **English, Telugu, Hindi and the code-switched pairs appear as tested evidence, never as the
+  headline** — worded so a reader understands them as what has been verified most closely, not as the
+  only languages accepted. Where accuracy is discussed, say plainly that it varies by language, accent,
+  and recording conditions.
+- **Tightened 2026-08-29, after the words changed and the framing didn't.** The site was reworded to
+  lead with the capability and still *looked* like a three-language product: `/languages` opened with a
+  row of five chips (Telugu · Hindi · Telugu + English · Hindi + English · English) over a tabbed
+  Telugu/Hindi example switcher, the homepage carried two devices captioned by language, and
+  "Multilingual" sat in the primary navigation as if it were a fourth thing As Told is. A reader takes a
+  chip row as the supported-language list no matter what the footnote under it says. So:
+  the benchmark groups are named in **exactly one place — the Support answer for "Which languages can I
+  speak?"** — and described there as release test groups. They must not appear in a hero, a chip or pill
+  row, a tab bar, a screenshot caption, an image `alt`, a feature grid, or a CTA on any page. A
+  screenshot of a mixed-language note is fine and welcome; **labelling it with the languages is not**.
+  Multilingual is a property of voice, so it lives inside the voice story rather than in the site's
+  primary navigation.
+- **Tightened again 2026-08-29, on the pictures.** Removing the labels was not enough, because the
+  *picture* is the claim. With the words fixed, the marketing site still closed its write-or-speak
+  sequence with a Telugu/English note and illustrated its multilingual section with a Hindi/English
+  one — uncaptioned, `alt` naming no language, and still teaching every visitor that As Told is an
+  English + Telugu + Hindi app. So, **on the website**: no screenshot of a note written in a
+  benchmark script, captioned or not. `hindi-light` and `voice-light` are deleted from
+  `website/public/`; the raws stay in `docs/appstore/raw/` for testing. The multilingual argument is
+  made by **the recording screen**, which carries no language control — *there is nothing to pick* is
+  a claim a picture can actually prove, and an absence cannot be misread as a list.
+
+  This binds the site, not the app and not the App Store listing: frame `03-languages` shows a
+  mixed-language note under a caption that names no language, and a store visitor looking at ten
+  frames of product is a different reader from someone deciding in five seconds what As Told *is*.
+
 ### Architecture non-goals (do not build)
 
 server-side note database · event-sourced note history · microservices · Kafka · GraphQL · vector DB ·
@@ -818,7 +1279,8 @@ auth platform · realtime collaboration stack · a sync engine before sync is a 
 
 ### P1 candidates (only after stable V1, not now)
 
-Optional iCloud sync (no custom account) · keep original audio (off by default) · native Share Sheet ·
+Optional iCloud sync (no custom account) · keep original audio (off by default) · ~~native Share
+Sheet~~ (**shipped 2026-08-26** — per-note Share; see the share exception above) ·
 export all (text/Markdown) · Lock Screen / Control Center quick capture · Apple Watch capture · manual
 appearance override (only if users ask) · pin note (evaluate against chronological philosophy first).
 
@@ -862,8 +1324,20 @@ Source: `docs/01-product-requirements.md` §15, `docs/07-build-plan.md` (Definit
   listing, website, and support content all read **As Told**.
 - The verification suite in `docs/07-build-plan.md` ("Verification suite") is green at **at least the
   current committed baseline**, with a clean typecheck and a succeeding Release build. As of this
-  checkpoint that baseline is **649 unit, 59 UI, 136 relay** (measured, not estimated, 2026-08-21;
-  raised from 625/59/84 by the monthly voice allowance the same day).
+  checkpoint that baseline is **1280 unit, 92 UI, 136 relay** (both app counts measured 2026-08-28 —
+  full `-only-testing:YourlyTests` and `-only-testing:YourlyUITests` runs, 1280 tests in 166 suites and
+  92 UI tests, green, raised from 1202/83 by Voice V2 Phase 2B: retained recordings, the 24-hour
+  lifetime and its sweep, Retry / Delete Recording, one-shot recovery of a recording that outlived its
+  capture — including one left mid-upload — route-change policy, and background durability. The
+  relay count is carried forward, not re-measured: no relay file was touched, so it cannot have moved.
+  Earlier: 1134 unit measured 2026-08-26 in 146 suites; raised from 1102 by per-note Share; raised from 846 by preformatted /
+  diagram blocks, high-confidence diagram detection, in-place code editing, the card pan rule, and
+  live Differentiate Without Color updates. The
+  UI and relay counts are **carried forward, not re-measured** in that pass: the UI suite was
+  deliberately not run, and no relay file was touched, so its count cannot have moved. Earlier: 846 on
+  2026-08-24, from 649/59/136, by V2 links, code blocks, rich paste, per-block card rendering, hiding
+  the table delimiter row, pasted code whose lines are elements, and code syntax colour — all
+  client-only work, which is why the relay count has not changed since).
   If additional tests are committed later, **the higher committed count becomes authoritative and this
   line MUST be updated** — a run that passes only the number written here while the suite has grown
   past it is a failure, not a pass. This line has gone stale three times ("305 unit, 33 UI", then

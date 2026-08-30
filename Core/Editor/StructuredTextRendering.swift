@@ -13,6 +13,12 @@ extension NSAttributedString.Key {
     /// Marks every line of a table block while its **source** is on screen — that is, while the note is
     /// being edited — so the page can draw the quiet container that groups those lines into one table.
     static let astTableBlock = NSAttributedString.Key("astTableBlock")
+    /// Marks every line of a code block while its **source** is on screen, so the page can draw the
+    /// quiet ground that groups those lines into one block.
+    static let astCodeBlock = NSAttributedString.Key("astCodeBlock")
+    /// Carries a link's destination on the run the reader can see and tap. The hidden syntax around it
+    /// is marked `astHiddenMarker` like any other marker — a destination is not a glyph.
+    static let astLink = NSAttributedString.Key("astLink")
 }
 
 enum StructuredTextStyle {
@@ -153,10 +159,18 @@ enum StructuredTextStyler {
     /// - Parameter tableCards: the height to reserve for each table that is being drawn as a card,
     ///   keyed by the lines it occupies. Empty while the note is being edited, which is what puts the
     ///   canonical source back on screen for the one person entitled to see it — the person editing it.
+    ///
+    /// - Parameter underlinesLinks: whether a link carries an underline as well as its colour. Driven
+    ///   by Differentiate Without Color: colour alone may not be the only thing telling a reader that
+    ///   these words go somewhere (RULES.md §4).
     static func apply(to storage: NSTextStorage, textColor: UIColor,
                       secondaryColor: UIColor = .secondaryLabel,
+                      linkColor: UIColor = .link,
                       availableWidth: CGFloat = 0,
-                      tableCards: [ClosedRange<Int>: CGFloat] = [:]) {
+                      tableCards: [ClosedRange<Int>: CGFloat] = [:],
+                      codeCards: [ClosedRange<Int>: CGFloat] = [:],
+                      codeTokens: [CodeHighlighting.Token: UIColor] = [:],
+                      underlinesLinks: Bool = false) {
         let text = storage.string
         let doc = MarkupDocument(text)
         let full = NSRange(location: 0, length: (text as NSString).length)
@@ -164,6 +178,9 @@ enum StructuredTextStyler {
         storage.beginEditing()
         storage.removeAttribute(.astHiddenMarker, range: full)
         storage.removeAttribute(.astTableBlock, range: full)
+        storage.removeAttribute(.astCodeBlock, range: full)
+        storage.removeAttribute(.astLink, range: full)
+        storage.removeAttribute(.underlineStyle, range: full)
 
         for (index, line) in doc.lines.enumerated() {
             // The line's own characters *plus its terminating newline*. A newline belongs to the
@@ -185,17 +202,216 @@ enum StructuredTextStyler {
                 let markerRange = NSRange(location: line.sourceRange.location, length: line.markerLength)
                 storage.addAttribute(.astHiddenMarker, value: true, range: markerRange)
             }
+
+            // A link's bracket and destination are hidden exactly the way a block marker is; what is
+            // left is the words, in the link colour, carrying the destination for the tap.
+            for link in line.links {
+                for run in link.hiddenRuns {
+                    storage.addAttribute(.astHiddenMarker, value: true, range: run)
+                }
+                let visible = link.displayRange
+                guard visible.length > 0, NSMaxRange(visible) <= full.length else { continue }
+                storage.addAttribute(.foregroundColor, value: linkColor, range: visible)
+                storage.addAttribute(.astLink, value: link.destination, range: visible)
+                if underlinesLinks {
+                    storage.addAttribute(.underlineStyle,
+                                         value: NSUnderlineStyle.single.rawValue, range: visible)
+                    storage.addAttribute(.underlineColor, value: linkColor, range: visible)
+                }
+            }
         }
 
-        if tableCards.isEmpty {
-            styleTableSource(in: storage, doc: doc, secondaryColor: secondaryColor)
-        } else {
-            reserveTableCards(in: storage, doc: doc, heights: tableCards, full: full)
-        }
+        // Both presentations, in one pass. Per-block editing means a note can hold a table the caret
+        // is inside — showing its source — and another table three lines down that is still a card, so
+        // "cards or source" was never a property of the note: it is a property of each block. Deciding
+        // it for the whole note left the block being edited with none of its editing presentation the
+        // moment a second block of the same kind was on the page (RULES.md §7, amended 2026-08-23).
+        styleTableSource(in: storage, doc: doc, secondaryColor: secondaryColor,
+                         drawnAsCards: Set(tableCards.keys))
+        reserveCards(in: storage, doc: doc, heights: tableCards, full: full)
+
+        styleCodeSource(in: storage, doc: doc, secondaryColor: secondaryColor,
+                        tokens: codeTokens, full: full, drawnAsCards: Set(codeCards.keys))
+        reserveCards(in: storage, doc: doc, heights: codeCards, full: full)
         storage.endEditing()
     }
 
-    /// Reading: the table's lines give up their glyphs and keep only their height.
+    /// Editing: a code block that still looks like code.
+    ///
+    /// Until 2026-08-24 this showed the fences, recessed to the colour of punctuation. That was honest
+    /// about the storage and wrong about the note: tapping a code card replaced it with ```` ```python ````
+    /// and a wall of unstyled text, so the block a reader had been looking at visibly broke the moment
+    /// they touched it. The fences are storage — exactly like a table's `| --- |` row — and a reader
+    /// should never have to look past them (RULES.md §7, amended 2026-08-24).
+    ///
+    /// So the block keeps its ground, its monospaced face, its language label and its syntax colour the
+    /// whole time, and only the two fence lines give up their glyphs:
+    ///
+    ///  - the **opening** fence keeps the air above the block, the header `CodeBlockView` draws the
+    ///    language and Copy Code into, and the card's own top padding. It has no glyphs, so nothing of
+    ///    ```` ```python ```` is drawn.
+    ///  - the **closing** fence keeps the block's bottom padding and the air below it.
+    ///  - everything between them is ordinary, editable, syntax-coloured text in the text view itself.
+    ///    No second editor, no sheet, no separate document — the note is still one string being typed
+    ///    into (RULES.md §5, §7).
+    ///
+    /// Syntax colour is applied to the *storage* here rather than to a card's private copy, which is
+    /// what lets it stay on while the writer types. It is still colour and nothing else: the spans come
+    /// from `CodeHighlighting`, which never inserts, removes, or reorders a character.
+    private static func styleCodeSource(in storage: NSTextStorage, doc: MarkupDocument,
+                                        secondaryColor: UIColor,
+                                        tokens: [CodeHighlighting.Token: UIColor] = [:],
+                                        full: NSRange = NSRange(location: 0, length: 0),
+                                        drawnAsCards: Set<ClosedRange<Int>> = []) {
+        let text = storage.string
+        guard text.contains(CodeBlock.fence) else { return }   // answered cheaply, as tables are
+        let font = CodeCardLayout.font()
+
+        for block in CodeBlock.blocks(in: text) where !drawnAsCards.contains(block.lineRange) {
+            guard block.lineRange.lowerBound < doc.lines.count,
+                  block.lineRange.upperBound < doc.lines.count else { continue }
+            let opening = doc.lines[block.lineRange.lowerBound]
+            let closing = doc.lines[block.lineRange.upperBound]
+            let range = NSRange(location: opening.sourceRange.location,
+                                length: closing.sourceRange.location + closing.sourceRange.length
+                                    - opening.sourceRange.location)
+            guard range.length > 0 else { continue }
+
+            storage.addAttribute(.astCodeBlock, value: NSValue(range: range), range: range)
+            storage.addAttribute(.font, value: font, range: range)
+
+            // A block with nothing in it yet keeps its fences on screen. Hiding both would leave the
+            // writer looking at an empty strip with no way to tell what it is or where to type.
+            guard block.lineRange.upperBound > block.lineRange.lowerBound + 1 else {
+                for line in [opening, closing] where line.sourceRange.length > 0 {
+                    storage.addAttribute(.foregroundColor, value: secondaryColor, range: line.sourceRange)
+                }
+                continue
+            }
+
+            colourCode(in: storage, block: block, doc: doc, tokens: tokens)
+            insetCode(in: storage, block: block, doc: doc)
+            // The two fences carry everything the card draws around its code, so that a block occupies
+            // the same space whichever presentation is on screen: the air above the block, the header
+            // strip, and the card's own top padding all live on the opening fence; the bottom padding
+            // and the air below it on the closing one. Without the margins here, moving focus to the
+            // title flipped the block to its card and moved it *down* the page by `blockMargin` — the
+            // one presentation had a margin above it and the other did not (fixed 2026-08-28).
+            hide(opening, in: storage,
+                 height: CodeCardLayout.Metrics.blockMargin
+                     + CodeCardLayout.Metrics.headerHeight
+                     + CodeCardLayout.Metrics.cardInsetV,
+                 full: full)
+            hide(closing, in: storage,
+                 height: CodeCardLayout.Metrics.cardInsetV + CodeCardLayout.Metrics.blockMargin,
+                 full: full)
+        }
+    }
+
+    /// The syntax spans, mapped from the block's own code offsets into the note's.
+    ///
+    /// `block.code` is the code lines joined by "\n", and those lines are consecutive in `body` with the
+    /// same separator, so offset *i* of the code is offset `codeStart + i` of the source. Every span is
+    /// bounds-checked against the code region anyway — colour must never be able to reach past it.
+    private static func colourCode(in storage: NSTextStorage, block: CodeBlock,
+                                   doc: MarkupDocument, tokens: [CodeHighlighting.Token: UIColor]) {
+        guard let language = CodeHighlighting.language(named: block.language), !tokens.isEmpty else { return }
+        let firstCode = doc.lines[block.lineRange.lowerBound + 1]
+        let lastCode = doc.lines[block.lineRange.upperBound - 1]
+        let start = firstCode.sourceRange.location
+        let end = lastCode.sourceRange.location + lastCode.sourceRange.length
+        guard end > start else { return }
+
+        for span in CodeHighlighting.spans(in: block.code, language: language) {
+            guard let colour = tokens[span.token] else { continue }
+            let mapped = NSRange(location: start + span.range.location, length: span.range.length)
+            guard mapped.location >= start, NSMaxRange(mapped) <= end else { continue }
+            storage.addAttribute(.foregroundColor, value: colour, range: mapped)
+        }
+    }
+
+    /// Sits the code where the card draws it.
+    ///
+    /// Measured rather than assumed, and it is the difference between "the block stays put" and "the
+    /// block jumps": a card draws its code `cardInsetH` in from its own edge, while the text view lays
+    /// the same characters out against the writing margin. Without this every line of a block slid 14
+    /// points left the moment the caret arrived — which is precisely the visible break this whole
+    /// presentation exists to remove.
+    private static func insetCode(in storage: NSTextStorage, block: CodeBlock, doc: MarkupDocument) {
+        let inset = CodeCardLayout.Metrics.cardInsetH
+        for index in (block.lineRange.lowerBound + 1)...(block.lineRange.upperBound - 1)
+        where index < doc.lines.count {
+            let line = doc.lines[index]
+            let lineEnd = line.sourceRange.location + line.sourceRange.length
+            let range = NSRange(location: line.sourceRange.location,
+                                length: line.sourceRange.length
+                                    + (lineEnd < storage.length ? 1 : 0))
+            guard range.length > 0 else { continue }
+            let existing = storage.attribute(.paragraphStyle, at: range.location,
+                                             effectiveRange: nil) as? NSParagraphStyle
+            let paragraph = (existing?.mutableCopy() as? NSMutableParagraphStyle)
+                ?? NSMutableParagraphStyle()
+            paragraph.firstLineHeadIndent = inset
+            paragraph.headIndent = inset
+            // A negative tail indent is measured from the trailing margin, so a long line wraps inside
+            // the card rather than running under its right edge.
+            paragraph.tailIndent = -inset
+            storage.addAttribute(.paragraphStyle, value: paragraph, range: range)
+        }
+    }
+
+    /// Takes one line's glyphs away and pins the height of the strip they leave behind.
+    ///
+    /// The hidden attribute goes on the line's characters and **not** its newline — a hidden character
+    /// is drawn as a zero-advancement control glyph, and doing that to a newline overrides the line
+    /// break it exists to perform, collapsing the following line into this one's fragment. The
+    /// paragraph style does include the newline, because a paragraph's height is set by the whole
+    /// paragraph and the newline is its last character. (Both lessons are the table rule row's,
+    /// learned the hard way on 2026-08-23.)
+    private static func hide(_ line: MarkupDocument.Line, in storage: NSTextStorage,
+                             height: CGFloat, full: NSRange) {
+        guard line.sourceRange.length > 0 else { return }
+        storage.addAttribute(.astHiddenMarker, value: true, range: line.sourceRange)
+
+        let lineEnd = line.sourceRange.location + line.sourceRange.length
+        let paragraphRange = NSRange(location: line.sourceRange.location,
+                                     length: line.sourceRange.length
+                                         + (lineEnd < full.length ? 1 : 0))
+        storage.addAttribute(.paragraphStyle,
+                             value: collapsing(to: height, leading: leading(in: storage, at: line)),
+                             range: paragraphRange)
+    }
+
+    /// How much taller than its clamp a line on `line` will actually be laid out.
+    ///
+    /// `maximumLineHeight` clamps a line's **ascent and descent** and nothing else: TextKit adds the
+    /// font's leading on top of the clamp, so a paragraph asked for one point comes back one point
+    /// plus the leading. Measured on 2026-08-28 — the body face carries 1.71pt of it and a
+    /// monospaced face carries none, which is why only the *reading* presentation ever drifted: a
+    /// block being edited is set in the code face, where the arithmetic happened to be exact.
+    ///
+    /// Read from the storage rather than assumed, because the face on a line is whatever the passes
+    /// above this one put there, and it changes with Dynamic Type.
+    private static func leading(in storage: NSTextStorage, at line: MarkupDocument.Line) -> CGFloat {
+        let index = line.sourceRange.location
+        guard index < storage.length else { return 0 }
+        return (storage.attribute(.font, at: index, effectiveRange: nil) as? UIFont)?.leading ?? 0
+    }
+
+    /// A paragraph style that makes its line occupy exactly `height` points, leading included.
+    private static func collapsing(to height: CGFloat, leading: CGFloat) -> NSMutableParagraphStyle {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = 0
+        paragraph.paragraphSpacing = 0
+        paragraph.paragraphSpacingBefore = 0
+        // Never zero: zero means "no clamp at all", and the line would spring back to its full height.
+        let clamp = max(1, height - leading)
+        paragraph.minimumLineHeight = clamp
+        paragraph.maximumLineHeight = clamp
+        return paragraph
+    }
+
+    /// Reading: a block's lines give up their glyphs and keep only their height.
     ///
     /// The words stay in `body`, character for character (RULES.md §5) — they are simply not what is
     /// drawn. Every line of the block is hidden at the glyph layer and the block is squeezed down to one
@@ -207,34 +423,45 @@ enum StructuredTextStyler {
     /// A reader should never have to know that a table is stored as `| Day | Date |`.
     ///
     /// The height lands on the block's first line, and the rest collapse to a point each, because
-    /// TextKit clamps line height per paragraph and each source line is its own paragraph. The card is
-    /// then positioned against the block's *measured* fragments rather than against this arithmetic, so
-    /// a point of rounding either way costs nothing.
-    private static func reserveTableCards(in storage: NSTextStorage, doc: MarkupDocument,
-                                          heights: [ClosedRange<Int>: CGFloat], full: NSRange) {
+    /// TextKit clamps line height per paragraph and each source line is its own paragraph. What the
+    /// clamp does **not** cover is the font's leading, which is added on top of it — so the reserved
+    /// region used to run about 1.7pt per line taller than the card going into it, an error that grew
+    /// with the block and pushed the card down the page (fixed 2026-08-28, see `collapsing(to:leading:)`).
+    /// Shared by tables and code blocks: both are read as a real view drawn over the space their
+    /// source reserved, and neither asks the reader to decode how the note stores it.
+    private static func reserveCards(in storage: NSTextStorage, doc: MarkupDocument,
+                                     heights: [ClosedRange<Int>: CGFloat], full: NSRange) {
         for (lineRange, height) in heights {
-            let indices = lineRange.filter { $0 < doc.lines.count }
-            guard !indices.isEmpty else { continue }
+            // Only the lines that can actually carry a paragraph style take part. A line with neither
+            // characters nor a newline of its own cannot be clamped, and counting one into the
+            // arithmetic below would leave the region taller than the card by whatever it laid out as.
+            let lines: [(line: MarkupDocument.Line, styled: NSRange, leading: CGFloat)] =
+                lineRange.compactMap { index in
+                    guard index < doc.lines.count else { return nil }
+                    let line = doc.lines[index]
+                    let lineEnd = line.sourceRange.location + line.sourceRange.length
+                    let styled = NSRange(location: line.sourceRange.location,
+                                         length: line.sourceRange.length
+                                             + (lineEnd < full.length ? 1 : 0))
+                    guard styled.length > 0 else { return nil }
+                    return (line, styled, leading(in: storage, at: line))
+                }
+            guard let head = lines.first else { continue }
+
+            // Every line occupies its clamp *plus* its font's leading (see `leading(in:at:)`). The tail
+            // collapses to a point each and the head takes what is left, so the block's lines total
+            // exactly the height the card needs — at four lines and at four hundred.
             let collapsed: CGFloat = 1
-            let first = max(1, height - collapsed * CGFloat(indices.count - 1))
+            let tail = lines.dropFirst().reduce(CGFloat(0)) { $0 + collapsed + $1.leading }
+            let first = max(1, height - tail - head.leading)
 
-            for (offset, lineIndex) in indices.enumerated() {
-                let line = doc.lines[lineIndex]
-                let lineEnd = line.sourceRange.location + line.sourceRange.length
-                let styled = NSRange(location: line.sourceRange.location,
-                                     length: line.sourceRange.length + (lineEnd < full.length ? 1 : 0))
-                guard styled.length > 0 else { continue }
-
-                let paragraph = NSMutableParagraphStyle()
-                paragraph.lineSpacing = 0
-                paragraph.paragraphSpacing = 0
-                paragraph.paragraphSpacingBefore = 0
-                let lineHeight = offset == 0 ? first : collapsed
-                paragraph.minimumLineHeight = lineHeight
-                paragraph.maximumLineHeight = lineHeight
-                storage.addAttribute(.paragraphStyle, value: paragraph, range: styled)
-                if line.sourceRange.length > 0 {
-                    storage.addAttribute(.astHiddenMarker, value: true, range: line.sourceRange)
+            for (offset, entry) in lines.enumerated() {
+                let occupies = (offset == 0 ? first : collapsed) + entry.leading
+                storage.addAttribute(.paragraphStyle,
+                                     value: collapsing(to: occupies, leading: entry.leading),
+                                     range: entry.styled)
+                if entry.line.sourceRange.length > 0 {
+                    storage.addAttribute(.astHiddenMarker, value: true, range: entry.line.sourceRange)
                 }
             }
         }
@@ -247,13 +474,16 @@ enum StructuredTextStyler {
     /// keeps a quiet container so it still reads as one table, but nothing is hidden and nothing moves.
     /// This is the "edit as text" presentation (RULES.md §7, amended 2026-08-21), and the note returns to
     /// its cards the moment the keyboard goes away.
+    ///
+    /// - Parameter drawnAsCards: the tables a card is being drawn over — see `styleCodeSource`.
     private static func styleTableSource(in storage: NSTextStorage, doc: MarkupDocument,
-                                         secondaryColor: UIColor) {
+                                         secondaryColor: UIColor,
+                                         drawnAsCards: Set<ClosedRange<Int>> = []) {
         let text = storage.string
         guard text.contains("|") else { return }   // the overwhelmingly common case, answered cheaply
 
         let ns = text as NSString
-        for table in TableBlock.tables(in: text) {
+        for table in TableBlock.tables(in: text) where !drawnAsCards.contains(table.lineRange) {
             // *One* range across the whole block, newlines included. Marking each line separately left
             // the newlines between them unmarked, so the drawing pass saw one run per line and stacked a
             // rounded rectangle behind each — the banded staircase that made a table look like
@@ -266,9 +496,45 @@ enum StructuredTextStyler {
             guard block.length > 0 else { continue }
             storage.addAttribute(.astTableBlock, value: NSValue(range: block), range: block)
 
+            // The rule is the row directly under the header, identified by *position* rather than by
+            // re-reading each line: asking "does this look like a rule?" of every row would hide a
+            // data row that happens to hold only dashes.
+            let ruleLine = table.hasHeaderRule ? table.lineRange.lowerBound + 1 : nil
             for lineIndex in table.lineRange where lineIndex < doc.lines.count {
                 let line = doc.lines[lineIndex]
                 guard line.sourceRange.length > 0 else { continue }
+
+                // The delimiter row goes, here as on every other surface. It is how the note records
+                // which row is the header — nobody typed it to be read, and it says nothing about the
+                // table's contents. It stays in `body` untouched; it simply is not drawn.
+                //
+                // This is **not** the re-spacing that was tried and rejected on 2026-08-21: no pipe is
+                // moved, no hairline is painted, and no line is made to look like something it is not.
+                // One line stops being drawn and every other line stays exactly as it was typed.
+                if lineIndex == ruleLine {
+                    // The line's characters, and **not** its newline. A hidden character is drawn as a
+                    // zero-advancement control glyph, and doing that to a newline overrides the line
+                    // break it exists to perform: the first data row then had no line of its own, fell
+                    // into the delimiter's collapsed fragment, and was squashed to three points of
+                    // nothing — the top row of every table with a header rule, gone while editing it.
+                    let hidden = line.sourceRange
+                    storage.addAttribute(.astHiddenMarker, value: true, range: hidden)
+                    // Its glyphs are gone, so its line must not keep the height they would have had.
+                    // The style goes on the newline too, because a paragraph's height is set by the
+                    // whole paragraph and the newline is the last character of this one.
+                    let lineEnd = line.sourceRange.location + line.sourceRange.length
+                    let paragraphRange = NSRange(location: line.sourceRange.location,
+                                                 length: line.sourceRange.length
+                                                     + (lineEnd < storage.length ? 1 : 0))
+                    let paragraph = NSMutableParagraphStyle()
+                    paragraph.lineSpacing = 0
+                    paragraph.paragraphSpacing = 0
+                    paragraph.paragraphSpacingBefore = 0
+                    paragraph.minimumLineHeight = 1
+                    paragraph.maximumLineHeight = 1
+                    storage.addAttribute(.paragraphStyle, value: paragraph, range: paragraphRange)
+                    continue
+                }
 
                 var index = line.sourceRange.location
                 let end = line.sourceRange.location + line.sourceRange.length
@@ -389,10 +655,26 @@ final class StructuredLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             UIBezierPath(roundedRect: rect, cornerRadius: 10).fill()
         }
 
+        // The same rectangle a `CodeBlockView` occupies, so a block does not change width when the
+        // caret arrives — the card spans the writing width exactly, and so does this.
+        storage.enumerateAttribute(.astCodeBlock, in: charRange) { value, range, _ in
+            guard value != nil else { return }
+            let glyphs = glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            let bounds = boundingRect(forGlyphRange: glyphs, in: container)
+            let rect = CGRect(x: origin.x,
+                              y: origin.y + bounds.minY,
+                              width: container.size.width,
+                              height: bounds.height)
+            codeFill.setFill()
+            UIBezierPath(roundedRect: rect,
+                         cornerRadius: CodeCardLayout.Metrics.corner).fill()
+        }
     }
 
     /// The container's fill — set by the view from the design system, like the marker colours.
     var tableFill: UIColor = UIColor.label.withAlphaComponent(0.04)
+    /// The ground behind a code block's source while it is being edited.
+    var codeFill: UIColor = UIColor.label.withAlphaComponent(0.05)
 
     // MARK: Draw visible list markers in the gutter
 

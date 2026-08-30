@@ -15,6 +15,12 @@ private final class FakeRecorder: AudioRecording {
 
     func requestPermission() async -> Bool { permissionAsked = true; return true }
     func start() throws -> URL { startCount += 1; return URL(fileURLWithPath: "/tmp/allowance.m4a") }
+    /// Pause/resume are not what these tests are about; they record the calls so a capture that
+    /// pauses can still be driven through them.
+    private(set) var pauses = 0
+    private(set) var resumes = 0
+    func pause() { pauses += 1 }
+    func resume() { resumes += 1 }
     func stop() -> URL? { URL(fileURLWithPath: "/tmp/allowance.m4a") }
     func cancel() {}
     func cleanup(_ url: URL) { cleaned.append(url) }

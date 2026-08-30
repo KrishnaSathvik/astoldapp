@@ -58,6 +58,58 @@ enum TableCardLayout {
 
         /// The height the note reserves for this table: the card plus the air around it.
         var reservedHeight: CGFloat { size.height + Metrics.blockMargin * 2 }
+
+        // MARK: Where the cells are
+        //
+        // Editing a cell in place means putting a field exactly where its words already are, so this
+        // has to agree with `TableCardView.draw` character for character. It is derived from the same
+        // two facts that drawing uses — columns are laid out left to right with a gap between them, and
+        // rows stack under the header — rather than being measured off the screen afterwards.
+
+        /// `header` is row 0 and `rows` are the records, which is the same numbering `TableBlock.rows`
+        /// uses — so a `CellPosition` means the same thing on both sides.
+        func rowHeight(_ row: Int) -> CGFloat? {
+            if row == 0 { return headerHeight }
+            let record = row - 1
+            guard record >= 0, record < rows.count else { return nil }
+            return rows[record].height
+        }
+
+        /// The top edge of a row, in the card's own coordinates.
+        func rowTop(_ row: Int) -> CGFloat? {
+            guard rowHeight(row) != nil else { return nil }
+            guard row > 0 else { return 0 }
+            return rows.prefix(row - 1).reduce(headerHeight) { $0 + $1.height }
+        }
+
+        /// The rectangle a cell's words occupy.
+        func cellFrame(row: Int, column: Int) -> CGRect? {
+            guard column >= 0, column < columnWidths.count,
+                  let top = rowTop(row), let height = rowHeight(row) else { return nil }
+            let x = columnWidths.prefix(column).reduce(Metrics.cardInsetH) { $0 + $1 + Metrics.columnGap }
+            return CGRect(x: x, y: top, width: columnWidths[column], height: height)
+        }
+
+        /// The cell a touch lands in, or `nil` for the gaps, the footer, and outside the card.
+        ///
+        /// The column gap belongs to neither neighbour: a tap there is a tap on the table rather than
+        /// on a cell, and picking the nearer column would start an edit the writer did not aim for.
+        func cell(at point: CGPoint) -> TableBlock.CellPosition? {
+            guard point.x >= 0, point.y >= 0, point.x <= size.width else { return nil }
+            let rowCount = 1 + rows.count
+            for row in 0..<rowCount {
+                guard let top = rowTop(row), let height = rowHeight(row) else { continue }
+                guard point.y >= top, point.y < top + height else { continue }
+                for column in columnWidths.indices {
+                    guard let frame = cellFrame(row: row, column: column) else { continue }
+                    if point.x >= frame.minX, point.x < frame.maxX {
+                        return TableBlock.CellPosition(row: row, column: column)
+                    }
+                }
+                return nil
+            }
+            return nil
+        }
     }
 
     /// One entry per table in `source`, in the order they appear.

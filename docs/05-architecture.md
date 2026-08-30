@@ -221,6 +221,45 @@ final class Note {
 
 - `title` normalized: whitespace-only becomes nil.
 - `body` remains raw user content.
+- **everything structural lives inside `body`** — line markers, table pipe rows, link syntax, and code
+  fences. No block database, no attributed string, no second field, no migration. Added 2026-08-23 for
+  links and code blocks (`RULES.md` §5, §7):
+
+  | In `body` | Reads as | Written by |
+  |---|---|---|
+  | `# ` `## ` `- ` `1. ` `- [ ] ` `- [x] ` | the six block kinds | typing, the Style menu, voice, paste |
+  | `\| a \| b \|` rows | a table (`TableBlock`); its `\| --- \|` row is stored, never drawn | paste |
+  | `https://…` | a link, exactly as written | typing, voice, paste |
+  | `[text](https://…)` | a link showing `text` | **paste only** |
+  | ` ``` ` … ` ``` ` | a code block (`CodeBlock`) | paste, **Paste as Code**, high-confidence detection |
+  | ` ```text ` … ` ``` ` | a preformatted block — the same `CodeBlock`, labelled **Plain text**, never coloured | paste (`<pre>`, a declared `text` fence), **Paste as Preformatted** |
+
+  `PreformattedDetection` is the other, added 2026-08-25: it recognises a directory tree or an aligned
+  diagram from **real Unicode box-drawing characters** (U+2500–U+257F, never ASCII `|` or `-`), three
+  lines, and two independent signals. It is consulted after `CodeDetection` declines and before the
+  plain-text fallback, and its result is inserted through
+  `DocumentAction.pasteAsPreformattedEdit(_:text:selection:)` — the same boundary and caret rules
+  **Paste as Preformatted** uses.
+
+  The preformatted row is deliberately **not** a second type, a second parser, or a second card. An ASCII
+  diagram and a function body need the identical treatment — do not touch these characters, do not let
+  them wrap — so `CodeBlock.Kind` is one derived property over the language the fence already stored, and
+  everything downstream (the literal region, the hidden fences, `CodeCardLayout`, `CodeCardPresenter`,
+  `CodeBlockView`, every export path) is shared unchanged. It is also the one row that is **never**
+  inferred: `CodeDetection` returns only languages `CodeHighlighting` can colour, and `text` is not one.
+
+  The code row is the only one that can be written **without the clipboard stating it**:
+  `CodeDetection` is one of the two inference-from-prose paths in As Told (`RULES.md` §4, amended
+  2026-08-24). It is consulted by the paste path only after every stated flavor has declined, returns a
+  language only when certain, and only one `CodeHighlighting` can colour. Its result is inserted through
+  `DocumentAction.pasteAsCodeEdit(_:language:text:selection:)` — the same boundary and caret rules
+  **Paste as Code** uses, so there is one insertion path for fenced blocks rather than two.
+
+  `MarkupDocument` resolves all of it in one pass and is the only place that does. It carries
+  `isLiteral` per line (code) and hidden runs at arbitrary offsets (link syntax), generalizing the
+  single hidden marker prefix it used to carry. **Its source↔visible mapping must stay bit-identical
+  for lines holding neither** — a contract pinned by tests, because every caret move, selection, voice
+  insertion, and undo path runs through it.
 - timeline sorting uses `createdAt`, not `updatedAt`.
 - date grouping derives from `createdAt` using current/local calendar rules.
 - no `voiceNote` type.

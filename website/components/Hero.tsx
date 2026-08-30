@@ -23,7 +23,12 @@ export function Hero({ eyebrow, title, lede, shot }: Props) {
           </div>
           <ul className={styles.proof} aria-label="As Told at a glance">
             <li>No account</li>
-            <li>English · తెలుగు · हिन्दी</li>
+            {/* This read "English · తెలుగు · हिन्दी" until 2026-08-28, which put a
+                supported-languages list in the first 400px of the site and made
+                As Told read as a three-language app. The capability is the
+                claim; the tested groups are a footnote further down
+                (`RULES.md` §7, "Language claims"). */}
+            <li>Multilingual voice</li>
             <li>Face ID optional</li>
           </ul>
         </div>

@@ -1,7 +1,11 @@
 import SwiftUI
 import UIKit
 
-/// The chrome a note carries above its first line: the creation date and the optional title.
+/// The chrome a note carries above its first line: the optional title.
+///
+/// The **date used to live here too**, and moved to the navigation bar on 2026-08-26 when the header
+/// gained Share — see `EditorView`. It is drawn in exactly one place, so nothing on this page has to
+/// stay in step with it.
 ///
 /// Deliberately **not** a subview of the text view. A `UITextView` is an accessibility element in its
 /// own right, so a control nested inside one disappears from VoiceOver — and from the UI tests that
@@ -9,21 +13,14 @@ import UIKit
 /// makes it travel with the text.
 @MainActor
 final class NotePageHeaderView: UIView {
-    let dateLabel = UILabel()
     let titleField = UITextField()
 
-    /// The gap between date and title, and between the title and the first line of body text —
-    /// the spacing the SwiftUI `VStack` used to supply (docs/03-design-system.md §4.7).
+    /// The gap between the title and the first line of body text — the spacing the SwiftUI `VStack`
+    /// used to supply (docs/03-design-system.md §4.7).
     static let gap = DSSpacing.s3
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-
-        dateLabel.font = StructuredTextStyle.dateLabelFont()
-        dateLabel.textColor = UIColor(Color.ds.textTertiary)
-        dateLabel.adjustsFontForContentSizeCategory = true
-        dateLabel.numberOfLines = 1
-        addSubview(dateLabel)
 
         titleField.font = StructuredTextStyle.editorTitleFont()
         titleField.textColor = UIColor(Color.ds.textPrimary)
@@ -59,20 +56,13 @@ final class NotePageHeaderView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         let width = bounds.width
-        var y: CGFloat = 0
-        if !dateLabel.isHidden {
-            let height = fittingHeight(of: dateLabel, width: width)
-            dateLabel.frame = CGRect(x: 0, y: y, width: width, height: height)
-            y += height + Self.gap
-        }
-        titleField.frame = CGRect(x: 0, y: y, width: width, height: fittingHeight(of: titleField, width: width))
+        titleField.frame = CGRect(x: 0, y: 0, width: width,
+                                  height: fittingHeight(of: titleField, width: width))
     }
 
     /// The height the header occupies at `width` — what the text view reserves above its first line.
     func height(forWidth width: CGFloat) -> CGFloat {
-        var total = fittingHeight(of: titleField, width: width)
-        if !dateLabel.isHidden { total += fittingHeight(of: dateLabel, width: width) + Self.gap }
-        return total
+        fittingHeight(of: titleField, width: width)
     }
 
     private func fittingHeight(of view: UIView, width: CGFloat) -> CGFloat {
@@ -80,7 +70,7 @@ final class NotePageHeaderView: UIView {
     }
 }
 
-/// One scrolling page: date, title, and body moving together.
+/// One scrolling page: title and body moving together.
 ///
 /// The body text view is the **only** scroll view on the screen and it fills the page, so every
 /// native behavior that depends on being the scroller — following the caret, lifting the line being
@@ -90,7 +80,10 @@ final class NotePageHeaderView: UIView {
 ///
 /// The header used to sit *outside* the scroll, in the editor's `VStack`. That pinned the date and
 /// title to the top of the screen while a long note slid past underneath them, clipped mid-line at
-/// the body's top edge — the note stopped reading as one page (2026-08-20).
+/// the body's top edge — the note stopped reading as one page (2026-08-20). The **title** still lives
+/// in the scroll for that reason and always will. The date left for the navigation bar on 2026-08-26,
+/// which is a different thing: a navigation bar already reserves its own height, so nothing scrolls
+/// underneath it and the clipping this class exists to prevent cannot come back through it.
 @MainActor
 final class NotePageView: UIView {
     let textView: StructuredTextView
@@ -124,15 +117,6 @@ final class NotePageView: UIView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    var dateText: String = "" {
-        didSet {
-            guard dateText != oldValue else { return }
-            header.dateLabel.text = dateText
-            header.dateLabel.isHidden = dateText.isEmpty
-            setNeedsLayout()
-        }
-    }
 
     var placeholderText: String = "" {
         didSet {
@@ -182,7 +166,9 @@ final class NotePageView: UIView {
         // Table cards sit over the space their source lines reserved, and that space moves whenever the
         // header's height does — a longer title, a larger text size — so their positions settle here,
         // in the same pass as the words they belong to.
-        (textView.delegate as? BodyTextView.Coordinator)?.tableCards.position(in: textView)
+        let coordinator = textView.delegate as? BodyTextView.Coordinator
+        coordinator?.tableCards.position(in: textView)
+        coordinator?.codeCards.position(in: textView)
         syncChromeToScroll()
     }
 
