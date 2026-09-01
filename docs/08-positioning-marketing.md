@@ -267,8 +267,10 @@ bar: only capability that is in *that* build, no language list or accuracy claim
 the monthly voice allowance — naming a cost boundary in store text turns it into a feature
 (`RULES.md` §8).
 
-The current entry is **1.1.0 (build 2)**: Quick Voice from Home, pause/resume, retained recordings,
-links, code cards, and per-note Share.
+The current entry is **1.2.0 (build 3)** (bumped 2026-09-01): the recent-library Home, calendar
+density dots, circular checklists, the neutral palette, and steadier voice capture. Below it,
+**1.1.0 (build 2)**: Quick Voice from Home, pause/resume, retained recordings, links, code cards, and
+per-note Share.
 
 ---
 

@@ -14,10 +14,48 @@ Rules that apply to every entry:
 
 ---
 
-## 1.1.0 (build 2)
+## 1.2.0 (build 3)
 
 `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` live in `project.yml`; the `.xcodeproj` is generated
-from it, so bump it there and re-run `xcodegen generate`.
+from it, so bump it there and re-run `xcodegen generate`. Bumped 2026-09-01.
+
+**What's New — text for submission** (907 characters, cap 4 000):
+
+```text
+Home is easier to scan, and the calendar shows you your month.
+
+A clearer Home
+Notes are grouped into Today and the previous seven days, with a two-line preview under each title — titled and untitled notes side by side. Show all opens a busy group; Browse older notes takes you to the complete timeline.
+
+A calendar that shows where you wrote
+Dots under each day show how much you wrote that day. Tap a day and its notes appear right under the month — go back by when, not just by what.
+
+Checklists, drawn as circles
+A checklist item now has a circle beside it. Tap it to tick it off; it stays where you put it.
+
+Steadier voice
+A recording that is interrupted is finished properly before anything is sent, and when transcription can't start, the message says what actually happened.
+
+Quieter in Light and Dark
+A neutral palette across the app, so the only colour on the page is the one that means something.
+```
+
+**What the build contains** beyond 1.1.0: the recent-library Home (Today / Previous 7 Days, capped
+groups with `Show all N`, `Browse older notes` → All Notes, two-line flattened previews, no card per
+note); the calendar's density dots and the selected day's notes under the month; circular checklist
+markers in the editor and `○` / `✓` in previews; the neutralised palette (`groupedCanvas`,
+`separator`, `calendarAccent`, `iconVoice`); the recorder-lifecycle work (an unexpected stop is not a
+completed recording; finalisation before upload; route observations are not proof the microphone is
+gone); attestation failures reported as what they are, in copy and in the relay log; the DEBUG-only
+`AppClock` pin and canonical seed library used for the screenshot capture. Marketing assets for this
+build: `docs/appstore/raw/library/`.
+
+If **1.1.0 (build 2) was never sent to review**, fold its entry below into this text before
+submitting — a What's New describes everything since the version the reader has.
+
+---
+
+## 1.1.0 (build 2)
 
 **What's New — submitted text** (1 032 characters, cap 4 000):
 
