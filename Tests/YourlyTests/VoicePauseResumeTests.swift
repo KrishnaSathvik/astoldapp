@@ -17,7 +17,11 @@ private final class PausableRecorder: AudioRecording {
     var permissionDelay: Duration = .zero
     var startURL = URL(fileURLWithPath: "/tmp/rec-pause-test.m4a")
     var level: Float = 0.5
-    var onInterruption: (() -> Void)?
+    var onCaptureEnded: ((RecordingStop) -> Void)?
+    /// What the finalized container measures. `nil` stands in for a file with no usable duration —
+    /// the one thing `.finishing` now refuses to send.
+    var assetSeconds: Double? = 1
+    var isCapturing = true
 
     private(set) var canceled = false
     private(set) var cleaned: [URL] = []
@@ -36,7 +40,12 @@ private final class PausableRecorder: AudioRecording {
     func start() throws -> URL { log.append("start"); return startURL }
     func pause() { pauses += 1; log.append("pause") }
     func resume() { resumes += 1; log.append("resume") }
-    func stop() -> URL? { stops += 1; log.append("stop"); return startURL }
+    func finish() async -> FinishedRecording? {
+        stops += 1
+        log.append("stop")
+        isCapturing = false
+        return FinishedRecording(url: startURL, assetSeconds: assetSeconds, bytes: 1)
+    }
     func cancel() { canceled = true; log.append("cancel") }
     func cleanup(_ url: URL) { cleaned.append(url) }
 }

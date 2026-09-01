@@ -1,3 +1,6 @@
+# Node — the website has its own node_modules and .gitignore; a stray one at the root is never source
+node_modules/
+
 # Xcode / generated project
 Yourly.xcodeproj/
 *.xcworkspace

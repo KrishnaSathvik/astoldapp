@@ -45,7 +45,9 @@ A per-screen walkthrough lives in `docs/design-reference/README.md`.
 
 - Warm off-white `canvas` in Light and near-black `canvas` in Dark, matching §5.2 tokens.
 - Dark navy `accent` used for: the `Continue` button, the floating `+`, and the selected calendar day.
-- Home rows are chromeless (no cards) — typography + whitespace + generous vertical rhythm.
+- Home rows are dense rows inside one grouped surface per period — no card per *note* (§4.3, 2026-08-30).
+- The four header glyphs keep distinct muted tints; the neutral palette applies to grounds, note
+  surfaces, text and dividers (§4.3, 2026-08-31).
 - The floating `+` is a filled dark circular control, bottom-right, quiet.
 - Calendar selected day is a filled accent circle; days-with-notes carry a small dot; a "Go to" list
   offers `Today` and the most recent note date.
@@ -188,105 +190,177 @@ Three blocks: brand, message, action.
 
 ## 4.3 Home — populated
 
+_Redesigned 2026-08-30, refined 2026-08-31. The header above this content — Profile, Calendar, New
+Note, Quick Voice, `.searchable` — is unchanged in position, order and behavior throughout. Only the
+library below it changed. The four header glyphs keep their **own muted accent tints** (§5.2): the
+monochrome rule is about content and surfaces, not about navigation._
+
 ### Top region
 
-Small date:
+The subtle current date, sitting directly above the **first period heading**, and appearing exactly
+once:
 
-`AUGUST 17, 2026`
+```text
+AUGUST 31, 2026
+Today
+```
 
-Primary title:
+The date rides on the first heading rather than occupying a section of its own — as its own section
+the platform gave it a full section's spacing above and below, and the top of Home was mostly empty
+before the first note. The prominent largeTitle `Today` **anchor is gone**: `Today` is now a period
+heading, and drawing it as both would render it twice.
 
-`Today`
-
-Calendar action aligned opposite title.
+Home carries **no title of its own and no note count**. An `As Told` largeTitle over `14 notes`
+was tried on 2026-08-31 and removed the same day: the name is on the icon the reader just tapped, a
+count of the library is a statistic (§4.12 forbids Home from showing statistics), and together they
+took a large block of the screen above the first note without helping anyone use the app.
 
 ### Content
 
-Continuous vertical timeline.
-
-Example:
+Notes bucketed by relative age. Each period is **one rounded surface** holding that period's rows,
+separated by hairline dividers.
 
 ```text
-AUGUST 17, 2026
+AUGUST 30, 2026
+Today
 
-Today                                  [calendar]
+╭─────────────────────────────────────────╮
+│ Japan Trip                              │
+│ Tokyo, then Kyoto, then Osaka. Two…     │
+├─────────────────────────────────────────┤
+│ Launch Checklist                        │
+│ ☑ App Store screenshots  ☐ Update the…  │
+├─────────────────────────────────────────┤
+│ SQL Questions                           │
+│ Find the two products with the highest…  │
+╰─────────────────────────────────────────╯
 
-Alaska trip idea
-I keep thinking maybe instead of staying
-the entire week in Anchorage we could...
+Previous 7 Days
 
-Something I remembered
-Need to call them tomorrow and ask...
-
-I don't know why but today I suddenly
-started thinking about...
-
-Yesterday
-
-Random thoughts at night
-It's weird how some songs take you...
-
-August 15
-
-Work ideas
-New project direction looks promising...
+╭─────────────────────────────────────────╮
+│ Weekend Plans                           │
+│ Mackinac Island, if the ferry still…    │
+├─────────────────────────────────────────┤
+│ Alaska Trip                             │
+│ Anchorage, Seward, Denali. Nothing…     │
+╰─────────────────────────────────────────╯
 ```
+
+**Home draws `Today` and `Previous 7 Days` only** (2026-08-31), each capped — 4 and 5 — with a
+reversible toggle under the group:
+
+```text
+Show all 14        →  the whole period, in place
+Show less          →  back to the cap
+```
+
+`Previous 30 Days` and `Older` exist, but on the **All Notes** screen behind `Browse older notes`.
+That affordance is drawn **only when notes actually sit outside the two periods Home holds** — with a
+library that is entirely recent, `Show all N` already reaches every note, and an archive link beside
+it would be the same offer made twice:
+
+```text
+Show all 14                       ← 14 recent notes, nothing older
+                                    (no archive affordance)
+
+Show all 14
+Browse older notes  ›             ← 14 recent, 106 older
+```
+
+It is named for **why you would tap it**, not for what the next screen is called; the screen it
+pushes is still titled `All Notes`, because that names where you have arrived.
+
+Boundaries are inclusive, counted in whole **calendar** days. A period nothing landed in is not
+drawn.
+
+Implemented as an inset-grouped `List` — the container, the hairlines and their inset, the section
+semantics VoiceOver reads, and **swipe-to-delete** are all things the platform already draws
+correctly at every Dynamic Type size, and the swipe is the one that cannot be recovered once the
+list stops being a list.
 
 ### Note row
 
-No card by default.
-
-Use:
-
-- typography
-- whitespace
-- optional subtle separator
-
-Prefer `VStack` rhythm over rounded rectangles.
-
-Hierarchy — restrained, editorial, never a settings list:
+**No card per _note_.** One rounded surface per **period**, many rows inside it.
 
 | | Titled note | Untitled note |
 |---|---|---|
-| Primary | title, `body` semibold (~17 pt), 1 line | first meaningful body line, `body` regular (~17 pt), primary colour |
-| Secondary | body preview, `subheadline` (~15 pt), secondary colour, 2–3 lines | — |
+| Title line | title, `body` **semibold** (~17 pt), `textPrimary`, 1 line | **none — the row has no title line** |
+| Excerpt | flattened body, `subheadline` (~15 pt), `textSecondary`, **2 lines** | flattened body, `body` **regular** (~17 pt), `textSecondary`, **2 lines** |
 
-Both previews carry a little extra line spacing. Leading blank lines are skipped so the preview
-always starts on real words. The row never renders `Untitled`, and never shows a creation time.
+**The primary/semibold treatment means exactly one thing: the writer named this note.** Nothing else
+earns it. A titleless note is not given a promoted first line at a lower weight — it is given *no
+title line*, and its body is drawn as the excerpt it is.
 
-### New note control
+That rule was reached the hard way on 2026-08-31, twice in one day: semibold on the promoted line
+claimed a name the writer never gave, and medium was the same mistake in a smaller amount. Any extra
+weight on a body line reads as a heading, and a column of voice transcripts then looks like a list of
+headlines nobody wrote. Weight now belongs to titles exclusively; the titleless excerpt carries its
+emphasis in **size** instead — body rather than `subheadline`, because with no title above it the
+excerpt *is* the row.
 
-Bottom-right, reachable, visually quiet.
+`Untitled`, `Voice Note`, a generated title, and a badge all stay forbidden. A voice capture with no
+title is an ordinary titleless note and takes the identical row. Decided in `NoteRowContent`, not in
+the view, so every part of it is checkable without a screen.
 
-Use SF Symbol `plus`.
+Two lines either way, and the **same** limit for every row, so truncation is deterministic rather than
+dependent on what happens to fit. The excerpt carries the **whole** body in both cases — a titleless
+note no longer spends its first line paying for a title it never had.
 
-Target hit area: at least 44×44 pt.
+**Rows are no longer a uniform height, deliberately** (2026-08-31). A titled note has three lines of
+content and a titleless one has two, and forcing them to match is what previously cost the excerpt
+its second line.
 
-Visual shape can use a native material/control treatment.
+Measured off a full-size screenshot at default type, 12 pt inset: a titled row with a two-line
+excerpt is **85–87 pt**, a titleless one **67 pt**. The target set for this pass was 76–84, and the
+titled row sits 1–3 pt above it — kept deliberately. The line heights inside a row are Dynamic
+Type's, so the inset is the only lever, and the next step down the 4-pt scale (12 → 8) would leave
+8 pt between a divider and the text: tighter than the row was *before* this pass, which is the
+opposite of the breathing room it exists to add. A number is not worth a row that reads as cramped.
+
+The preview is **flattened**: the lines the reader would have seen, joined onto one line with two
+spaces, so a checklist reads `✓ Website  ✓ Voice V2  ○ Screenshots` rather than showing its first
+item alone. Leading blank lines are skipped. No marker, fence, or table pipe ever reaches a row
+(`StructuredTextExport.previewLines`). A checklist item is drawn with the editor's **circle**
+(`○` / `✓`, since 2026-09-01), not the `☐`/`☑` box that text copied *out* of the app carries — the
+row is a picture of the page, and the page draws circles; the box is the interop spelling other
+apps recognise. The row never renders `Untitled`, and **never shows a creation time**.
+
+### Spacing
+
+| Gap | Value |
+|---|---|
+| Period heading → its surface | ~10 pt |
+| Surface → next period heading | 24 pt |
+| Row vertical inset | 12 pt |
+| Title → excerpt | 4 pt |
+
+Deliberately tighter than the iOS default: at this row density the platform's section spacing turns
+scrolling into whitespace.
+
+The **grouped surface's corner radius, its inset, and the hairline inset are the platform's** and are
+deliberately not overridden. Measured on iOS 26 at @3x: a **~20 pt** continuous corner and a **16 pt**
+side inset — already the shape the refinement asked for. There is no public API to set a section's
+radius, so reaching an exact number by hand would mean abandoning `List` for rectangles in a
+`ScrollView` and losing swipe-to-delete, which RULES.md §4 does not allow trading away.
 
 ---
 
 ## 4.4 Home — empty
 
-Do not use a giant illustration.
-
-Preferred:
+The mark, the state, the tagline. Centred, monochrome, no card and no illustration panel.
 
 ```text
-AUGUST 17, 2026
+                    ✒︎
 
-Today
+            Nothing here yet.
 
-Your thoughts will appear here.
-
-                                      [+]
+         Write it. Say it. Keep it.
 ```
 
-Optional alternate supporting copy:
-
-`Write something. Say something.`
-
-Do not repeat the complete marketing pitch.
+No creation control here: the header already carries both ways into a note, and a second one would
+be the same verb twice. The second line is the **locked tagline** rather than new copy — interface
+text must not encourage or coach the user (RULES.md §4). The feather keeps `accent`; it is the one
+place brand colour belongs on Home, because the mark is identity rather than content.
 
 ---
 
@@ -320,24 +394,82 @@ Pushed inside Home's navigation stack, not a sheet. _(Changed 2026-08-19: the sp
 push shipped. It carries the system back button, so the screen needs no close control and no second
 way out — the reason there is also no "Go to Today" button on it.)_
 
+**One vertical scroll for the whole page** (2026-08-31). The month header, the grid, the day heading,
+the notes, and the way past the cap are all in the same `ScrollView`. The grid used to sit above a
+`List` that scrolled *inside* it, so a day with eleven notes handed the reader two stacked scrolling
+surfaces and no way to tell which one a drag would move. A nested notes list is forbidden here.
+
 ### Header
 
 - current month/year
-- month step controls (previous / next)
+- month step controls (previous / next), in `calendarAccent`
 
-### Grid
+### The calendar's own accent
 
-- native weekday rhythm
-- days with notes: tiny dot
-- selected date: clear selection (the selection replaces that day's dot — its notes are listed below)
-- Today: native distinction
-- opens with today selected; stepping months selects today when it is in view, else the 1st
+The calendar page uses **one** colour for every piece of interaction state: `calendarAccent`, the
+sage the Calendar glyph in Home's header wears. The page reads as belonging to the icon that opened
+it, and — more usefully — colour here carries **state** rather than decorating.
+
+| State | Treatment |
+|---|---|
+| Ordinary date | plain `textPrimary`, no decoration |
+| Has 1 note | one sage dot beneath |
+| Has 2–3 notes | two sage dots |
+| Has 4+ notes | three sage dots |
+| Today, unselected | thin sage ring (1.5 pt) |
+| Selected | solid sage circle, `onAccent` number |
+| Month arrows | sage |
+
+Today's ring and the selected fill are different **shapes**, not different colours: one says *you are
+here in time*, the other *you are looking at this*, and both are true on the day you open the screen.
+
+`calendarAccent` is deliberately **not** `iconCalendar` itself, and the difference is measured. The
+glyph's sage (`#4E8A76`) is 4.02:1 against white — fine for a symbol, below the 4.5:1 floor every
+glyph in this app clears (§6) the moment a day *number* sits on top of it. `calendarAccent` is the
+same hue 12 % darker in Light (`#457968`), measured **5.01:1** on screen against `onAccent`; Dark is
+the glyph's own light sage (`#86BCA9`), measured **8.80:1**, because a light accent takes dark text.
+
+### Density dots
+
+**Maximum three, always.** The dots are a *sense* of activity, not a count: seven dots for seven notes
+is a bar chart and a number is a badge, and both turn a calendar into the dashboard §1 fences it away
+from. Three levels answer the only question the grid is asked from across the room — *quiet day or
+busy day* — and the exact answer is one tap below.
+
+They carry no category and never will. A voice-created note is an ordinary note; `Note` owns no type,
+tag, or colour for anything here to render. No voice icons, checklist icons, category colours, or
+numerical badges.
+
+State is never carried by colour alone (§14): a cell's accessibility value speaks the **exact** count
+(`3 notes`, `Today, 2 notes`), not the number of dots drawn — a reader who cannot see the dots is not
+helped by an approximation of them.
+
+A **selected** day draws no dots. Selection has already claimed the cell and its notes are listed
+directly below, so dots under a filled circle would be the same fact drawn twice.
 
 ### Selected day
 
-Beneath the grid: the day label (`Today` / `Yesterday` / `August 15`) and that day's notes, using the
-same `NoteRow` as Home. Tapping one opens it **from here**, so Back returns to the calendar with the
-day still selected. A day with nothing on it reads `Nothing written on this day.`
+Beneath the grid: the day heading, then that day's notes using the same `NoteRow` as Home.
+
+The heading is `Today` when today is selected, and otherwise the weekday **and** the date —
+`Saturday, August 29`. The weekday places the note in a week, which a bare `August 29` withholds for
+no gain in quietness. Deliberately **not** the timeline's `dayLabel`, which answers `Yesterday`: on a
+calendar the reader has a grid in front of them and has pointed at a square, so a relative name
+answers a question they did not ask. **No count beside it.**
+
+**At most 4 notes, then `Show all N` ⇄ `Show less`** (2026-08-31) — the same control, in the same
+words, that Home uses, because a reader who learned it once must not have to learn it again. Four
+rather than Home's five, because the grid above is tall: eleven notes under it pushed the calendar
+itself several screens up, and the calendar stopped being a calendar. Expansion resets when the
+selection moves — a new day is a new question — and need not survive leaving the screen.
+
+Tapping a note opens it **from here**, so Back returns to the calendar with the day still selected. A
+day with nothing on it reads `Nothing written on this day.`
+
+**Flat rows with hairline dividers — not a grouped card.** Home wraps each period in a rounded surface
+because it has several periods to tell apart; here the grid already gives the page all the structure
+it needs, and a second large container under it would only add weight. Same row typography as Home
+(§4.3), different surrounding presentation.
 
 This list is a way *to* a note, not a place to browse. It has no search, no sort, no grouping, no
 pagination, and no counts — see RULES.md §1. Swipe-to-delete is deliberately not offered here; the
@@ -346,9 +478,12 @@ note's own overflow (`···` → Delete Note) covers it, and the Undo banner ap
 ### No
 
 - heatmap
-- note-count badge
+- note-count badge, or any exact count on the grid
 - streak colors
+- per-note-type colours, voice icons, or checklist icons
+- more than three dots on a day
 - a second search field
+- a nested scrolling notes list
 
 ---
 
@@ -470,6 +605,26 @@ Style
 Source markers (`# `, `- `, `1. `, `- [ ] `) stay in `body` and are hidden at the glyph layer; the
 visible bullet, number, and checkbox are drawn in a 28pt left gutter.
 
+**The checkbox is a circle, not a box** (2026-08-31; `StructuredTextStyle.checkboxFrame`). A square
+says *task manager*, and a checklist here is content to tick off, not a task (docs/02-features.md
+Milestone A); a thin ring beside the words says *note*, and sits with the rounded cards, search, and
+buttons the rest of the app is made of. It is As Told's own mark, not Apple's — drawn, not an SF
+Symbol, so the stroke, the diameter, and the gap before the words are ours:
+
+- **Unticked:** a 1.5pt ring in `TextSecondary`, transparent inside.
+- **Ticked:** a solid `Accent` disc with a bold tick in `onAccent` — white in Light, near-black on the
+  lighter Dark accent, the same rule every glyph on an accent follows. The tick is the one SF Symbol
+  in the mark, sized to the disc rather than the font so it stays centred at every text size.
+- **Diameter is derived from the line's cap height** (≈18pt at the default body size), so it scales
+  with Dynamic Type like the bullet and the number beside it. It ends at least 6pt before the text —
+  sized for the 28pt gutter it shares with them, which does not move for it.
+- **A ticked item's words step back to `TextSecondary`** — muted, never faded: 6.3:1 Light / 8.5:1
+  Dark, and still the note. No strikethrough, no custom alpha, and the item stays where it is; a
+  checklist that reorders itself is a task list.
+- Rendering only. The source still holds `- [ ] ` / `- [x] `, export still writes `☐` / `☑`,
+  VoiceOver still hears "Checked, …", and the 44pt target below is untouched. The design reference
+  still shows a box; read it as this circle.
+
 **A checkbox's target is wider and taller than its gutter** (`StructuredTextStyle.checkboxHitWidth`
 and `checkboxHitHeight`, 44pt each, 2026-08-21). The box stays small — a marker is not the sentence —
 but the region that ticks it has to clear the 44pt floor below, and ticking items off is the whole
@@ -529,11 +684,11 @@ words, and a table as its cells rather than the pipes it is stored in.
   tracks Dynamic Type), never on the first line. A section break has to be visible as a break.
 - Drawn gutter markers align to the text **baseline**, not to the middle of the line fragment — the
   fragment carries the paragraph's line spacing underneath the text, so a centred marker rides low.
-- **A marker is one colour: `TextSecondary`.** Bullet, number, and the outline of an unticked box all
+- **A marker is one colour: `TextSecondary`.** Bullet, number, and the ring of an unticked circle all
   use the semantic secondary token — quieter than the sentence, never faint. No custom alphas: the
   number was drawn at 70% of the body colour and the empty box at 55%, which put the box at 3.75:1 on
   Light canvas, below the 4.5:1 §6 requires of every glyph, and 5.7:1 in Dark. Secondary is 6.3:1
-  Light / 8.5:1 Dark. A ticked box is the only marker drawn in `Accent` — the tick is a *state*, and
+  Light / 8.5:1 Dark. A ticked circle is the only marker drawn in `Accent` — the tick is a *state*, and
   it is the one thing in the gutter worth looking at.
 - **Weak markers read as small markers.** The complaint that list type "looks smaller" than prose was
   measured and is false — a list line is the same 17pt body (see below). What was actually wrong was
@@ -575,6 +730,35 @@ and one way to abandon it. Haptics mark start, stop, success, and failure.
 The recording control can use system material/Liquid Glass treatment.
 
 The writing surface should remain solid.
+
+### Recording stopped unexpectedly (added 2026-08-30)
+
+A state of this surface, not a screen of its own, and shown on both presentations of the capture —
+the in-note panel and Quick Voice — from one definition (`VoiceErrorCopy`).
+
+```text
+Recording stopped unexpectedly.
+
+What you said before it stopped is still here.
+
+    Delete Recording        Transcribe
+```
+
+Reached only when the recorder stops without being asked: an encoder failure, or a finish nobody
+requested. **Not** reached by a call, Siri, backgrounding, the duration cap, or Back — all of those
+finish and transcribe as they always have, and none of them is a surprise to the person holding the
+phone.
+
+Shaped like the retained-failure state it sits beside — same two controls, same held audio, same
+promise that nothing was thrown away — because from the user's side it is the same situation: there
+is a recording on this iPhone and a decision to make about it. Two differences, both deliberate:
+
+- **Transcribe**, not Retry. Nothing was attempted, so there is nothing to attempt again.
+- Nothing is sent until it is tapped. A transcript arriving on its own is what made a truncated
+  capture indistinguishable from a complete one.
+
+The second line is the load-bearing one. It sets the expectation *before* the transcript is read —
+that what comes back stops where the recording stopped, not where the speaker did.
 
 ---
 
@@ -704,11 +888,12 @@ Use Dynamic Type-backed semantic styles.
 |---|---|---|
 | `homeTitle` | ~34 pt Bold | Today |
 | `screenTitle` | ~28 pt Bold | Settings |
-| `groupTitle` | ~20 pt Semibold | Yesterday / older date group |
-| `noteTitle` | ~17–18 pt Semibold | Home result title |
+| `groupTitle` | ~20 pt Semibold | period heading (`Today`, `Previous 7 Days`) |
+| `noteTitle` | ~17–18 pt Semibold | Home row title — a name the writer chose |
+| `noteBody` | ~17–18 pt Regular | Excerpt of an **untitled** Home row — the whole row (§4.3) |
 | `editorTitle` | ~22–24 pt Semibold | Optional note title |
 | `editorBody` | ~17–18 pt Regular | Main writing |
-| `preview` | ~15 pt Regular | Home body preview |
+| `preview` | ~15 pt Regular | Home body excerpt under a title (2 lines, flattened) |
 | `dateLabel` | ~12–13 pt Semibold | top date |
 | `caption` | ~12 pt Regular | low-level metadata |
 

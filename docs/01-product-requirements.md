@@ -164,7 +164,7 @@ Use native iOS conventions wherever they improve familiarity, accessibility, mot
 
 - first-run welcome
 - chronological Home
-- automatic day grouping
+- automatic grouping by relative period (`Today` / `Previous 7 Days` / `Previous 30 Days` / `Older`; changed 2026-08-30 from day grouping — see `RULES.md` §1)
 - create note
 - optional title
 - plain text body

@@ -37,19 +37,111 @@ These are treated as fixed product constraints unless intentionally changed.
   2026-08-18 from the thoughts-only framing — this widens the *invitation*, not the *product*. See
   `README.md` §2 and `docs/08-positioning-marketing.md`.) The product still refuses to become Notion /
   Todoist / Word / an AI writing assistant; the do-not-build fences in §7 hold.
-- Home MUST be the complete chronological notes timeline (no separate "All Notes" screen).
-- Notes MUST be grouped automatically by day.
-- MUST NOT expose user-facing pagination or a "Load more" control.
+- **Home is the recent chronological notes surface, not the complete archive.** Home shows `Today`
+  and `Previous 7 Days`, under the caps below. When — **and only when** — notes exist outside that
+  recent surface, Home exposes **one** archive affordance, labelled `Browse older notes` with a
+  disclosure indicator, leading to the complete chronological timeline (the screen it opens is
+  titled `All Notes`). If every note in the library already sits in `Today` or `Previous 7 Days`,
+  there MUST be no archive affordance at all: `Show all N` has already exposed the complete library,
+  and a second control leading to the same notes one screen further away is the same offer made
+  twice. A period merely being *capped* is not a reason to draw it.
+  (Changed 2026-08-31. The affordance was unconditional and named `View All Notes` for part of that
+  day; it sat under a `Show all 14` that reached the same fourteen notes, and the two read as the
+  same offer twice. It is now named for why you would tap it rather than for what the next screen is
+  called. The previous rule required Home to *be* the complete timeline; it was written when a library was a handful of notes, and at a few hundred — especially
+  with a run of untitled voice captures, which have no title to scan past — Home stopped being a
+  place to land and became the database. The mental model is now four surfaces with four questions:
+  Home *what was I working on recently*, All Notes *show me everything*, Calendar *what did I write
+  that day*, Search *where is that note*. Rationale in
+  `docs/plans/2026-08-30-home-library-redesign-design.md`.)
+- **All Notes is an extension of Home, not a second organization system.** It MUST use the same
+  chronological period grouping and the same note-row presentation. It MUST NOT add its own search,
+  sort, filter, alternate layout, folders, counts, or any other browsing model. This is the calendar
+  day list's fence, applied to the one other surface that lists notes — the moment either grows a
+  control Home did not give it, As Told has a second notes browser. (Added 2026-08-31.)
+- Each Home period MUST be capped — **4** for `Today`, **5** for `Previous 7 Days` — with a quiet
+  `Show all N` that expands **that period in place**, where `N` names the whole period and never the
+  remainder. The cap keeps the newest; a period inside its cap MUST NOT draw the affordance at all;
+  and the cap is a rule about **presentation**, never about the query — a storage batch boundary MUST
+  NOT be able to become a UI rule by accident. Expansion MUST last for the visit: opening a note from
+  an expanded period and coming back MUST NOT re-collapse it. It need not survive a launch.
+  (Added 2026-08-31.)
+- **`Show all N` MUST be reversible.** An expanded period MUST offer `Show less` — the same control,
+  in the same place — returning it to its cap for the rest of the visit. A period that never reached
+  its cap MUST NOT draw either label. (Added 2026-08-31: expansion that only went one way turned a
+  fourteen-row `Previous 7 Days` into a wall with no way back short of leaving Home, which made a
+  glance feel like a commitment. `Show less` is not pagination running backwards — it restores a
+  presentation rule, and reveals nothing.)
+- Home MUST lead with the **subtle current date**, sitting on the first period heading and appearing
+  exactly once. It MUST NOT print the app's name, and it MUST NOT print a count of the library.
+  (Restored 2026-08-31, the same day an `As Told` title over `N notes` briefly replaced it. The name
+  of the app is on the icon the reader just tapped; the count is a statistic, and §4 forbids Home
+  from showing statistics outright; and together they cost a large block of the screen above the
+  first note. The date is small, tertiary and all-caps — it orients rather than announces, which is
+  why it does not compete with the `Today` heading under it.)
+- Notes MUST be grouped automatically by **relative period** on Home — `Today`, `Previous 7 Days`,
+  `Previous 30 Days`, `Older` — with a period drawn only when something landed in it. (Changed
+  2026-08-30, replacing "grouped automatically by day". Day buckets were correct and unscannable:
+  a library of several hundred notes carried roughly as many date headings, and a heading that
+  appears once per note has stopped being information. Boundaries are inclusive and counted in whole
+  **calendar** days — never 24-hour math. The **calendar** still groups by day and still names the
+  day; reaching a date and browsing a timeline are different questions.)
+- Home MUST NOT expose page numbers, batches, cursors, repeated `Load more` controls, or any other
+  user-facing pagination. A period-level `Show all N` / `Show less` affordance **is permitted** when
+  Home intentionally previews only part of that period: it toggles that period between its cap and
+  its whole self, revealing only notes already belonging to it. It is not pagination — there is no
+  next batch, and pressing it twice returns to where it started. All Notes MAY fetch older notes internally while
+  scrolling, but that loading MUST remain invisible — no page numbers, batch counts, `Load more`, or
+  repeated continuation controls. (Clarified 2026-08-31; the original prohibition is unchanged in
+  spirit and in what it forbids.)
 - Search MUST be available from Home via native pull-down/`.searchable` behavior.
 - Calendar is a **secondary** navigation tool for reaching a date — not a second database UI.
   Selecting a day lists that day's notes **on the calendar itself**, and opening one returns there
   (changed 2026-08-19, replacing the day-filtered Home mode). The fence that keeps it from becoming
   a second browsing surface: the day list is rows and nothing else — no search, no sort, no
-  grouping, no pagination, no counts, the same `NoteRow` Home uses. Home remains the only complete
-  timeline.
+  grouping, no pagination, no counts, the same `NoteRow` Home uses. (The complete timeline moved
+  behind **Browse older notes** on 2026-08-31, under the same fence; the calendar is still not it.)
+- **The calendar page MUST have exactly one vertical scrolling surface.** The month grid, the selected
+  day's heading, its notes, and the way past their cap all scroll together. A nested scrolling notes
+  list MUST NOT be reintroduced. (Added 2026-08-31, fixing it: the grid sat above a `List` that
+  scrolled inside it, so a day with eleven notes gave the reader two stacked scroll views and no way
+  to know which one a drag would move.)
+- The selected day MUST show at most **4** notes, with the same reversible `Show all N` / `Show less`
+  Home uses, in the same words. Four rather than Home's five because the grid above it is tall.
+  Expansion resets when the selection moves and need not survive leaving the screen. (Added
+  2026-08-31.)
+- The selected-day heading is `Today` when today is selected, and otherwise the weekday **and** date
+  (`Saturday, August 29`) — never the timeline's relative `Yesterday`, because the reader has pointed
+  at a square on a grid. **No count beside it.** (Added 2026-08-31.)
+- **A day's note indicator MUST NOT become a count.** At most **three** dots — 1 note, 2–3, 4+ — as a
+  sense of activity only. No numerical badge, no heatmap, no per-note-type colour, no voice or
+  checklist icon, and nothing else that distinguishes notes the `Note` model does not actually
+  distinguish. A voice-created note is an ordinary note. The dot count is visual shorthand; the
+  accessibility value MUST speak the **exact** number, since state is never carried by colour alone
+  (§4). (Added 2026-08-31.)
 - Note title MUST be optional. MUST NOT ever render `Untitled`.
 - Empty notes (no meaningful title or body) MUST be discarded automatically.
 - Home MUST NOT show note creation times on normal rows.
+- **A note's body MUST NOT visually masquerade as a title.** A row draws a title line **only** when
+  `title` holds visible text; that line is the sole thing rendered in the primary/semibold treatment,
+  and it means one thing — *the writer named this note*. A titleless note MUST NOT have its first
+  body line promoted into that slot: the row draws **no title line at all**, and its body is rendered
+  as an ordinary excerpt in secondary body text. `Untitled`, `Voice Note`, a generated title, and a
+  badge all stay forbidden — the absence of a title is the answer, not something to fill in. A
+  voice-created note with no title is an ordinary titleless note and takes the same row.
+  (Tightened 2026-08-31, twice in one day. First semibold, then **medium**, were tried on the
+  promoted first line; both were the same mistake in different amounts. Any extra weight on a body
+  line reads as a heading, so a column of voice transcripts looked like a list of names nobody wrote.
+  Weight now belongs to titles exclusively.)
+- A row's body excerpt MUST be limited to **two** lines, the same limit for every row, so truncation
+  is deterministic and never depends on what happens to fit. It carries the **whole** body: a
+  titleless note no longer spends its first line paying for a title it never had. (Changed
+  2026-08-31 from one line — a single orphaned sentence read as a headline and left a section
+  looking sparse while its notes had more to say.)
+- Untitled body text MUST be clearly readable and visually **subordinate to a real title**, and MUST
+  NOT look disabled. Colours come from the semantic tokens (`textPrimary` for a title,
+  `textSecondary` for an excerpt), never from a hard-coded grey, and the hierarchy MUST read
+  correctly in both Light and Dark. (Added 2026-08-31.)
 - Editor shows the note **date**, not a prominent time.
 - Notes MUST autosave. MUST NOT show a Save button — and MUST NOT show a `Done` either. A control
   that ends editing implies that not pressing it loses work, which is the belief autosave exists to
@@ -307,6 +399,45 @@ says so before the retry rather than after it. Editor internals are never persis
   lock (§3).
 - **Voice MUST NEVER summon a keyboard that was not already visible.** Someone who chose to speak has
   made a choice with their hands; answering it with a keyboard overrides it.
+- **A rejected attestation is not a failed transcription** (added 2026-08-31, after production
+  evidence). App Attest is the app's own setup, and the user has no part in it. A `401` means our
+  registration is stale — the relay forgot the key, or the install changed underneath it — and the
+  relay rejects it *before* it reads a byte of audio, so nothing has been attempted. The client MUST
+  repair the registration and complete the request the user asked for, **once**; a second rejection
+  is a real failure and stands. It MUST NOT be shown as "Couldn't transcribe that recording", and the
+  user MUST NOT be the mechanism by which the app re-authenticates itself.
+  This does **not** loosen the rule above it: a transcription that actually failed — audio the relay
+  took, tried, and could not turn into words — is still never retried automatically, and `401` is the
+  only status that gets a second attempt.
+- **A rejected attestation MUST say why in the relay log** (added 2026-08-31). The verifier already
+  distinguishes a missing assertion, an expired challenge, an unknown key, and a bad signature; all
+  four used to be discarded at the route boundary into one opaque `attestation_failed`, which left the
+  failure most likely to be our own bug the one nobody could diagnose. Metadata only: the reason, and
+  whether a key id was present — **never which**, because a key id identifies an install (§3).
+
+- **The capture's state MUST match the recorder's** (added 2026-08-30, after audit). `AVAudioRecorder`
+  MUST have a delegate, and an unexpected finish or an encode error MUST reach the capture. A capture
+  MUST NOT remain `recording` — with a timer counting and a waveform drawn — once the recorder
+  underneath it has stopped. The recorded-duration clock stops when the capture actually terminates,
+  not when the app notices.
+- **An unexpected stop MUST NOT look like a completed recording** (added 2026-08-30). A recorder that
+  stops on its own — an encoder failure, a finish nobody asked for — keeps every second it captured,
+  exactly as an interruption does; what it MUST NOT do is transcribe and hand back a note as though
+  the user had ended it. The capture stops at `stoppedUnexpectedly`, says so, and offers the two
+  controls held audio always has: send it, or delete it. This is `docs/10-voice-v2.md` §14's *say what
+  happened* applied to the one ending that had no way to say anything. A call or Siri is unchanged and
+  still finishes and transcribes: the user knows a call arrived, and nobody is told a recorder failed.
+- **Finalization is a step, not a label** (added 2026-08-30). No upload begins until the recorder has
+  confirmed it stopped and the container it wrote has been **measured** on-device. A file with no
+  usable duration is refused locally rather than uploaded — the relay measures the same way and would
+  refuse it anyway. `Phase.finishing` is where this happens, and it is the only way out of a capture.
+- **A transient route observation is not proof the microphone is gone** (corrected 2026-08-30). Route
+  change notifications are delivered *while the route is changing*, so `currentRoute.inputs` is
+  momentarily empty during transitions a recording survives intact. An empty read MUST be escalated to
+  a settled check of the session, never acted on as an ending. Unchanged: an input the system says has
+  gone (`.oldDeviceUnavailable`, `.noSuitableRouteForCategory`) still finishes safely, a newly
+  available device still never switches the microphone mid-thought, and nothing ever auto-resumes.
+
 - **A finished recording is not casually lost.** After a retryable transcription failure the audio is
   retained on-device for **explicit** retry, for **24 hours** (`VoiceLimits.retryLifetime`, a named
   constant beside the other voice limits, never a number in the view layer). Which failures qualify is
@@ -458,13 +589,49 @@ Source: `docs/03-design-system.md` (whole file, incl. §0 Visual reference),
 
 ### Home
 
-- Header shows: subtle current date, prominent `Today`, and a Calendar action.
-- MUST NOT show greeting, weather, current time, quote, writing prompt, streak, or statistics.
-- Row: if a title exists → title (one line where possible, ~17 pt semibold) + 2–3 line body preview
-  (~15 pt regular, secondary, comfortable leading); if not → the first meaningful body line becomes
-  the primary content and reads at body weight. Never generate `Untitled`.
-- No card per note by default — use typography, whitespace, optional subtle separator. Prefer
-  `VStack` rhythm over rounded rectangles.
+- Header shows: subtle current date, the first period heading, and the Profile / Calendar / New Note
+  / Quick Voice actions. (Amended 2026-08-30: the prominent largeTitle `Today` **anchor is gone**.
+  `Today` is now a period heading, and drawing it as both anchor and heading rendered it twice — a
+  duplicated heading is a bug, and VoiceOver reads it out loud. The current date rides above the
+  first heading rather than occupying a band of its own.)
+- MUST NOT show greeting, weather, current time, quote, writing prompt, streak, statistics, the app's
+  own name, or a count of the library.
+- The four header action glyphs — Profile, Calendar, New Note, Quick Voice — each carry their own
+  muted accent tint, and Quick Voice carries its own rather than sharing New Note's. (Restored
+  2026-08-31, after a day drawn in `textPrimary`. **The monochrome rule below is about content and
+  surfaces, not about navigation**: four identically-inked glyphs in one corner have to be read
+  before they can be told apart, and writing and speaking are peers rather than one being the
+  other's second button. Home's grounds, note surfaces, text, and dividers stay neutral.)
+
+### Calendar
+
+- The calendar page uses **one** accent, `calendarAccent` — the sage its glyph wears in Home's header
+  — for every piece of interaction state: month chevrons, the selected day's fill, today's ring, and
+  the density dots. Colour here carries **state**; it does not decorate. (Added 2026-08-31.)
+- Today's marker and the selected marker MUST differ in **shape** (ring vs. filled), not only in
+  colour: both are true on the day the screen opens, and a reader must be able to see both.
+- `calendarAccent` is **not** `iconCalendar`. The glyph's sage is 4.02:1 against white, which is fine
+  for a symbol and below the 4.5:1 floor the moment a day *number* is drawn on it. Light is the same
+  hue 12 % darker (`#457968`), measured 5.01:1 on screen against `onAccent`; Dark is the glyph's own
+  `#86BCA9`, measured 8.80:1. Any future change to either MUST be re-measured, not eyeballed.
+- Row: if a title exists → title (one line, ~17 pt semibold, `textPrimary`) over a **two**-line
+  flattened body excerpt (~15 pt regular, `textSecondary`); if not → **no title line**, and the
+  excerpt alone at body size (~17 pt regular, `textSecondary`), two lines. Never generate `Untitled`.
+  (Amended 2026-08-30 to a one-line preview for density, and amended again 2026-08-31 to two: one
+  line turned a titleless note into a lone sentence that read as a headline. Rows are no longer a
+  uniform height — a titled note has genuinely more to show, and forcing both shapes to match is
+  what cost the excerpt its second line. Measured at default type: a titled row with a two-line
+  excerpt is **85–87 pt**, a titleless one **67 pt**.)
+- A row's preview is **flattened**: the lines the reader would have seen, joined onto one line. No
+  marker, fence, or table pipe may reach it (see the structure-marker rule below).
+- **No card per _note_.** A note MUST NOT be its own floating rounded rectangle. One rounded surface
+  **per period**, holding that period's rows separated by hairline dividers, is what Home draws.
+  (Amended 2026-08-30, replacing "prefer `VStack` rhythm over rounded rectangles". What that rule
+  protected was a screen of per-note cards, and it still forbids exactly that; a single grouped
+  surface is the opposite — it is what lets the rows be dense.)
+- Home MUST NOT show a note's creation **time** on a row. This did not change with the grouped
+  redesign, and was deliberately re-affirmed on 2026-08-30 when a `9:41 PM ·` preview prefix was
+  proposed and dropped.
 - Must remain navigable and premium with 0, 1, many-today, many-days, long/absent titles, long
   bodies, and large Dynamic Type. Verified at 500–1,000+ notes.
 
@@ -655,16 +822,30 @@ decorative animation that slows capture.
 
 - Colors via semantic tokens (`Color.ds.canvas`, `Color.ds.textPrimary`, …) or adaptive Asset Catalog /
   native system colors. MUST NOT scatter `Color(hex:)` or `gray500` across views.
-- Reference palette (light / dark): `canvas` `#F8F7F3`/`#101112`, `surfaceElevated` `#FFFFFF`/`#1A1B1D`,
-  `textPrimary` `#1C1C1E`/`#F3F2EE`, `textSecondary` `#68686D`/`#A6A6AB`, `textTertiary` `#99999F`/`#747479`,
+- Reference palette (light / dark), **neutralised 2026-08-30**: `canvas` `#FFFFFF`/`#000000`,
+  `groupedCanvas` `#F2F2F7`/`#000000`, `surfaceElevated` `#FFFFFF`/`#1C1C1E`,
+  `separator` `#3C3C43` @29% / `#545458` @65%, `textPrimary` `#1C1C1E`/`#FFFFFF`,
+  `textSecondary` `#5B5B61`/`#ADADB4`, `textTertiary` `#77777D`/`#909097`,
   `accent` `#314D63`/`#8AA9BE`, `onAccent` `#FFFFFF`/`#101112` (text drawn *on* an accent fill — not a
-  fixed white, because the dark accent is light), `destructive` = iOS system red. Warm canvas/accent
-  are custom adaptive tokens.
+  fixed white, because the dark accent is light), `destructive` = iOS system red.
+  - The **warm** canvas (`#F8F7F3`) and the cream dark `textPrimary` (`#F3F2EE`) are **gone**. No
+    brand colour sits on a content surface: the feather mark carries the identity, and a tint behind
+    the writing was competing with it.
+  - `canvas` and `groupedCanvas` are two grounds because a page of writing and a grouped list want
+    opposite things — nothing between the words and the screen, versus something for the row
+    surfaces to be islands against. One token could not be both.
+  - `accent` and the **four** header icon tints (`iconProfile`, `iconCalendar`, `iconCompose`,
+    `iconVoice`) are **unchanged**: they are controls, not content. Neutralising the palette
+    neutralised *content surfaces*; it never meant removing the colour that tells one control from
+    another. `iconVoice` (muted lavender, `#6B5E93` / `#A99BD1`) was added 2026-08-31 so Quick Voice
+    stops borrowing New Note's slate blue.
 - Typography: system San Francisco + Dynamic Type-backed semantic styles. **No custom font in V1.**
   Editor line height ~1.35–1.45×.
 - Spacing: 4-pt foundation (4/8/12/16/20/24/32/40/48/64). Default horizontal margin 20 pt (Home),
   20–24 pt (Editor).
-- Radius: 8/12/18/24/pill — only where controls/sheets need shape. Do NOT wrap every note in a large radius.
+- Radius: 8/12/18/24/pill — only where controls/sheets need shape. Do NOT wrap every note in a large
+  radius; the grouped period surface on Home is one radius around **many** notes, which is the
+  distinction that rule was drawing (amended 2026-08-30).
 - Icons: SF Symbols only. No emoji, no Font Awesome, no mixed icon libraries.
 - Materials / Liquid Glass: use for **controls and navigation** (New Note, mic, recording surface,
   sheet/nav controls) — NOT for content. The content plane stays calm and opaque. Never put the whole
@@ -1324,7 +1505,33 @@ Source: `docs/01-product-requirements.md` §15, `docs/07-build-plan.md` (Definit
   listing, website, and support content all read **As Told**.
 - The verification suite in `docs/07-build-plan.md` ("Verification suite") is green at **at least the
   current committed baseline**, with a clean typecheck and a succeeding Release build. As of this
-  checkpoint that baseline is **1280 unit, 92 UI, 136 relay** (both app counts measured 2026-08-28 —
+  checkpoint that baseline is **1359 unit, 101 UI, 137 relay** (measured 2026-08-31 —
+  full `-only-testing:YourlyTests` and `-only-testing:YourlyUITests` runs, both green, with a
+  succeeding Release build and a clean relay typecheck. The UI figure is from the last full run, taken
+  before the row-hierarchy and calendar passes — both of which, by agreement, added no UI tests. The
+  row pass changed one view's typography and no label, identifier, or control. The calendar pass
+  restructured a view hierarchy, so its two existing UI classes were re-run on their own and are
+  green (4/4); nothing else on that screen's surface moved).
+
+  Three changes are in this tree at once, and the number is **the tree's**, not any one of theirs:
+
+  1. the Home library redesign and its three refinement passes — the recent-only scope, the caps and
+     their reversible `Show all N` / `Show less`, the conditional `Browse older notes`, the restored
+     date line and header tints, the row hierarchy in which only a title reads as one, and the
+     calendar pass (one scroll, a 4-note day cap, sage state colour, density dots);
+  2. the recorder lifecycle work — the `AVAudioRecorder` delegate, an unexpected stop that can
+     neither leave the capture `recording` nor pass for an ordinary success, `.finishing` as a real
+     gate before any upload, and a transient empty audio route that is checked rather than believed;
+  3. the attestation repair — a 401 completed inside the request that was rejected, a stale local key
+     replaced before the upload, and a guard that no other status gains a second attempt. The relay
+     rose to 137 with the attestation-rejection log.
+
+  **The earlier figures in this line (1280, 1292, 1297, 1303, 1308, 1320, 1334, 1340) were partial counts taken
+  while those changes landed one at a time; the number above supersedes all of them.** Anything
+  landing on top of this tree MUST **re-measure** and write the real number here rather than adding
+  its own delta to this one.
+
+  Earlier: 1280 unit and 92 UI measured 2026-08-28 —
   full `-only-testing:YourlyTests` and `-only-testing:YourlyUITests` runs, 1280 tests in 166 suites and
   92 UI tests, green, raised from 1202/83 by Voice V2 Phase 2B: retained recordings, the 24-hour
   lifetime and its sweep, Retry / Delete Recording, one-shot recovery of a recording that outlived its

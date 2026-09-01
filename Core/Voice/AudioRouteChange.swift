@@ -41,22 +41,32 @@ enum AudioRouteChange {
         case finishSafely
         /// Nothing to do — one continuous container, still being written.
         case keepRecording
+        /// The route snapshot showed no inputs, and that is not enough to act on. Ask the session
+        /// once it has settled, and finish only if the microphone is genuinely gone.
+        case confirmInputLoss
     }
 
     /// The conservative policy `docs/10-voice-v2.md` §14 asks for.
     ///
     /// - Losing the active input finishes safely. iOS may well move the recording to the built-in
     ///   microphone without missing a sample, but "may well" is not something to bet a user's words
-    ///   on, and a live waveform drawn over a dead input is worse than an honest stop. If the device
-    ///   pass shows `AVAudioRecorder` surviving the transition with one valid container, this is the
-    ///   one line that has to change.
+    ///   on, and a live waveform drawn over a dead input is worse than an honest stop. This is the
+    ///   system's own explicit statement that a device went away (`.oldDeviceUnavailable`,
+    ///   `.noSuitableRouteForCategory`), not an inference — which is what makes it safe to act on.
     /// - A newly available device does **not** end the recording. Somebody speaking a thought must
     ///   not have their microphone switched mid-sentence because a case was opened nearby; a new
     ///   device is used naturally by the *next* recording.
-    /// - No remaining input at all is unambiguous, whatever the notification's reason said: there is
-    ///   nothing left to record with.
+    /// - **An empty input list is a question, not a conclusion** (corrected 2026-08-30). This
+    ///   previously read "no remaining input at all is unambiguous, whatever the notification's
+    ///   reason said" and finished the capture on the spot. It is not unambiguous: the notification
+    ///   is delivered *while the route is changing*, so `currentRoute.inputs` is momentarily empty
+    ///   during transitions a recording survives intact — and a capture ended on that instant is a
+    ///   thought silently truncated mid-sentence, reported to the user as a success. The observation
+    ///   is kept, and it is escalated to a settled check (`.confirmInputLoss`) rather than to an
+    ///   ending. What that check asks is in `AVAudioRecorderService.confirmInputLoss()`; the answer
+    ///   still finishes safely when the microphone really is gone.
     static func decision(for reason: Reason, hasInput: Bool) -> Decision {
-        guard hasInput else { return .finishSafely }
-        return reason == .inputDeviceLost ? .finishSafely : .keepRecording
+        if reason == .inputDeviceLost { return .finishSafely }
+        return hasInput ? .keepRecording : .confirmInputLoss
     }
 }

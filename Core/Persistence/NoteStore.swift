@@ -13,5 +13,7 @@ protocol NoteStore {
     func discardIfEmpty(_ note: Note) throws
     func recent(limit: Int, before: Date?) throws -> [Note]
     func notes(on day: Date) throws -> [Note]
-    func noteDays(in month: Date) throws -> Set<Date>
+    /// How many visible notes each day of `month` holds. Days with none are absent, so
+    /// `Set(result.keys)` is the set of days that earn a mark on the grid.
+    func noteDayCounts(in month: Date) throws -> [Date: Int]
 }

@@ -23,7 +23,21 @@ final class VoiceCaptureModel {
         /// Holding the microphone, keeping the file open, and **not** counting time.
         case paused
         /// The recorder is being closed and its file finalized, before anything is sent.
+        ///
+        /// A real step, not a label on the way past one (corrected 2026-08-30). Nothing leaves this
+        /// state until the recorder has confirmed it stopped and the container it wrote has been
+        /// measured — `AudioRecording.finish()` is what happens *in* here, and it is the only way
+        /// out. Before that it was set and left within one synchronous call, which meant the upload
+        /// began while the encoder might still have been writing.
         case finishing
+        /// The recorder stopped without being asked, and what is on disk is real but incomplete.
+        ///
+        /// Its own state rather than a quiet trip through `finishing`, because the difference between
+        /// this and Done is the difference between "here is your thought" and "here is as much of
+        /// your thought as survived" — and `docs/10-voice-v2.md` §14 requires the app to *say what
+        /// happened* rather than to present the second as the first. The audio is retained, so the
+        /// two choices are the two that already exist for held audio: send it, or delete it.
+        case stoppedUnexpectedly
         /// Recording finished, audio held, waiting on the one-time disclosure before it is sent.
         /// Only ever reached once per install, and only when the service actually uploads
         /// (`TranscriptionConsent`).
@@ -59,6 +73,11 @@ final class VoiceCaptureModel {
             // *your words are gone* (`docs/10-voice-v2.md` §13).
             case (_, .failed(let error)) where old != new:
                 return VoiceErrorCopy.announcement(for: error)
+            // The one ending a listener could otherwise mistake for a completed recording: the
+            // screen changed under them and nothing was said. Both halves matter — it stopped, and
+            // what was said before it stopped is still here.
+            case (_, .stoppedUnexpectedly) where old != new:
+                return "\(VoiceErrorCopy.unexpectedStopMessage) \(VoiceErrorCopy.retainedNotice)"
             // And its counterpart: the recording is now actually gone, at the user's own request.
             case (.failed, .idle): return "Recording deleted"
             default: return nil
@@ -109,6 +128,12 @@ final class VoiceCaptureModel {
 
     private var audio: HeldAudio?
     private var work: Task<Void, Never>?
+    /// The finalization in flight — closing the recorder and measuring what it wrote.
+    ///
+    /// Held so that abandoning a capture abandons this too. It is deliberately *not* the same task
+    /// as `work`: finalizing is about the file, transcribing is about the network, and a cancel that
+    /// conflated them would be a cancel that could interrupt the encoder.
+    private var finishing: Task<Void, Never>?
     /// Which transcription attempt is the current one.
     ///
     /// `Task.cancel()` alone is not an answer here: a real upload that has already reached the relay
@@ -221,12 +246,19 @@ final class VoiceCaptureModel {
         phase = .requestingPermission
         guard await recorder.requestPermission() else { phase = .permissionDenied; return }
         do {
-            // A call or Siri ends the recording for us — finish with what was captured rather than
-            // silently dropping the user's words (docs/04-voice-transcription.md §7).
             // A call, Siri, or an audio route the recorder cannot continue on — all of them end the
             // capture the same way, and none of them may end it by deleting what was said
             // (docs/04-voice-transcription.md §7, docs/10-voice-v2.md §14).
-            recorder.onInterruption = { [weak self] in self?.done() }
+            //
+            // A recorder that stopped *on its own* is the one ending that does not go down that
+            // path. The audio is kept exactly the same way; what differs is that the user is told,
+            // because they were still speaking into a microphone that had already closed.
+            recorder.onCaptureEnded = { [weak self] stop in
+                switch stop {
+                case .userFinished, .interrupted: self?.done()
+                case .unexpected: self?.endUnexpectedly()
+                }
+            }
             audio = .held(try recorder.start())
             recorded.start(at: clock.now)
             phase = .recording
@@ -265,17 +297,92 @@ final class VoiceCaptureModel {
         // From either live state. Somebody who paused and then decided they were finished must not
         // have to resume in order to stop (`docs/10-voice-v2.md` §5 keeps **Done** in both).
         guard phase == .recording || phase == .paused else { return }
+        stopCounting()
+        phase = .finishing
+        // Strongly captured on purpose. Back mid-recording finishes and transcribes (`RULES.md` §2),
+        // and the editor drops this capture in the same breath — a weak capture here would let the
+        // finalization evaporate along with it, which is the data loss the rule exists to prevent.
+        finishing = Task {
+            self.settleFinished(await self.recorder.finish(), ending: .userFinished)
+        }
+    }
+
+    /// The recorder stopped and nobody asked it to.
+    ///
+    /// Everything about the audio is handled exactly as **Done** handles it — the file is finalized,
+    /// measured, and kept. The one thing that is different is the ending it arrives at: the user is
+    /// shown `stoppedUnexpectedly` and decides, rather than being handed a note that looks like the
+    /// whole of what they said. Nothing here discards (`RULES.md` §2).
+    private func endUnexpectedly() {
+        guard phase == .recording || phase == .paused else { return }
+        stopCounting()
+        phase = .finishing
+        finishing = Task {
+            self.settleFinished(await self.recorder.finish(), ending: .unexpected)
+        }
+    }
+
+    /// Stop the recorded-duration clock and the cap that reads it.
+    ///
+    /// Called the instant a capture actually terminates, however it terminated. The clock is
+    /// arithmetic over `ContinuousClock` and knows nothing about the microphone, so a recorder that
+    /// dies while this is still running produces a timer that goes on climbing over a dead input —
+    /// which is precisely what the app used to draw.
+    private func stopCounting() {
         limitTask?.cancel()
         limitTask = nil
         recorded.pause(at: clock.now)
-        phase = .finishing
-        guard let url = recorder.stop() else {
-            audio = nil                      // nothing was captured, so there is nothing to keep
+    }
+
+    /// What a finalized recording becomes, once it is finalized and measured.
+    ///
+    /// The one gate every capture passes through, so no ending can skip the measurement. A container
+    /// with no usable duration is not audio: the relay measures the same way and refuses what it
+    /// cannot measure, so this refuses it here rather than spending a round trip to be told.
+    private func settleFinished(_ finished: FinishedRecording?, ending: RecordingStop) {
+        // Nothing was ever opened, so there is nothing to finalize and nothing to keep. `.finishing`
+        // is a step, and a step has to end even when the recorder had nothing to hand back.
+        guard let finished else {
+            release()
             phase = .failed(.noSpeech)
             return
         }
-        audio = .held(url)
+        VoiceDiagnostics.captureFinished(origin: origin,
+                                         ending: ending,
+                                         recorded: recorded.elapsed(at: clock.now),
+                                         finished: finished)
+        guard finished.isTranscribable else {
+            release()                        // nothing was captured, so there is nothing to keep
+            phase = .failed(.noSpeech)
+            return
+        }
+        guard ending != .unexpected else {
+            // Kept and handed back to the user with an explanation — never uploaded on the
+            // assumption that a recording which ended by itself ended when they meant it to.
+            //
+            // Remembered across the process only once the disclosure has been accepted. A first
+            // recording that has never been asked about may not be persisted for a later surface to
+            // offer back: the recovery path treats a retained recording as already-disclosed,
+            // because until now one could only exist after a *sent* upload. Held instead, so it
+            // stays for this surface and this decision, and goes with it — the same rule
+            // `finishOnLeave()` already applies to audio waiting on the disclosure (RULES.md §3).
+            if consent.hasConsented { retain(finished.url) } else { audio = .held(finished.url) }
+            phase = .stoppedUnexpectedly
+            return
+        }
+        audio = .held(finished.url)
         // The audio stays on disk while the question is open; nothing is sent until it is answered.
+        guard consent.hasConsented else { phase = .needsConsent; return }
+        transcribe(finished.url)
+    }
+
+    /// **Transcribe** what survived an unexpected stop — the user's decision, never the app's.
+    ///
+    /// The same upload every other capture makes, from the same held audio, subject to the same
+    /// disclosure. A recording that fails from here fails into the ordinary retained-recording
+    /// flow, because from this point it is an ordinary recording.
+    func transcribeCaptured() {
+        guard phase == .stoppedUnexpectedly, let url = audio?.url else { return }
         guard consent.hasConsented else { phase = .needsConsent; return }
         transcribe(url)
     }
@@ -308,6 +415,14 @@ final class VoiceCaptureModel {
             done()
             return
         }
+        // Left while the file was still being closed.
+        //
+        // The audio is already committed — the user stopped speaking and the recorder is shutting
+        // down — so this is the mid-recording case one moment later, and it MUST finish and insert
+        // exactly as that one does (`RULES.md` §2). Doing nothing is what allows that: the
+        // finalization task holds this capture alive and carries it through to the transcript.
+        // Falling through to `cancel()` here would delete a recording the user had finished making.
+        if phase == .finishing { return }
         // Left while the recording was still being sent.
         //
         // The user has finished speaking and committed the audio; navigating away is not a decision
@@ -363,6 +478,8 @@ final class VoiceCaptureModel {
     func cancel() {
         limitTask?.cancel()
         limitTask = nil
+        finishing?.cancel()
+        finishing = nil
         abandonTranscription()
         recorder.cancel()
         audio = nil
@@ -407,6 +524,8 @@ final class VoiceCaptureModel {
     func discard() {
         limitTask?.cancel()
         limitTask = nil
+        finishing?.cancel()
+        finishing = nil
         abandonTranscription()
         release()
         recorded = RecordedDuration()
@@ -476,10 +595,11 @@ final class VoiceCaptureModel {
         attempt += 1
         let generation = attempt
         phase = .transcribing
-        work = Task { [service, onTranscript] in
+        work = Task { [service, onTranscript, origin] in
             do {
                 let result = try await service.transcribe(audioURL: url, requestID: UUID())
                 guard isCurrentAttempt(generation) else { return }
+                VoiceDiagnostics.transcriptReceived(origin: origin, characters: result.text.count)
                 onTranscript(result.text)          // editor owns insertion
                 release()                          // delete temp audio on success, immediately
                 if let until = result.allowanceExhaustedUntil {

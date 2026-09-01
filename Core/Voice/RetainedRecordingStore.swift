@@ -108,14 +108,17 @@ struct NoRetainedRecordingStore: RetainedRecordingStoring {
 @MainActor
 final class RecoveredRecordingFile: AudioRecording {
     var level: Float { 0 }
-    var onInterruption: (() -> Void)?
+    var onCaptureEnded: ((RecordingStop) -> Void)?
+
+    /// Nothing is open, so nothing can stop.
+    var isCapturing: Bool { false }
 
     /// There is no microphone to ask for.
     func requestPermission() async -> Bool { false }
     func start() throws -> URL { throw TranscriptionError.serviceUnavailable }
     func pause() {}
     func resume() {}
-    func stop() -> URL? { nil }
+    func finish() async -> FinishedRecording? { nil }
     func cancel() {}
 
     /// The one thing a recovered recording's file can still have done to it, other than being sent.

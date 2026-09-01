@@ -382,8 +382,15 @@ final class CalendarDayNotesUITests: XCTestCase {
     }
 }
 
-/// Home's chronological identity. The defect these lock down: `Today` was printed by the day
-/// grouping rather than by Home itself, so a day with nothing written on it opened on `Yesterday`.
+/// Home's identity, as it reads after the 2026-08-30 library redesign and the 2026-08-31 refinements.
+///
+/// These originally locked down a defect where `Today` was printed by the day grouping rather than
+/// by Home itself, so a day with nothing written on it opened on `Yesterday`. That defect is now
+/// structurally impossible: `Today` is a *bucket* and `Yesterday` is not a heading at all.
+///
+/// What leads Home is the quiet current date over the first period heading. An `As Told` title over
+/// a note count briefly replaced it and was removed the same day: the app's name was on the icon the
+/// reader just tapped, and the size of the library is a statistic Home does not report (RULES.md §4).
 final class TimelineHeaderUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
@@ -401,29 +408,149 @@ final class TimelineHeaderUITests: XCTestCase {
         return df.string(from: .now).uppercased()
     }
 
-    func testHomeAnchorsOnTodayAboveTheGroups() {
+    func testHomeLeadsWithTheDateOverTheFirstPeriodHeading() {
         let app = launchedApp()
         XCTAssertTrue(app.staticTexts[Self.todayLabel()].waitForExistence(timeout: 8),
-                      "Home should show the current date")
-        XCTAssertTrue(app.staticTexts["Today"].exists, "Today should anchor Home")
-        XCTAssertTrue(app.staticTexts["Yesterday"].exists, "older groups still have their headers")
+                      "the current date should lead Home")
+        XCTAssertTrue(app.staticTexts["Today"].exists, "today's notes sit under a Today heading")
+        XCTAssertTrue(app.staticTexts["Previous 7 Days"].exists,
+                      "the sample seed spans several days, so the next period should be drawn")
     }
 
-    /// With nothing written today, `Today` must still be the first heading — never `Yesterday`.
-    func testTodayStillAnchorsHomeWithNoNotesToday() {
-        let app = launchedApp(seed: nil)
-        XCTAssertTrue(app.staticTexts["Today"].waitForExistence(timeout: 8),
-                      "Today should anchor Home even with no notes")
+    /// The date orients once. Repeating it over every group would be the screen telling the time
+    /// again for notes the reader has already placed.
+    func testTheDateAppearsOnceAndOnlyOnTheFirstHeading() {
+        let app = launchedApp()
+        XCTAssertTrue(app.staticTexts["Previous 7 Days"].waitForExistence(timeout: 8))
+        XCTAssertEqual(app.staticTexts.matching(identifier: Self.todayLabel()).count, 1,
+                       "the date belongs to the first heading, not to every one")
     }
 
-    /// The regression that matters: notes exist, but none of them are from today. Home must still
-    /// open on `Today`, with the older groups beneath it.
-    func testTodayAnchorsHomeWhenEveryNoteIsOlder() {
+    /// Home carries no name and no count of its own (removed 2026-08-31).
+    func testHomeDoesNotPrintItsOwnNameOrACount() {
+        let app = launchedApp()
+        XCTAssertTrue(app.staticTexts["Today"].waitForExistence(timeout: 8), "Home did not group")
+        XCTAssertFalse(app.staticTexts["As Told"].exists,
+                       "the app's name was on the icon the reader just tapped")
+        XCTAssertFalse(app.staticTexts.element(matching: NSPredicate(format: "label MATCHES %@",
+                                                                    "^[0-9]+ notes?$")).exists,
+                       "the size of the library is a statistic, and Home reports none")
+    }
+
+    /// Home stops at the recent periods. Anything older is behind **Browse older notes**, which is
+    /// the only route from Home into the complete timeline (RULES.md §1, changed 2026-08-31).
+    func testHomeStopsAtTheRecentPeriodsAndOffersTheArchive() {
         let app = launchedApp(seed: "-seedOlderNotesOnly")
-        XCTAssertTrue(app.staticTexts["Today"].waitForExistence(timeout: 8),
-                      "Today should anchor Home even when nothing was written today")
-        XCTAssertTrue(app.staticTexts[Self.todayLabel()].exists, "current date still leads Home")
+        XCTAssertTrue(app.buttons["Browse older notes"].waitForExistence(timeout: 8),
+                      "older notes exist, so Home should offer the archive")
+        XCTAssertFalse(app.staticTexts["Previous 30 Days"].exists,
+                       "Home draws Today and Previous 7 Days and nothing older")
+        XCTAssertFalse(app.staticTexts["Older"].exists)
+    }
+
+    func testBrowseOlderNotesOpensTheCompleteTimeline() {
+        let app = launchedApp(seed: "-seedOlderNotesOnly")
+        XCTAssertTrue(app.buttons["Browse older notes"].waitForExistence(timeout: 8))
+        app.buttons["Browse older notes"].tap()
+        XCTAssertTrue(app.navigationBars["All Notes"].waitForExistence(timeout: 8),
+                      "Browse older notes should push the archive, which names itself All Notes")
+    }
+
+    /// **The duplication the conditional archive exists to kill** (2026-08-31). Seven notes, all of
+    /// them today: `Show all 7` already reaches every note in the library, so an archive affordance
+    /// beside it would lead to the same seven notes one screen further away.
+    func testNoArchiveAffordanceWhenHomeAlreadyHoldsEveryNote() {
+        let app = launchedApp(seed: "-seedCappedToday")
+        XCTAssertTrue(app.buttons["Show all 7"].waitForExistence(timeout: 8),
+                      "Today is over its cap, so the expander should be offered")
+        XCTAssertFalse(app.buttons["Browse older notes"].exists,
+                       "nothing is older than Home draws, so there is nothing to browse")
+    }
+
+    /// The buckets replaced day headings outright. A per-day heading reappearing means something
+    /// reintroduced `groupedByDay` on Home.
+    func testHomeDoesNotDrawPerDayHeadings() {
+        let app = launchedApp()
+        XCTAssertTrue(app.staticTexts["Today"].waitForExistence(timeout: 8), "Home did not group")
         XCTAssertFalse(app.staticTexts["Yesterday"].exists,
-                       "the seed is a week old, so Yesterday should not appear at all")
+                       "Home groups by period now — Yesterday is not one of them")
+    }
+
+    /// With nothing written today there is simply no `Today` group, and the date still leads. The old
+    /// failure mode — Home *opening* on `Yesterday` — cannot recur, because no day is ever a heading.
+    func testNoTodayGroupWhenNothingWasWrittenToday() {
+        let app = launchedApp(seed: "-seedOlderNotesOnly")
+        XCTAssertTrue(app.staticTexts[Self.todayLabel()].waitForExistence(timeout: 8),
+                      "the date still leads Home")
+        XCTAssertFalse(app.staticTexts["Today"].exists,
+                       "nothing was written today, so no Today group should be drawn")
+    }
+
+    /// The cap, and the way past it. Seven notes today, four drawn, and the affordance names the
+    /// whole period rather than being permanent furniture.
+    func testACappedPeriodExpandsInPlace() {
+        let app = launchedApp(seed: "-seedCappedToday")
+        XCTAssertTrue(app.staticTexts["Today"].waitForExistence(timeout: 8), "Home did not group")
+        XCTAssertTrue(app.staticTexts["Capped note 7"].exists, "the newest is drawn")
+        XCTAssertFalse(app.staticTexts["Capped note 3"].exists, "the fifth-newest is capped away")
+
+        let expand = app.buttons["Show all 7"]
+        XCTAssertTrue(expand.waitForExistence(timeout: 5), "the cap should offer a way past itself")
+        expand.tap()
+
+        XCTAssertTrue(app.staticTexts["Capped note 3"].waitForExistence(timeout: 5),
+                      "expanding should reveal the rest of the group in place")
+        XCTAssertFalse(app.buttons["Show all 7"].exists,
+                       "and the affordance stops offering what is already shown")
+    }
+
+    /// **`Show all N` goes both ways** (2026-08-31). One-way expansion left a group open with no way
+    /// back short of leaving Home, which made a glance feel like a commitment.
+    func testAnExpandedPeriodCanBeCollapsedAgain() {
+        let app = launchedApp(seed: "-seedCappedToday")
+        XCTAssertTrue(app.buttons["Show all 7"].waitForExistence(timeout: 8))
+        app.buttons["Show all 7"].tap()
+
+        let collapse = app.buttons["Show less"]
+        XCTAssertTrue(collapse.waitForExistence(timeout: 5),
+                      "an expanded group must offer its own way back")
+        collapse.tap()
+
+        XCTAssertTrue(app.buttons["Show all 7"].waitForExistence(timeout: 5),
+                      "collapsing should restore the cap and the offer to open it again")
+        XCTAssertFalse(app.staticTexts["Capped note 3"].exists,
+                       "and the capped notes should be back behind the cap")
+        XCTAssertTrue(app.staticTexts["Capped note 7"].exists, "the newest four still stand")
+    }
+
+    /// Expansion belongs to the visit, not to the list. A period that re-collapsed because the reader
+    /// opened one of its notes would make the affordance feel like it had not worked (RULES.md §1).
+    func testAnExpandedPeriodSurvivesOpeningANote() {
+        let app = launchedApp(seed: "-seedCappedToday")
+        XCTAssertTrue(app.buttons["Show all 7"].waitForExistence(timeout: 8))
+        app.buttons["Show all 7"].tap()
+        XCTAssertTrue(app.staticTexts["Capped note 1"].waitForExistence(timeout: 5),
+                      "the oldest of the seven should now be drawn")
+
+        app.staticTexts["Capped note 1"].tap()
+        XCTAssertTrue(app.buttons["Back to notes"].waitForExistence(timeout: 8), "the editor never opened")
+        app.buttons["Back to notes"].tap()
+
+        XCTAssertTrue(app.staticTexts["Capped note 1"].waitForExistence(timeout: 8),
+                      "Today should still be expanded after coming back from a note")
+        XCTAssertTrue(app.buttons["Show less"].exists, "and must not have re-collapsed")
+    }
+
+    /// An empty library shows the mark and the tagline — no group, no date line, no creation control
+    /// duplicating the header's, and no archive to open.
+    func testEmptyHomeShowsTheMarkAndTagline() {
+        let app = launchedApp(seed: nil)
+        XCTAssertTrue(app.staticTexts["Nothing here yet."].waitForExistence(timeout: 8),
+                      "an empty library should name its state")
+        XCTAssertTrue(app.staticTexts["Write it. Say it. Keep it."].exists,
+                      "the tagline is the second line")
+        XCTAssertTrue(app.buttons["New note"].exists, "creation still lives in the header")
+        XCTAssertFalse(app.buttons["Browse older notes"].exists,
+                       "there is no archive to open when there are no notes")
     }
 }

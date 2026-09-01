@@ -94,6 +94,8 @@ struct QuickVoiceCaptureView: View {
             capture(model, paused: true)
         case .finishing:
             TranscribingIndicator()
+        case .stoppedUnexpectedly:
+            unexpectedStop(model)
         case .needsConsent:
             consentRequest(model)
         case .transcribing:
@@ -258,6 +260,43 @@ struct QuickVoiceCaptureView: View {
                         .foregroundStyle(Color.ds.textPrimary)
                         .frame(minHeight: 44)
                 }
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    /// The recorder stopped on its own, and the user was still speaking (`docs/10-voice-v2.md` §14).
+    ///
+    /// Shaped like the retained-failure surface below it on purpose — same two controls, same held
+    /// audio, same promise that nothing was thrown away — because from the user's side it is the same
+    /// situation: there is a recording on this iPhone and a decision to make about it. What differs
+    /// is only which sentence explains why they are being asked.
+    ///
+    /// **Transcribe** rather than Retry: nothing has been attempted, so there is nothing to attempt
+    /// again. And the capture stops here rather than uploading by itself, because a note that arrived
+    /// unannounced is exactly the outcome that made a thirty-second thought look like a five-second
+    /// one.
+    private func unexpectedStop(_ model: VoiceCaptureModel) -> some View {
+        VStack(spacing: DSSpacing.s4) {
+            Text(VoiceErrorCopy.unexpectedStopMessage)
+                .font(.ds.preview)
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.ds.textPrimary)
+                .multilineTextAlignment(.center)
+            Text(VoiceErrorCopy.unexpectedStopNotice)
+                .font(.ds.preview)
+                .foregroundStyle(Color.ds.textSecondary)
+                .multilineTextAlignment(.center)
+            HStack(spacing: DSSpacing.s6) {
+                Button(VoiceErrorCopy.deleteRecordingLabel) { model.deleteRecording(); onClose() }
+                    .foregroundStyle(Color.ds.textSecondary)
+                    .frame(minHeight: 44)
+                    .accessibilityHint("Deletes this recording from this iPhone")
+                Button(VoiceErrorCopy.transcribeCapturedLabel) { model.transcribeCaptured() }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.ds.textPrimary)
+                    .frame(minHeight: 44)
+                    .accessibilityHint("Turns what was recorded before it stopped into a note")
             }
         }
         .accessibilityElement(children: .contain)

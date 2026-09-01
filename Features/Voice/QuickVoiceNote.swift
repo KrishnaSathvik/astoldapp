@@ -23,8 +23,10 @@ enum QuickVoiceNote {
     /// mistaken for content.
     ///
     /// **No title is generated** (`docs/10-voice-v2.md` §7). Inventing one would be a second
-    /// interpretation layer over words the product promises to preserve, and Home already renders a
-    /// titleless note from its first meaningful line without ever writing "Untitled" (`RULES.md` §4).
+    /// interpretation layer over words the product promises to preserve. Home needs none: a titleless
+    /// note is drawn as an excerpt with no title line at all, never as "Untitled" and never by
+    /// promoting its first sentence into one (`RULES.md` §1, `NoteRowContent`). A spoken note and a
+    /// typed one with no title are the same row — there is no voice badge and no separate shape.
     static func make(from transcript: String) -> Note? {
         let note = Note(title: nil, body: transcript)
         return note.isEmptyDraft ? nil : note

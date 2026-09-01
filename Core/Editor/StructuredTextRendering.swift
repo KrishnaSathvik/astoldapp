@@ -122,6 +122,36 @@ enum StructuredTextStyle {
         max(0, checkboxHitHeight - (bodyFont().lineHeight + lineSpacing))
     }
 
+    // MARK: The drawn marker is a circle
+
+    /// A checklist marker is a **circle**, not a box (2026-08-31). A square reads as a task manager,
+    /// which a checklist here is explicitly not (docs/02-features.md Milestone A): a thin ring beside
+    /// the words reads as a note with something to tick off. Rendering only — the source keeps
+    /// `- [ ] ` / `- [x] `, and the hit target above is untouched.
+    ///
+    /// The ring's stroke. Thin, so it stays a mark and not a control; not hairline, so it is there.
+    static let checkboxStrokeWidth: CGFloat = 1.5
+
+    /// How far in from the gutter's left edge the circle starts.
+    static let checkboxInset: CGFloat = 2
+
+    /// The circle's diameter for a line set in `font`. Derived from the cap height rather than picked
+    /// as a number, so it scales with the item beside it at every Dynamic Type size — the same rule
+    /// the bullet and the number follow. About 18pt at the default body size: big enough to aim at
+    /// and to hold a legible tick, small enough to leave the words room in a 28pt gutter.
+    static func checkboxDiameter(for font: UIFont) -> CGFloat {
+        (font.capHeight * 1.5).rounded()
+    }
+
+    /// Where the circle is drawn for a line whose gutter starts at `x` and whose text sits on
+    /// `baselineY`. Centred on the cap height rather than the fragment: a mark optically sits with the
+    /// letters beside it, not with the leading underneath them.
+    static func checkboxFrame(x: CGFloat, baselineY: CGFloat, font: UIFont) -> CGRect {
+        let diameter = checkboxDiameter(for: font)
+        let centerY = baselineY - font.capHeight / 2
+        return CGRect(x: x + checkboxInset, y: centerY - diameter / 2, width: diameter, height: diameter)
+    }
+
     private static func scaled(_ style: UIFont.TextStyle, weight: UIFont.Weight) -> UIFont {
         let base = UIFont.preferredFont(forTextStyle: style)
         let descriptor = base.fontDescriptor.addingAttributes(
@@ -137,8 +167,14 @@ enum StructuredTextStyle {
     /// thing that can describe an *empty last line*, because it has no characters to hold attributes).
     /// Two nearly-identical copies of this is exactly how the caret ends up styled as one kind of line
     /// while the text around it is another.
+    ///
+    /// - Parameter checkedTextColor: what a **ticked** item's words are set in. They step back to the
+    ///   secondary token — still the note, still legible, and the reader may want to untick it — never
+    ///   to a custom alpha or a strikethrough. Living here rather than in the styler is what keeps the
+    ///   caret's typing attributes on a ticked line agreeing with the words already on it.
     static func attributes(for kind: BlockKind, isFirstLine: Bool,
-                           textColor: UIColor) -> [NSAttributedString.Key: Any] {
+                           textColor: UIColor,
+                           checkedTextColor: UIColor = .secondaryLabel) -> [NSAttributedString.Key: Any] {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = lineSpacing
         // Never on the first line, which has the page edge above it rather than a paragraph.
@@ -148,7 +184,8 @@ enum StructuredTextStyle {
             paragraph.firstLineHeadIndent = listIndent
             paragraph.headIndent = listIndent
         }
-        return [.font: font(for: kind), .paragraphStyle: paragraph, .foregroundColor: textColor]
+        let colour = kind == .checklist(checked: true) ? checkedTextColor : textColor
+        return [.font: font(for: kind), .paragraphStyle: paragraph, .foregroundColor: colour]
     }
 }
 
@@ -165,6 +202,7 @@ enum StructuredTextStyler {
     ///   these words go somewhere (RULES.md §4).
     static func apply(to storage: NSTextStorage, textColor: UIColor,
                       secondaryColor: UIColor = .secondaryLabel,
+                      checkedTextColor: UIColor = .secondaryLabel,
                       linkColor: UIColor = .link,
                       availableWidth: CGFloat = 0,
                       tableCards: [ClosedRange<Int>: CGFloat] = [:],
@@ -194,7 +232,8 @@ enum StructuredTextStyler {
 
             storage.addAttributes(
                 StructuredTextStyle.attributes(for: line.kind, isFirstLine: index == 0,
-                                               textColor: textColor),
+                                               textColor: textColor,
+                                               checkedTextColor: checkedTextColor),
                 range: styled
             )
 
@@ -552,8 +591,13 @@ enum StructuredTextStyler {
 
 /// A layout manager that hides the glyphs of source markers and draws the visible list markers.
 final class StructuredLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
-    /// Accent used to fill a checked checkbox; set by the view so it matches the design system.
+    /// Accent used to fill a ticked circle; set by the view so it matches the design system.
     var accentColor: UIColor = .label
+
+    /// The tick drawn *on* that fill — the design system's `onAccent`, which is what a glyph on the
+    /// accent is always set in (white in Light, near-black on the lighter Dark accent). Not a fixed
+    /// white: that would vanish on the Dark accent.
+    var tickColor: UIColor = .white
 
     /// The colour of a gutter marker — bullet, number, and the outline of an *unticked* box. Set by
     /// the view to the design system's secondary text token.
@@ -730,15 +774,34 @@ final class StructuredLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         (string as NSString).draw(at: point, withAttributes: attributes)
     }
 
+    /// Unticked: a thin ring in the marker colour, transparent inside. Ticked: a solid accent circle
+    /// carrying a tick in `tickColor`. The shape is drawn here rather than taken from an SF Symbol so
+    /// the stroke, the diameter, and the gap before the words are As Told's own
+    /// (`StructuredTextStyle.checkboxFrame`), and so a checked mark is a *filled* disc with the tick
+    /// painted on it rather than a disc with the tick knocked out to the canvas.
     private func drawCheckbox(checked: Bool, x: CGFloat, baselineY: CGFloat, font: UIFont) {
-        let name = checked ? "checkmark.square.fill" : "square"
-        let config = UIImage.SymbolConfiguration(font: font)
-        guard let image = UIImage(systemName: name, withConfiguration: config)?
-            .withTintColor(checked ? accentColor : markerColor, renderingMode: .alwaysOriginal)
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+        let frame = StructuredTextStyle.checkboxFrame(x: x, baselineY: baselineY, font: font)
+        // Resolve against the traits in force for this draw, so the same code paints the Light and
+        // Dark tokens correctly whether it is on screen or in a test's renderer.
+        let traits = UITraitCollection.current
+
+        guard checked else {
+            let stroke = StructuredTextStyle.checkboxStrokeWidth
+            context.setStrokeColor(markerColor.resolvedColor(with: traits).cgColor)
+            context.setLineWidth(stroke)
+            context.strokeEllipse(in: frame.insetBy(dx: stroke / 2, dy: stroke / 2))
+            return
+        }
+
+        context.setFillColor(accentColor.resolvedColor(with: traits).cgColor)
+        context.fillEllipse(in: frame)
+        // The tick is the one SF Symbol here: its shape is the shape a reader already knows. Sized
+        // to the circle, not to the font, so it stays centred in the disc at every text size.
+        let config = UIImage.SymbolConfiguration(pointSize: frame.width * 0.5, weight: .bold)
+        guard let tick = UIImage(systemName: "checkmark", withConfiguration: config)?
+            .withTintColor(tickColor.resolvedColor(with: traits), renderingMode: .alwaysOriginal)
         else { return }
-        // Centred on the cap height rather than the fragment: a box optically sits with the letters
-        // beside it, not with the leading underneath them.
-        let centerY = baselineY - font.capHeight / 2
-        image.draw(at: CGPoint(x: x + 2, y: centerY - image.size.height / 2))
+        tick.draw(at: CGPoint(x: frame.midX - tick.size.width / 2, y: frame.midY - tick.size.height / 2))
     }
 }

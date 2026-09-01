@@ -215,6 +215,15 @@ struct BodyTextView: UIViewRepresentable {
                 page.afterNavigationTransition {
                     if isFocused, isEditable, !tv.isFirstResponder {
                         EditorTrace.measure("body becomeFirstResponder") { tv.becomeFirstResponder() }
+                        #if DEBUG
+                        // Screenshot hook only. Focus lands the caret at the end of the note; the
+                        // keyboard-up raw wants the title and opening structure above the keyboard,
+                        // which means the caret — and the scroll position — at the start instead.
+                        if DebugLaunch.caretAtStart {
+                            tv.selectedRange = NSRange(location: 0, length: 0)
+                            tv.scrollRangeToVisible(tv.selectedRange)
+                        }
+                        #endif
                     }
                 }
             }
@@ -381,6 +390,7 @@ struct BodyTextView: UIViewRepresentable {
             StructuredTextStyler.apply(to: tv.textStorage,
                                        textColor: UIColor(Color.ds.textPrimary),
                                        secondaryColor: UIColor(Color.ds.textTertiary),
+                                       checkedTextColor: UIColor(Color.ds.textSecondary),
                                        linkColor: UIColor(Color.ds.link),
                                        availableWidth: tv.textContainer.size.width
                                            - tv.textContainer.lineFragmentPadding * 2,
@@ -484,7 +494,8 @@ struct BodyTextView: UIViewRepresentable {
             tv.typingAttributes = StructuredTextStyle.attributes(
                 for: doc.lines[index].kind,
                 isFirstLine: index == 0,
-                textColor: UIColor(Color.ds.textPrimary)
+                textColor: UIColor(Color.ds.textPrimary),
+                checkedTextColor: UIColor(Color.ds.textSecondary)
             )
         }
 
@@ -1059,6 +1070,7 @@ final class StructuredTextView: UITextView {
         let storage = NSTextStorage()
         let layoutManager = StructuredLayoutManager()
         layoutManager.accentColor = UIColor(Color.ds.accent)
+        layoutManager.tickColor = UIColor(Color.ds.onAccent)
         layoutManager.markerColor = UIColor(Color.ds.textSecondary)
         layoutManager.codeFill = UIColor(Color.ds.codeSurface)
         storage.addLayoutManager(layoutManager)

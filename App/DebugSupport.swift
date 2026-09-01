@@ -11,6 +11,10 @@ enum DebugLaunch {
     /// Seeds the sample timeline shifted back a week, so nothing lands on today — the case where
     /// Home must still anchor on `Today` rather than opening on `Yesterday`.
     static var seedOlderNotesOnly: Bool { args.contains("-seedOlderNotesOnly") }
+    /// Seeds more notes into today than Home's cap draws, so the `Show all N` affordance exists to
+    /// be tapped. Seven, because seven untitled captures in one afternoon is the wall the cap was
+    /// added for (`HomeLibrary`).
+    static var seedCappedToday: Bool { args.contains("-seedCappedToday") }
     static var openSampleEditor: Bool { args.contains("-openSampleEditor") }
     /// Seeds a single note exercising every structure type — for verifying live-styled rendering.
     static var seedStructuredDemo: Bool { args.contains("-seedStructuredDemo") }
@@ -63,12 +67,54 @@ enum DebugLaunch {
     static var seedWeekendThoughtsDemo: Bool { args.contains("-seedWeekendThoughtsDemo") }
     /// Seeds an ordinary, beautiful, entirely unstructured note — no table, no code, no gimmick.
     static var seedSundayDemo: Bool { args.contains("-seedSundayDemo") }
+
+    // MARK: Marketing refresh raw library (2026-08-31)
+
+    /// Seeds the redesigned Home with two notes today and eleven in Previous 7 Days. The latter is
+    /// intentionally over its five-row cap so the raw shows the real `Show all 11` affordance.
+    static var seedMarketingHome: Bool { args.contains("-seedMarketingHome") }
+    /// Seeds the titleless, multi-paragraph result of a natural Quick Voice capture.
+    static var seedMarketingVoiceNote: Bool { args.contains("-seedMarketingVoiceNote") }
+    /// Seeds the structured Japan Trip note used for the clean, toolbar, Light and Dark raws.
+    static var seedMarketingJapan: Bool { args.contains("-seedMarketingJapan") }
+    /// Seeds the realistic pasted trip budget requested for the marketing refresh.
+    static var seedMarketingBudget: Bool { args.contains("-seedMarketingBudget") }
+    /// Seeds the SQL note requested for the marketing refresh.
+    static var seedMarketingSQL: Bool { args.contains("-seedMarketingSQL") }
+    /// Seeds August 31 with four notes and surrounding dates with one-to-three activity dots.
+    static var seedMarketingCalendar: Bool { args.contains("-seedMarketingCalendar") }
+
+    // MARK: The canonical demo library (2026-09-01) — see `library` below
+
+    /// Seeds the whole library as Home draws it. `-pinnedNow` decides which day is today.
+    static var seedLibraryHome: Bool { args.contains("-seedLibraryHome") }
+    /// Seeds the same library redistributed over the visible month, for the calendar raw.
+    static var seedLibraryCalendar: Bool { args.contains("-seedLibraryCalendar") }
+    /// Value after `-seedLibraryNote`: the key of one library note to seed alone, at `demoNoteDate`,
+    /// for an editor raw. Titled notes are keyed by title; the titleless voice note is `voice`.
+    static var seedLibraryNote: String? { value(after: "-seedLibraryNote") }
+    /// Value after `-pinnedNow`, `yyyy-MM-dd'T'HH:mm:ss` in the simulator's own time zone — what
+    /// `AppClock.now` answers for the whole launch. Parsed once: the grid asks per cell.
+    static let pinnedNow: Date? = {
+        guard let raw = value(after: "-pinnedNow") else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return f.date(from: raw)
+    }()
+    private static func value(after flag: String) -> String? {
+        guard let i = args.firstIndex(of: flag), i + 1 < args.count else { return nil }
+        return args[i + 1]
+    }
     /// Seeds one note far longer than a screen — for verifying that the writing toolbar never covers
     /// the line being written. Pair with `-openSeededNote -caretAtEnd`.
     static var seedLongNote: Bool { args.contains("-seedLongNote") }
     /// Opens the note with the body focused and the caret on its last line, which is the state the
     /// floating toolbar has to stay out of the way of.
     static var caretAtEnd: Bool { args.contains("-caretAtEnd") }
+    /// Opens an existing note with the body focused at its first character. Used by the keyboard-up
+    /// marketing raw so the note's title and opening structure stay visible above the keyboard.
+    static var caretAtStart: Bool { args.contains("-caretAtStart") }
     /// Seeds a single spoken, code-switched note — for the multilingual voice screenshot.
     static var seedVoiceDemo: Bool { args.contains("-seedVoiceDemo") }
     /// Opens the newest seeded note in the editor — the *existing note* (reading) path.
@@ -144,7 +190,154 @@ enum DebugLaunch {
     /// Today's date, not a fixed one: a demo note dated months ago would contradict the timeline
     /// these captures also show.
     static var demoNoteDate: Date {
-        Calendar.current.date(bySettingHour: 9, minute: 41, second: 0, of: .now) ?? .now
+        Calendar.current.date(bySettingHour: 9, minute: 41, second: 0, of: AppClock.now) ?? AppClock.now
+    }
+
+    // MARK: The canonical demo library (2026-09-01)
+    //
+    // One catalogue of notes a person could plausibly have written, dated three ways: as Home draws
+    // it (two today, nine across the previous seven days, so the week shows its real `Show all 9`),
+    // as the calendar draws it (four on the selected day, one to three dots on the days around it),
+    // and one note at a time at `demoNoteDate` for the editor raws. The same words everywhere, so a
+    // Home row, a calendar row and the open note never disagree about what a note says.
+
+    /// The library, newest-first as Home would list it. `key` names a note on the command line;
+    /// `title == nil` is a titleless note, which is what a Quick Voice capture produces.
+    private static let library: [(key: String, title: String?, body: String)] = [
+        ("Weekend Plan", "Weekend Plan", """
+        Coffee near the trail Saturday morning, then the market on the way back.
+
+        Sunday stays open unless the weather turns. If it does, the afternoon goes to the book and the next trip.
+        """),
+        ("voice", nil, """
+        I think Saturday should stay pretty simple. Start early, grab coffee near the trail, and hike before it gets too warm.
+
+        After that I want to stop at the market and pick up a few things for dinner.
+
+        Sunday can stay open. If the weather changes, I'll use the afternoon to finish the book and plan the next trip.
+        """),
+        ("Japan Trip", "Japan Trip", """
+        # Before we book
+
+        A few things to settle before we start reserving anything.
+
+        - [ ] Choose travel dates
+        - [x] Compare flights
+        - [ ] Reserve hotels
+        - [ ] Book rail passes
+
+        # Route
+
+        1. Tokyo — 4 nights
+        2. Kyoto — 3 nights
+        3. Osaka — 2 nights
+
+        # Pack
+
+        - Rain jacket
+        - Camera
+        - Portable charger
+        """),
+        ("Launch Checklist", "Launch Checklist", """
+        Choose screenshots, update the website, final device pass, then submit.
+
+        - [ ] Capture new Home screenshots
+        - [x] Finish Voice device pass
+        - [x] Update marketing site
+        - [ ] Prepare App Store metadata
+        - [ ] Upload final build
+
+        Nothing goes out until the last device pass is clean.
+        """),
+        ("Monthly Units Query", "Monthly Units Query", """
+        Keep this here until the dashboard is finished.
+
+        ```sql
+        SELECT
+            product_id,
+            SUM(units) AS total_units
+        FROM orders
+        WHERE ordered_at >= '2026-08-01'
+        GROUP BY product_id
+        HAVING SUM(units) > 100
+        ORDER BY total_units DESC;
+        ```
+
+        Runs against the August partition.
+        """),
+        ("Ideas for Sunday", nil, """
+        One thing I want to remember before next week is to keep Sunday light. A slow morning, a long walk, and nothing booked after lunch.
+        """),
+        ("Book Notes", "Book Notes", """
+        A few ideas from the chapter that stood out, mostly about attention.
+
+        The argument is that focus is less a matter of discipline than of arrangement. What sits within reach gets used; what takes three steps to find quietly stops existing. So the question is never “how do I concentrate” but “what have I put in front of myself”.
+
+        The second idea follows from the first. A short list written the night before does more than a long one written in the morning, because the morning list is really a negotiation.
+
+        Worth trying for a week before deciding anything.
+        """),
+        ("Trip Budget", "Trip Budget", """
+        A rough estimate before we book anything.
+
+        | Item | Estimate |
+        | --- | ---: |
+        | Flights | $980 |
+        | Hotel | $1,400 |
+        | Rental car | $650 |
+        | Activities | $340 |
+
+        # Still to price
+
+        - Train tickets
+        - Parking
+        - Museum passes
+        """),
+        ("Packing List", "Packing List", """
+        Light, and only one bag.
+
+        - [x] Rain jacket
+        - [ ] Camera
+        - [ ] Portable charger
+        - [ ] Small day pack
+        - [ ] Walking shoes
+        """),
+        ("Garden", nil, "Move the basil inside and give the tomatoes another week."),
+        ("Trail", nil, "The trail starts shaded, but bring enough water for the ridge."),
+    ]
+
+    /// When each library note was written, as **Home** shows the library: two notes today, nine
+    /// across the previous seven days. `(days ago, hour, minute)`, against `AppClock.now`.
+    private static let libraryHomeDates: [String: (Int, Int, Int)] = [
+        "Weekend Plan": (0, 9, 20), "voice": (0, 8, 45),
+        "Japan Trip": (1, 19, 10), "Launch Checklist": (1, 14, 30),
+        "Monthly Units Query": (2, 16, 5), "Ideas for Sunday": (2, 11, 20),
+        "Book Notes": (3, 21, 15), "Trip Budget": (4, 18, 40), "Packing List": (5, 9, 5),
+        "Garden": (6, 17, 50), "Trail": (6, 7, 40),
+    ]
+
+    /// The same library as the **calendar** shows it: three notes on the selected day, and one, two,
+    /// one and four notes on the days before it — one, two and three dots, the grid's whole range
+    /// (`CalendarDayDensity`: three dots need four notes).
+    private static let libraryCalendarDates: [String: (Int, Int, Int)] = [
+        "Weekend Plan": (0, 9, 20), "voice": (0, 8, 45), "Japan Trip": (0, 8, 10),
+        "Garden": (1, 18, 15),
+        "Monthly Units Query": (2, 16, 5), "Ideas for Sunday": (2, 11, 20),
+        "Trip Budget": (2, 9, 30), "Launch Checklist": (2, 8, 15),
+        "Book Notes": (4, 21, 15), "Trail": (4, 7, 40),
+        "Packing List": (5, 9, 5),
+    ]
+
+    @MainActor
+    private static func insertLibrary(_ context: ModelContext, dates: [String: (Int, Int, Int)]) {
+        let cal = Calendar.current
+        for entry in library {
+            let (daysAgo, hour, minute) = dates[entry.key] ?? (0, 9, 41)
+            let day = cal.date(byAdding: .day, value: -daysAgo, to: AppClock.now)!
+            let date = cal.date(bySettingHour: hour, minute: minute, second: 0, of: day)!
+            context.insert(Note(title: entry.title, body: entry.body, createdAt: date, updatedAt: date))
+        }
+        try? context.save()
     }
 
     @MainActor
@@ -215,7 +408,7 @@ enum DebugLaunch {
             if existing == 0 {
                 let cal = Calendar.current
                 func at(_ daysAgo: Int, _ hour: Int, _ minute: Int) -> Date {
-                    let day = cal.date(byAdding: .day, value: -daysAgo, to: .now)!
+                    let day = cal.date(byAdding: .day, value: -daysAgo, to: AppClock.now)!
                     return cal.date(bySettingHour: hour, minute: minute, second: 0, of: day)!
                 }
                 // Short first lines on purpose: a Home row shows three lines of preview, and three
@@ -399,6 +592,208 @@ enum DebugLaunch {
                 """
                 context.insert(Note(title: "Ideas for Sunday", body: body,
                                     createdAt: demoNoteDate, updatedAt: demoNoteDate))
+                try? context.save()
+            }
+            return
+        }
+
+        if seedLibraryHome || seedLibraryCalendar {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                insertLibrary(context, dates: seedLibraryHome ? libraryHomeDates : libraryCalendarDates)
+            }
+            return
+        }
+
+        if let key = seedLibraryNote {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0, let entry = library.first(where: { $0.key == key }) {
+                context.insert(Note(title: entry.title, body: entry.body,
+                                    createdAt: demoNoteDate, updatedAt: demoNoteDate))
+                try? context.save()
+            }
+            return
+        }
+
+        if seedMarketingHome {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let cal = Calendar.current
+                func at(_ daysAgo: Int, _ hour: Int, _ minute: Int) -> Date {
+                    let day = cal.date(byAdding: .day, value: -daysAgo, to: AppClock.now)!
+                    return cal.date(bySettingHour: hour, minute: minute, second: 0, of: day)!
+                }
+                let samples: [(String?, String, Date)] = [
+                    ("Weekend plans",
+                     "Pick up the rental car Friday afternoon, then leave before dinner.",
+                     at(0, 10, 30)),
+                    (nil,
+                     "Tokyo → Kyoto → Osaka. Still deciding whether to add a day in Nara.",
+                     at(0, 9, 15)),
+                    ("Launch Checklist",
+                     "Finish screenshots, update the website, and do one final device pass.",
+                     at(1, 18, 40)),
+                    ("SQL Questions",
+                     "Find the two products with the highest total units sold this month.",
+                     at(1, 14, 10)),
+                    (nil,
+                     "A few ideas I want to remember from the book before I return it.",
+                     at(2, 20, 5)),
+                    ("Packing List",
+                     "Rain jacket, camera, portable charger, and the small day pack.",
+                     at(2, 8, 45)),
+                    ("Recipe Ideas",
+                     "Lemon pasta, crispy potatoes, and the tomato soup from Sunday.",
+                     at(3, 19, 20)),
+                    (nil,
+                     "I was thinking we could leave early Saturday and stop at the market on the way back.",
+                     at(3, 11, 30)),
+                    ("Books to find",
+                     "The Creative Act, North Woods, and the essay collection Mira mentioned.",
+                     at(4, 16, 10)),
+                    (nil,
+                     "Call the shop before lunch and ask whether the print is ready to collect.",
+                     at(5, 12, 25)),
+                    ("Dinner Friday",
+                     "Book the table by the window if the earlier time is still open.",
+                     at(5, 9, 5)),
+                    (nil,
+                     "The trail starts shaded, but bring enough water for the ridge.",
+                     at(6, 17, 50)),
+                    ("Garden notes",
+                     "Move the basil inside and give the tomatoes another week.",
+                     at(7, 7, 40)),
+                ]
+                for (title, body, date) in samples {
+                    context.insert(Note(title: title, body: body, createdAt: date, updatedAt: date))
+                }
+                try? context.save()
+            }
+            return
+        }
+
+        if seedMarketingVoiceNote {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let body = """
+                Okay, here's what I want to do this weekend. Saturday morning, get coffee near the trail and hike before it gets too hot. Then stop at the market on the way back.
+
+                Sunday can stay open. If the weather turns, I'll use that time to finish the book and plan the next trip.
+
+                I also want to make a short list tonight so I don't forget anything.
+                """
+                context.insert(Note(body: body, createdAt: demoNoteDate, updatedAt: demoNoteDate))
+                try? context.save()
+            }
+            return
+        }
+
+        if seedMarketingJapan {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let body = """
+                # Before we book
+
+                A few things to settle before we start reserving anything.
+
+                - [x] Choose travel dates
+                - [x] Compare flights
+                - [ ] Reserve hotels
+                - [ ] Book rail passes
+
+                # Route
+
+                1. Tokyo — 4 nights
+                2. Kyoto — 3 nights
+                3. Osaka — 2 nights
+
+                # Pack
+
+                - Rain jacket
+                - Camera
+                - Portable charger
+                """
+                context.insert(Note(title: "Japan Trip", body: body,
+                                    createdAt: demoNoteDate, updatedAt: demoNoteDate))
+                try? context.save()
+            }
+            return
+        }
+
+        if seedMarketingBudget {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let body = """
+                | Item | Estimate |
+                | --- | ---: |
+                | Hotel | $1,400 |
+                | Rental car | $650 |
+                | Boat tour | $229 |
+                | Flights | $980 |
+
+                # Still to price
+
+                - Ferry
+                - Parking
+                - Museum passes
+                """
+                context.insert(Note(title: "Trip budget", body: body,
+                                    createdAt: demoNoteDate, updatedAt: demoNoteDate))
+                try? context.save()
+            }
+            return
+        }
+
+        if seedMarketingSQL {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let body = """
+                Keep this here until the dashboard is finished.
+
+                ```sql
+                SELECT product_id,
+                       SUM(units) AS total_units
+                FROM orders
+                WHERE ordered_at >= '2026-08-01'
+                GROUP BY product_id
+                HAVING SUM(units) > 100
+                ORDER BY total_units DESC;
+                ```
+
+                Runs against the August partition.
+                """
+                context.insert(Note(title: "Monthly units query", body: body,
+                                    createdAt: demoNoteDate, updatedAt: demoNoteDate))
+                try? context.save()
+            }
+            return
+        }
+
+        if seedMarketingCalendar {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            if existing == 0 {
+                let cal = Calendar.current
+                func at(_ daysAgo: Int, _ hour: Int, _ minute: Int) -> Date {
+                    let day = cal.date(byAdding: .day, value: -daysAgo, to: AppClock.now)!
+                    return cal.date(bySettingHour: hour, minute: minute, second: 0, of: day)!
+                }
+                let samples: [(String?, String, Date)] = [
+                    ("Weekend plans", "Pick up the rental car before dinner, then pack tonight.", at(0, 12, 20)),
+                    ("Japan Trip", "Tokyo → Kyoto → Osaka. Still deciding whether to add Nara.", at(0, 11, 10)),
+                    (nil, "I was thinking we could leave early Saturday and stop at the market on the way back.", at(0, 10, 5)),
+                    ("Launch Checklist", "Screenshots, website, final device pass, then submit.", at(0, 9, 0)),
+                    (nil, "Move the basil inside before the temperature drops tonight.", at(1, 18, 15)),
+                    ("Book Notes", "Three ideas about making time for work that matters.", at(2, 16, 40)),
+                    (nil, "The last train leaves earlier than I remembered.", at(2, 13, 20)),
+                    ("Packing List", "Rain jacket, camera, and portable charger.", at(2, 8, 10)),
+                    (nil, "Save the museum map before we leave the hotel.", at(2, 7, 35)),
+                    ("Recipe Ideas", "Lemon pasta and crispy potatoes.", at(4, 15, 30)),
+                    (nil, "Ask whether the print is ready to collect.", at(4, 10, 0)),
+                    ("Trail notes", "Start early; the ridge has no shade.", at(5, 9, 45)),
+                ]
+                for (title, body, date) in samples {
+                    context.insert(Note(title: title, body: body, createdAt: date, updatedAt: date))
+                }
                 try? context.save()
             }
             return
@@ -784,6 +1179,20 @@ enum DebugLaunch {
             return
         }
 
+        if seedCappedToday {
+            let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
+            guard existing == 0 else { return }
+            let cal = Calendar.current
+            for i in 0..<7 {
+                let date = cal.date(bySettingHour: 9 + i, minute: 0, second: 0, of: AppClock.now)!
+                context.insert(Note(title: "Capped note \(i + 1)",
+                                    body: "Body for capped note \(i + 1).",
+                                    createdAt: date, updatedAt: date))
+            }
+            try? context.save()
+            return
+        }
+
         guard seedSampleNotes || seedOlderNotesOnly else { return }
         let existing = (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
         guard existing == 0 else { return }
@@ -792,7 +1201,7 @@ enum DebugLaunch {
         // Shifted a week back when only older notes are wanted, so no sample lands on today.
         let shift = seedOlderNotesOnly ? 7 : 0
         func at(_ daysAgo: Int, _ hour: Int, _ minute: Int) -> Date {
-            let day = cal.date(byAdding: .day, value: -(daysAgo + shift), to: .now)!
+            let day = cal.date(byAdding: .day, value: -(daysAgo + shift), to: AppClock.now)!
             return cal.date(bySettingHour: hour, minute: minute, second: 0, of: day)!
         }
 
@@ -872,7 +1281,10 @@ enum DebugVoice {
     private final class DebugRecorder: AudioRecording {
         private var url: URL?
         private var startedAt: Date?
-        var onInterruption: (() -> Void)?
+        var onCaptureEnded: ((RecordingStop) -> Void)?
+
+        /// The stand-in is open for exactly as long as it holds a file.
+        var isCapturing: Bool { url != nil }
 
         /// A flat 0.4 by default — a test asserts on phases, not on pixels.
         ///
@@ -908,7 +1320,14 @@ enum DebugVoice {
 
         func pause() {}
         func resume() {}
-        func stop() -> URL? { url }
+        /// Measured like the real one, so a debug capture exercises the same `.finishing` gate: the
+        /// stand-in bytes are not a real container, so they measure as one second of nothing rather
+        /// than as unmeasurable, which would send every debug capture down the no-speech path.
+        func finish() async -> FinishedRecording? {
+            guard let url else { return nil }
+            let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? Int
+            return FinishedRecording(url: url, assetSeconds: 1, bytes: bytes)
+        }
         func cancel() { if let url { cleanup(url) } }
         func cleanup(_ url: URL) {
             try? FileManager.default.removeItem(at: url)

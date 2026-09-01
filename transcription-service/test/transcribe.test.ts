@@ -3,7 +3,7 @@ import { buildTestServer, captureLogs, multipartAudio } from './helpers.js';
 import { adts, m4a, mp3, notAudio, validAudio, wav } from './fixtures.js';
 import { FakeTranscriptionProvider } from '../src/services/fakeTranscription.js';
 import { EmptyTranscriptError } from '../src/services/transcription.js';
-import { AppAttestVerifier } from '../src/security/attestation.js';
+import { AppAttestVerifier, AttestationError } from '../src/security/attestation.js';
 import { InMemoryRateLimiter } from '../src/security/rateLimit.js';
 
 const audio = validAudio;
@@ -228,6 +228,50 @@ describe('POST /v1/transcriptions duration limit', () => {
     expect(res.json().error).toBe('audio_too_large');
     expect(provider.calls).toBe(0);
     await app.close();
+  });
+
+  /// A rejected attestation must say *why* in the log, and must still say nothing about the caller.
+  ///
+  /// Added 2026-08-31, after a production 401 whose cause could not be established: the verifier
+  /// distinguishes a missing assertion, an expired challenge, an unknown key and a bad signature,
+  /// and all four used to be discarded at the route boundary.
+  it('logs why an attestation was rejected, without the key id', async () => {
+    const logs = captureLogs();
+    const app = await buildTestServer({
+      deps: {
+        logDestination: logs.destination,
+        verifier: {
+          issueChallenge: () => ({ challenge: 'c', expiresAt: Date.now() + 1000 }),
+          register: async () => ({ installId: 'i' }),
+          verifyRequest: async () => {
+            throw new AttestationError('unknown key');
+          },
+        },
+      },
+    });
+    const upload = multipartAudio(m4a(10));
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/transcriptions',
+      ...upload,
+      headers: {
+        ...upload.headers,
+        'x-attest-key-id': 'SECRETKEYID',
+        'x-attest-assertion': 'abc',
+      },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(401);
+    const rejection = logs.records().find((r) => r.msg === 'attestation rejected');
+    expect(rejection).toBeDefined();
+    expect(rejection!.reason).toBe('unknown key');
+    expect(rejection!.status).toBe(401);
+    expect(rejection!.hadKeyId).toBe(true);
+    expect(rejection!.hadAssertion).toBe(true);
+
+    // The key id identifies an install. It says whether one was sent, never which (RULES.md §3).
+    expect(logs.raw()).not.toContain('SECRETKEYID');
   });
 
   it('logs only safe metadata when it rejects on duration', async () => {

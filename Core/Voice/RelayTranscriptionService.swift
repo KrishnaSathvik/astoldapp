@@ -42,37 +42,26 @@ struct RelayTranscriptionService: TranscriptionService {
             throw TranscriptionError.invalidResponse
         }
 
-        // The handshake is deliberately *not* on the upload's clock: it is two tiny round trips with
-        // a short deadline (`AppAttestClient.handshakeTimeout`), while the upload below carries
-        // minutes of audio and waits on the transcription itself.
-        let headers = try await attestationHeaders(requestID)
+        var (responseData, httpResponse) = try await upload(data, filename: audioURL.lastPathComponent,
+                                                            requestID: requestID)
 
-        let boundary = "yourly-\(UUID().uuidString)"
-        var request = URLRequest(url: baseURL.appending(path: "v1/transcriptions"))
-        request.httpMethod = "POST"
-        // Idle-time budget for uploading the recording and waiting on the transcription. Long on
-        // purpose: the relay accepts up to `VoiceLimits.maxRecordingSeconds` of audio, and a long
-        // recording legitimately takes far more than a handshake's worth of time to come back.
-        // Confirm the real ceiling against the live relay on device before release.
-        request.timeoutInterval = Self.uploadTimeout
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.setValue(requestID.uuidString, forHTTPHeaderField: "x-request-id")
-        for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
-        request.httpBody = Self.multipartBody(audio: data, filename: audioURL.lastPathComponent, boundary: boundary)
-
-        let responseData: Data
-        let httpResponse: HTTPURLResponse
-        do {
-            let (d, r) = try await session.data(for: request)
-            responseData = d
-            guard let http = r as? HTTPURLResponse else { throw TranscriptionError.invalidResponse }
-            httpResponse = http
-        } catch let error as URLError {
-            throw TranscriptionError.transport(error)
-        } catch let error as TranscriptionError {
-            throw error
-        } catch {
-            throw TranscriptionError.serviceUnavailable
+        // **A rejected attestation is not a failed transcription** (added 2026-08-31).
+        //
+        // The relay rejects before it reads a byte of audio, and the rejection means our registration
+        // is stale — the relay restarted and forgot the key, or the install changed underneath it.
+        // Repairing that and sending once more is *completing the request the user asked for*, and it
+        // is deliberately the only status that gets a second attempt.
+        //
+        // This is not the automatic retry `RULES.md` §2 forbids. That rule is about a transcription
+        // that failed: audio the relay took, tried, and could not turn into words — which stays
+        // explicit, user-initiated, and untouched below. Here nothing was ever attempted. Without
+        // this, the first recording after a stale registration told the user "Couldn't transcribe
+        // that recording" about a recording that was entirely fine, and made them tap **Retry** to
+        // perform an authentication repair they should never have been shown.
+        if httpResponse.statusCode == 401 {
+            await attestationRejected()                   // forget the key; the next call re-attests
+            (responseData, httpResponse) = try await upload(data, filename: audioURL.lastPathComponent,
+                                                           requestID: requestID)
         }
 
         switch httpResponse.statusCode {
@@ -91,8 +80,9 @@ struct RelayTranscriptionService: TranscriptionService {
                     : nil
             )
         case 401:
-            await attestationRejected()                   // stale registration — re-attest next time
-            throw TranscriptionError.serviceUnavailable   // attestation failed — not user-facing detail
+            // Rejected again, with a registration made moments ago. That is the relay refusing this
+            // install rather than a stale key, and there is nothing here the user can act on.
+            throw TranscriptionError.serviceUnavailable
         case 400:
             // The relay could not read a duration out of the file, so it refused to pay to
             // transcribe it. Nothing the user can act on beyond trying again.
@@ -123,6 +113,44 @@ struct RelayTranscriptionService: TranscriptionService {
                 resetsAt: decoded?.resetsAt.flatMap(Self.isoDate)
             )
         default:
+            throw TranscriptionError.serviceUnavailable
+        }
+    }
+
+    /// One attempt: fresh attestation headers, then the multipart upload.
+    ///
+    /// Separated out so a rejected attestation can be repaired and the upload made once more without
+    /// the audio being read from disk twice, and without any other failure gaining a second attempt.
+    private func upload(_ audio: Data,
+                        filename: String,
+                        requestID: UUID) async throws -> (Data, HTTPURLResponse) {
+        // The handshake is deliberately *not* on the upload's clock: it is two tiny round trips with
+        // a short deadline (`AppAttestClient.handshakeTimeout`), while the upload below carries
+        // minutes of audio and waits on the transcription itself.
+        let headers = try await attestationHeaders(requestID)
+
+        let boundary = "yourly-\(UUID().uuidString)"
+        var request = URLRequest(url: baseURL.appending(path: "v1/transcriptions"))
+        request.httpMethod = "POST"
+        // Idle-time budget for uploading the recording and waiting on the transcription. Long on
+        // purpose: the relay accepts up to `VoiceLimits.maxRecordingSeconds` of audio, and a long
+        // recording legitimately takes far more than a handshake's worth of time to come back.
+        // Confirm the real ceiling against the live relay on device before release.
+        request.timeoutInterval = Self.uploadTimeout
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue(requestID.uuidString, forHTTPHeaderField: "x-request-id")
+        for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
+        request.httpBody = Self.multipartBody(audio: audio, filename: filename, boundary: boundary)
+
+        do {
+            let (d, r) = try await session.data(for: request)
+            guard let http = r as? HTTPURLResponse else { throw TranscriptionError.invalidResponse }
+            return (d, http)
+        } catch let error as URLError {
+            throw TranscriptionError.transport(error)
+        } catch let error as TranscriptionError {
+            throw error
+        } catch {
             throw TranscriptionError.serviceUnavailable
         }
     }

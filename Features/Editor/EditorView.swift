@@ -152,6 +152,11 @@ struct EditorView: View {
             if DebugLaunch.caretAtEnd {
                 bodySelection = NSRange(location: (note.body as NSString).length, length: 0)
                 bodyFocused = true
+            } else if DebugLaunch.caretAtStart {
+                // The caret itself is placed by `BodyTextView` once the view is first responder: the
+                // selection binding only flows *out* of the text view, so writing it here moves nothing.
+                bodySelection = NSRange(location: 0, length: 0)
+                bodyFocused = true
             }
             if DebugLaunch.autoStartVoice, let model {
                 startVoice(model)

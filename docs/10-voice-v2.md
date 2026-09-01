@@ -690,8 +690,15 @@ Each of these MUST be handled explicitly before Voice V2 is called finished:
   captured; losing the active input is not something to continue through on a guess)
 - Bluetooth / AirPods **connect** mid-recording (**shipped 2B** — the recording continues, because
   nobody's microphone should change mid-sentence because a case was opened nearby)
-- audio route changes (**shipped 2B** — `AudioRouteChange` decides, on route semantics rather than
-  product names; still to be confirmed on hardware, §25)
+- audio route changes (**shipped 2B, corrected 2026-08-30** — `AudioRouteChange` decides, on route
+  semantics rather than product names. The hardware confirmation §25 asked for found the policy too
+  aggressive in one place: an empty `currentRoute.inputs` read *during* a route transition was treated
+  as proof the microphone had gone, and a normal transition therefore ended captures mid-sentence. An
+  empty read is now escalated to a settled check of the session rather than acted on; an input the
+  system explicitly says has gone still finishes safely)
+- the recorder stopping **on its own** (**added 2026-08-30** — an encoder failure or an unasked-for
+  finish. Keeps every second captured, and stops at `stoppedUnexpectedly` rather than transcribing:
+  see below)
 - app backgrounding (**shipped 2B** — finishes from `paused` as well as `recording`)
 
 The safe default in every case:
@@ -699,6 +706,31 @@ The safe default in every case:
 ```text
 interrupted  →  pause or finish safely  →  keep the captured audio  →  say what happened
 ```
+
+### The recorder stopping on its own (added 2026-08-30, after audit)
+
+The last clause of that default had no implementation for one ending, and it was the ending that
+needed it most. `AVAudioRecorder` had no delegate, so an encoder failure mid-capture was invisible:
+the capture went on reporting `recording`, the timer went on counting, the waveform went on being
+drawn over a dead input, and **Done** then finalized whatever had been written before the failure and
+uploaded it like an ordinary recording. What came back was a note holding the first few seconds of a
+much longer thought, with nothing anywhere saying so.
+
+```text
+Recording stopped unexpectedly.
+
+What you said before it stopped is still here.
+
+    Delete Recording        Transcribe
+```
+
+The audio is kept and retained under §13's rules, exactly as a failed upload's is — dropping it would
+be the one outcome worse than a rejected upload. What is different is that nothing is sent until the
+user asks. **Transcribe**, not Retry: nothing was attempted, so there is nothing to attempt again.
+
+An interruption is deliberately *not* routed here. A call or Siri still finishes and transcribes
+(`RULES.md` §2, unchanged): the user watched the call arrive and knows where their sentence stopped,
+and telling them a recorder failed would be telling them something that did not happen.
 
 **MUST NOT** record indefinitely in the background to be clever about it. A continuous background
 listener is on the do-not-build list, and the audio-session configuration required for it is not

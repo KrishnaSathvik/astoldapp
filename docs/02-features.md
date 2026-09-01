@@ -746,7 +746,10 @@ is worse than leaving the text as prose. Adding it means teaching `CodeHighlight
   otherwise the first pasted line joins as words, with its marker dropped. A marker MUST NEVER land
   mid-line, where it would read as literal text.
 - Home and search previews render the same visible text, never the markers — and never a table's
-  pipe source either (`StructuredTextExport.previewText`, 2026-08-21). A table is drawn on the note
+  pipe source either (`StructuredTextExport.previewText`, 2026-08-21). One glyph differs on purpose
+  (2026-09-01): a preview draws a checklist item as the editor's circle, `○` / `✓`
+  (`BlockKind.previewMarker`), while text that leaves the app keeps `☐` / `☑` — the spelling the
+  table above promises and the one `RichPasteDocument.checkbox` recognises on the way back in. A table is drawn on the note
   page and nowhere else, so every other surface that shows a note *as text* shows its cells, joined
   by `·`, with the delimiter row gone. Home read `| Day | Date | Schedule |` out of `body` until
   then. The pasteboard is deliberately not part of this: copying a table still yields its source.

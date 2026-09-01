@@ -11,7 +11,11 @@ private final class FakeRecorder: AudioRecording {
     var permissionAsked = false
     private(set) var cleaned: [URL] = []
     var level: Float = 0
-    var onInterruption: (() -> Void)?
+    var onCaptureEnded: ((RecordingStop) -> Void)?
+    /// What the finalized container measures. `nil` stands in for a file with no usable duration —
+    /// the one thing `.finishing` now refuses to send.
+    var assetSeconds: Double? = 1
+    var isCapturing = true
 
     func requestPermission() async -> Bool { permissionAsked = true; return true }
     func start() throws -> URL { startCount += 1; return URL(fileURLWithPath: "/tmp/allowance.m4a") }
@@ -21,7 +25,11 @@ private final class FakeRecorder: AudioRecording {
     private(set) var resumes = 0
     func pause() { pauses += 1 }
     func resume() { resumes += 1 }
-    func stop() -> URL? { URL(fileURLWithPath: "/tmp/allowance.m4a") }
+    func finish() async -> FinishedRecording? {
+        isCapturing = false
+        return FinishedRecording(url: URL(fileURLWithPath: "/tmp/allowance.m4a"),
+                                assetSeconds: assetSeconds, bytes: 1)
+    }
     func cancel() {}
     func cleanup(_ url: URL) { cleaned.append(url) }
 }

@@ -99,7 +99,7 @@ final class SwiftDataNoteStore: NoteStore {
         return userVisibleNotes(try context.fetch(descriptor))
     }
 
-    func noteDays(in month: Date) throws -> Set<Date> {
+    func noteDayCounts(in month: Date) throws -> [Date: Int] {
         let start = MonthMath.startOfMonth(for: month, calendar: calendar)
         let end = MonthMath.addMonths(1, to: start, calendar: calendar)
         let descriptor = FetchDescriptor<Note>(
@@ -107,10 +107,16 @@ final class SwiftDataNoteStore: NoteStore {
                 $0.deletedAt == nil && $0.createdAt >= start && $0.createdAt < end
             }
         )
-        // A day earns its dot from a note the reader can actually open — an empty draft held by an
+        // A day earns its dots from notes the reader can actually open — an empty draft held by an
         // open editor must not light one up (`NoteVisibility`).
+        //
+        // Counts rather than a bare set of days (changed 2026-08-31, for the density dots). The
+        // fetch, the predicate and the visibility rule are unchanged to the character; only the
+        // projection is richer, and `Set(result.keys)` is still exactly the old answer.
         let notes = userVisibleNotes(try context.fetch(descriptor))
-        return Set(notes.map { calendar.startOfDay(for: $0.createdAt) })
+        return notes.reduce(into: [:]) { counts, note in
+            counts[calendar.startOfDay(for: note.createdAt), default: 0] += 1
+        }
     }
 
     private var calendar: Calendar { .current }

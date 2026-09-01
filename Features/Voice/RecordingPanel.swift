@@ -23,6 +23,8 @@ struct RecordingPanel: View {
                 capture(paused: true)
             case .finishing:
                 TranscribingIndicator(ground: .darkPanel)
+            case .stoppedUnexpectedly:
+                unexpectedStop
             case .needsConsent:
                 consentRequest
             case .transcribing:
@@ -53,7 +55,7 @@ struct RecordingPanel: View {
                 UIAccessibility.post(notification: .announcement, argument: said)
             }
             switch new {
-            case .requestingPermission, .recording, .paused, .finishing,
+            case .requestingPermission, .recording, .paused, .finishing, .stoppedUnexpectedly,
                  .needsConsent, .transcribing, .failed, .permissionDenied:
                 wasActive = true
             case .idle:
@@ -118,6 +120,37 @@ struct RecordingPanel: View {
                         ? "Continues this recording where it stopped"
                         : "Holds the recording without ending it")
                 }
+            }
+        }
+    }
+
+    /// The recorder stopped on its own while the user was still speaking (`docs/10-voice-v2.md` §14).
+    ///
+    /// The same two controls the retained-failure state below offers, over the same held audio, and
+    /// for the same reason: there is a recording on this iPhone and the user is the one who decides
+    /// what happens to it. Nothing is uploaded from here without being asked — a transcript arriving
+    /// on its own is what made a truncated capture indistinguishable from a complete one.
+    private var unexpectedStop: some View {
+        VStack(spacing: DSSpacing.s4) {
+            Text(VoiceErrorCopy.unexpectedStopMessage)
+                .font(.ds.preview)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+            Text(VoiceErrorCopy.unexpectedStopNotice)
+                .font(.ds.preview)
+                .foregroundStyle(.white.opacity(0.85))
+                .multilineTextAlignment(.center)
+            HStack(spacing: DSSpacing.s6) {
+                Button(VoiceErrorCopy.deleteRecordingLabel) { model.deleteRecording(); onClose() }
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(minHeight: 44)
+                    .accessibilityHint("Deletes this recording from this iPhone")
+                Button(VoiceErrorCopy.transcribeCapturedLabel) { model.transcribeCaptured() }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .frame(minHeight: 44)
+                    .accessibilityHint("Adds what was recorded before it stopped to this note")
             }
         }
     }

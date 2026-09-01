@@ -1,7 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// Home is the complete chronological notes timeline. See docs/01-product-requirements.md §8.
+/// Home is the recent notes library; the complete timeline is behind Browse older notes.
+/// See docs/01-product-requirements.md §8 and RULES.md §1 (changed 2026-08-31).
 struct HomeView: View {
     @Environment(\.modelContext) private var context
 
@@ -27,7 +28,10 @@ struct HomeView: View {
     /// was closed. Offered back once, on one surface, with two controls
     /// (`RecoveredRecordingView`, `docs/10-voice-v2.md` §13).
     @State private var recoveredRecording: RetainedVoiceRecording?
-    @State private var pageLimit = 40
+    @State private var showingAllNotes = false
+    /// Periods the reader has expanded on this visit to Home (`HomeLibrary`). Here rather than inside
+    /// the list so that opening a note and coming back does not re-collapse them.
+    @State private var expandedPeriods: Set<NoteTimelineSection.Period> = []
     @AppStorage("profileName") private var profileName = ""
     @Environment(AppLockModel.self) private var lock
 
@@ -52,6 +56,10 @@ struct HomeView: View {
                 .navigationDestination(isPresented: $showingCalendar) {
                     CalendarPage()
                 }
+                .navigationDestination(isPresented: $showingAllNotes) {
+                    AllNotesView(onSelect: { open($0, from: .notes) },
+                                 onDelete: { deletion.delete($0, in: context) })
+                }
                 .navigationDestination(isPresented: $showingProfile) {
                     ProfileView(lock: lock)
                 }
@@ -60,7 +68,7 @@ struct HomeView: View {
 
     private var homeScreen: some View {
         ZStack(alignment: .bottom) {
-            Color.ds.canvas.ignoresSafeArea()
+            Color.ds.groupedCanvas.ignoresSafeArea()
             if isSearching {
                 SearchResultsView(query: searchQuery) { open($0, from: .notes) }
             } else {
@@ -116,7 +124,7 @@ struct HomeView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingQuickVoice = true } label: {
                         Image(systemName: "mic")
-                            .foregroundStyle(Color.ds.iconCompose)
+                            .foregroundStyle(Color.ds.iconVoice)
                     }
                     .accessibilityLabel("New voice note")
                     .accessibilityHint("Starts recording straight away")
@@ -165,14 +173,16 @@ struct HomeView: View {
         return String(f).uppercased()
     }
 
-    /// Home is always the whole timeline. Browsing a single day belongs to the calendar, which
-    /// shows that day's notes under its own grid rather than sending the reader back here filtered.
+    /// Home is the **recent** library (changed 2026-08-31 — `RULES.md` §1). The complete timeline is
+    /// one tap away behind **Browse older notes**, and only when there is something older to browse;
+    /// browsing a single day belongs to the calendar, which shows that day's notes under its own grid
+    /// rather than sending the reader back here filtered.
     private var content: some View {
-        PagedNotesList(
-            limit: pageLimit,
+        HomeLibraryList(
+            expanded: $expandedPeriods,
             onSelect: { open($0, from: .notes) },
             onDelete: { deletion.delete($0, in: context) },
-            onLoadMore: { pageLimit += 40 }
+            onBrowseOlder: { showingAllNotes = true }
         )
     }
 

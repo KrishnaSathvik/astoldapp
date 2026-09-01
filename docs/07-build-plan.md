@@ -85,7 +85,7 @@ No permission prompts occur.
 - whitespace-only title normalizes
 - empty draft disappears
 - text survives relaunch
-- old note edit does not change creation-day group
+- old note edit does not change which period group the note sits in (sorting is by `createdAt`)
 
 ## Done when
 
@@ -413,12 +413,16 @@ known-good baseline — anything lower means something was lost, not that the ba
 ```bash
 xcodegen generate   # the .xcodeproj is generated and gitignored; regenerate after adding files
 
-# 1280 unit tests (measured 2026-08-28, Voice V2 Phase 2B)
+# 1359 unit tests (measured 2026-08-31 — Home library redesign and its three refinement
+# passes, recorder lifecycle, attestation repair; see RULES.md §8)
 xcodebuild test -project Yourly.xcodeproj -scheme Yourly \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:YourlyTests
 
-# 92 UI tests, including the three accessibility audits
+# 101 UI tests, including the three accessibility audits.
+# Shut every simulator down first (`xcrun simctl shutdown all`) and use an isolated
+# -derivedDataPath: several of these are load-sensitive and fail under contention while passing
+# alone, which reads as a regression and is not one.
 xcodebuild test -project Yourly.xcodeproj -scheme Yourly \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:YourlyUITests -parallel-testing-enabled NO
@@ -428,8 +432,58 @@ xcodebuild build -project Yourly.xcodeproj -scheme Yourly \
   -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
 
 # Relay: 136 tests, clean typecheck
-cd transcription-service && npx vitest run && npx tsc --noEmit
+cd transcription-service && npx vitest run && npx tsc --noEmit   # 137 tests
 ```
+
+## Device stress pass — voice capture completeness
+
+**Not runnable in CI or on a simulator, and it is the only pass that proves the thing it is about.**
+A simulator has no microphone, so every capture there is silence of the right length; what this pass
+measures is whether the *file* holds as much audio as the person actually spoke.
+
+Added 2026-08-30, after two Home Quick Voice captures produced notes containing only the first few
+seconds of a much longer recording. The client-side half of the evidence did not exist at the time and
+now does; the server-side half existed but is not retained long enough to be read after the fact.
+
+**Capture the server side first — it does not survive.** Fly keeps roughly the last twenty minutes of
+log, so the run has to be recorded while it happens:
+
+```bash
+fly logs -a as-told-relay | tee -a voice-pass-relay.log | grep --line-buffered "transcription ok"
+```
+
+Each line carries `seconds` — the duration the relay measured **from the uploaded container**, never
+from anything the client claimed. That is the authority on what was actually sent.
+
+**The client side, from a DEBUG build on the device** (`VoiceDiagnostics`, metadata only — no
+transcript, no audio, no note text, no file name):
+
+```bash
+log stream --device --predicate 'subsystem == "com.astold.app" AND category == "voice"'
+```
+
+```text
+voice_capture_finished origin=quickVoice ending=userFinished recorded=27.80 asset=27.64 bytes=241328 drift=0.16
+voice_capture_finished origin=quickVoice ending=unexpected  recorded=31.20 asset=6.41  bytes=58112  drift=24.79
+```
+
+`drift` is the whole point: `recorded` is how long the microphone was open, `asset` is how much audio
+the finalized container holds. They agree on a healthy capture. The second line is the defect this
+pass exists to catch, and it now also names itself in `ending`.
+
+**The runs.** At least **20 Home Quick Voice** and **20 in-note**, roughly 20–30 seconds each, speaking
+continuously. Across them, exercise: plain recording · Pause → Resume · AirPods connecting mid-capture
+· AirPods disconnecting mid-capture · Control Centre pulled down and dismissed · backgrounding and
+returning · Siri · an incoming call.
+
+**Pass condition**, per run:
+
+- `abs(recorded - asset)` within ~0.5s, and the relay's `seconds` within ~1s of `asset`.
+- `ending` is `userFinished` for every run nothing interrupted.
+- No run ends in a note whose text stops earlier than the speech did.
+
+A single `drift` above a second is a finding, not noise — report the run, its `ending`, and the point
+at which the audio stops.
 
 ## The UI suite flakes — reproduce before believing it
 

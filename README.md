@@ -17,6 +17,22 @@ The app is intentionally **not** a productivity workspace, AI writing assistant,
 
 These decisions should be treated as product constraints unless intentionally changed later.
 
+- **Home's library is a monochrome grouped list (changed 2026-08-30).** The note library below Home's
+  header was redesigned for scanning density; the **header is untouched** — Profile, Calendar, New
+  Note, Quick Voice and `.searchable` keep their positions, order and behavior, and no overflow menu
+  or bottom toolbar was introduced. Four locked decisions moved with it, deliberately and together:
+  notes group by **relative period** (`Today` / `Previous 7 Days` / `Previous 30 Days` / `Older`)
+  rather than by day; a period is **one rounded surface holding many rows**, which is still not a
+  card per note; a row is a title over a flattened body excerpt; and the palette
+  is **neutral** — the warm `#F8F7F3` canvas and cream dark ink are gone, because no brand colour
+  belongs on a content surface. The prominent largeTitle `Today` anchor went with the change, since
+  `Today` is now a heading and drawing it twice is a bug. **Monochrome scopes to content and
+  surfaces, not to navigation** (settled 2026-08-31, after a day with the header drawn in
+  `textPrimary`): the four header glyphs keep their own muted tints — Profile terracotta, Calendar
+  sage, New Note slate blue, Quick Voice lavender — because colour that tells one control from
+  another is doing a job their symbols alone do not. **What did not change: Home still shows no
+  creation time on a row** — a `9:41 PM ·` preview prefix was proposed and dropped rather than unlock
+  that. Design: `docs/plans/2026-08-30-home-library-redesign-design.md`; rules: `RULES.md` §1, §4.
 - Product name is **As Told** (locked 2026-08-17). Full marketing name: **As Told — Private Notes**. App Store name and home-screen icon label: **As Told**. The internal Xcode target/module stays `Yourly`; the bundle id is `com.astold.app` (changed 2026-08-18, before any App Store Connect record existed — it is permanent now that one does). **Reviewed and approved 2026-08-26**: Apple ID `6804007726`, listing at `https://apps.apple.com/us/app/as-told/id6804007726`. The id lives in two places that feed everything else — `APP_STORE_ID` in `website/lib/site.ts` and `AppLinks.appStoreID` in `Features/Profile/PrivacyView.swift`.
 - Primary descriptor: **A private place for anything you want to put into words.** Brand promise: **Your words, as told by you.** (Repositioned 2026-08-18 from the thoughts-only *"Private notes, in your own words."* framing. This **widens the invitation, not the product**: V1 shipped scope, the do-not-build fences, and all shipped-feature marketing claims are unchanged; structured writing and voice-structure commands are sequenced roadmap, not V1. Tagline is unchanged. Full brand / ASO / SEO / website direction: `docs/08-positioning-marketing.md`.)
 - **Links and code blocks live inside `body` (added 2026-08-23 — V2 Phases 1–2, both free).** `body`
@@ -62,11 +78,22 @@ These decisions should be treated as product constraints unless intentionally ch
 - No onboarding carousel.
 - One first-run welcome screen.
 - Tagline: **Write it. Say it. Keep it.**
-- Home is the complete chronological notes timeline.
-- Notes are grouped automatically by day.
-- No user-facing pagination or "Load more".
+- Home is the **recent** notes surface — the current date over `Today` and `Previous 7 Days`, capped
+  at 4 and 5, with a reversible `Show all N` / `Show less` per period, and one **`Browse older
+  notes`** into the complete timeline **only when notes actually sit outside those periods**
+  (changed 2026-08-31; `RULES.md` §1). Four surfaces, four questions: Home *what was I working on
+  recently*, All Notes *show me everything*, Calendar *what did I write that day*, Search *where is
+  that note*. All Notes is an extension of Home, not a second organization system: same grouping,
+  same rows, and no search, sort, filter, layout, folders, or counts of its own.
+- Home carries **no app title and no note count** — the name is on the icon the reader just tapped,
+  and the size of the library is a statistic Home does not report (`RULES.md` §1, §4).
+- Notes are grouped automatically by relative period — `Today` / `Previous 7 Days` / `Previous 30 Days` / `Older` (changed 2026-08-30; was by day).
+- No user-facing pagination or "Load more". A period-level `Show all N` / `Show less` toggle is permitted and is not pagination; All Notes may load older notes invisibly while scrolling (`RULES.md` §1).
 - Search is available from Home using native pull-down/search behavior.
-- Calendar is a secondary navigation tool for jumping to a date.
+- Calendar is a secondary navigation tool for jumping to a date. It has **one** vertical scroll, its
+  own sage accent for interaction state (chevrons, selected day, today's ring, density dots), at most
+  **three** dots per day as a sense of activity rather than a count, and the selected day shows 4
+  notes with the same `Show all N` / `Show less` Home uses (2026-08-31; `RULES.md` §1, §4).
 - Note title is optional.
 - Empty notes are discarded automatically.
 - Home does not show note creation times.

@@ -39,6 +39,24 @@ export async function transcribeRoutes(
       identity = result.identity;
     } catch (err) {
       if (err instanceof AttestationError) {
+        // **Log why.** The verifier distinguishes `missing assertion`, `invalid or expired
+        // challenge`, `unknown key`, and a failed signature check, and every one of them used to
+        // arrive at the client as the same opaque 401 — which meant the one failure most likely to
+        // be a bug in our own setup was the one nobody could diagnose. Added 2026-08-31, after a
+        // first-request 401 whose cause could not be established from production logs.
+        //
+        // Metadata only: the reason is our own text, and `keyId` is recorded as *present or not*
+        // rather than by value — it identifies an install (RULES.md §3).
+        req.log.warn(
+          {
+            requestId,
+            status: 401,
+            reason: err.message,
+            hadKeyId: Boolean(req.headers['x-attest-key-id']),
+            hadAssertion: Boolean(req.headers['x-attest-assertion']),
+          },
+          'attestation rejected',
+        );
         return reply.code(401).send({ requestId, error: 'attestation_failed' });
       }
       throw err;

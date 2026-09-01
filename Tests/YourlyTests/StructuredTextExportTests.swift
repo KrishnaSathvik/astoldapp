@@ -17,6 +17,14 @@ struct StructuredTextExportPlainTextTests {
         #expect(StructuredTextExport.plainText("- [x] Done") == "☑ Done")
     }
 
+    /// A Home or search row draws the checklist the way the editor does — a circle — while the text
+    /// that leaves the app keeps the box other apps recognise. Two spellings, two audiences, one source.
+    @Test func previewDrawsAChecklistAsCirclesWhileExportKeepsTheBox() {
+        let source = "- [ ] Reserve hotels\n- [x] Compare flights"
+        #expect(StructuredTextExport.previewText(source) == "○ Reserve hotels\n✓ Compare flights")
+        #expect(StructuredTextExport.plainText(source) == "☐ Reserve hotels\n☑ Compare flights")
+    }
+
     @Test func subheadingLosesItsMarkerLikeAHeading() {
         #expect(StructuredTextExport.plainText("## Later") == "Later")
     }
@@ -200,9 +208,10 @@ struct StructuredTextPreviewTests {
         #expect(preview.hasSuffix("Still need to book."))
     }
 
+    /// A preview draws the editor's circle, not the pasteboard's box (`BlockKind.previewMarker`).
     @Test func listsStillShowTheMarkersTheReaderSees() {
         #expect(StructuredTextExport.previewText("# Shopping\n- Eggs\n- [ ] Call Ravi\n- [x] Done")
-                == "Shopping\n• Eggs\n☐ Call Ravi\n☑ Done")
+                == "Shopping\n• Eggs\n○ Call Ravi\n✓ Done")
     }
 
     @Test func aNoteWithoutATableIsExactlyItsVisibleText() {
@@ -273,10 +282,11 @@ struct SpokenRowTests {
         #expect(row == "Unchecked, Call Ravi\nChecked, Book hotel")
     }
 
-    /// The eye keeps the glyphs. Both spellings exist because both audiences do.
+    /// The eye keeps a glyph — the circle the editor draws. Both spellings exist because both
+    /// audiences do.
     @Test func theVisiblePreviewIsUnchanged() {
         let body = "- [ ] Call Ravi"
-        #expect(StructuredTextExport.previewText(body) == "☐ Call Ravi")
+        #expect(StructuredTextExport.previewText(body) == "○ Call Ravi")
         #expect(StructuredTextExport.spokenRow(title: nil, body: body) == "Unchecked, Call Ravi")
     }
 
@@ -308,5 +318,39 @@ struct SpokenRowTests {
         let row = StructuredTextExport.spokenRow(title: nil, body: "| Day | Park |\n| --- | --- |\n| 1 | Kenai |")
         #expect(!row.contains("|"))
         #expect(row.contains("Kenai"))
+    }
+}
+
+/// `previewLines` — the Home row's one-line spelling of a note.
+///
+/// A Home row is one line tall and a note is not, so the row joins these. What matters is that
+/// nothing structural survives the flattening: a checklist arriving as its first item alone, or a
+/// fence or a pipe reaching a row, are the two ways this goes wrong.
+struct PreviewLinesTests {
+    @Test func aChecklistFlattensToItsItemsAndTheirState() {
+        let lines = StructuredTextExport.previewLines("- [x] Website\n- [x] Voice V2\n- [ ] Screenshots")
+        #expect(lines == ["✓ Website", "✓ Voice V2", "○ Screenshots"])
+        #expect(lines.joined(separator: "  ") == "✓ Website  ✓ Voice V2  ○ Screenshots")
+    }
+
+    @Test func blankLinesAreDroppedSoARowNeverStartsEmpty() {
+        #expect(StructuredTextExport.previewLines("\n\n   \nFirst real words") == ["First real words"])
+    }
+
+    @Test func noMarkerOrFenceOrPipeReachesARow() {
+        let note = "# Shopping\n- Eggs\n```sql\nSELECT 1\n```\n| Day | Cost |\n| --- | --- |\n| Mon | 20 |"
+        let joined = StructuredTextExport.previewLines(note).joined(separator: "  ")
+        for leak in ["# ", "- [", "```", "|"] {
+            #expect(!joined.contains(leak), "row preview leaked \(leak) — \(joined)")
+        }
+        #expect(joined.contains("Shopping"))
+        #expect(joined.contains("• Eggs"))
+        #expect(joined.contains("SELECT 1"))
+        #expect(joined.contains("Day · Cost"))
+    }
+
+    @Test func anEmptyBodyProducesNoLines() {
+        #expect(StructuredTextExport.previewLines("").isEmpty)
+        #expect(StructuredTextExport.previewLines("   \n  ").isEmpty)
     }
 }

@@ -510,3 +510,208 @@ struct ChecklistHitTargetTests {
         #expect(coordinator.checkboxLine(in: tv, at: CGPoint(x: 10, y: rect.minY + rect.height * 0.2)) == nil)
     }
 }
+
+// MARK: - The circle
+
+/// A checklist marker is a **circle**, not a box (2026-08-31, docs/03-design-system.md "How structure
+/// renders"). A square reads as a task manager, which a checklist here is explicitly not
+/// (docs/02-features.md Milestone A); a thin ring beside the words reads as a note with something to
+/// tick off. The change is rendering only — the source still holds `- [ ] ` / `- [x] `, which these
+/// tests keep typing.
+///
+/// Most of this is measured off pixels rather than asserted about symbol names, because the claim is
+/// what a reader sees: a corner that stays empty is what separates a circle from a box.
+@MainActor
+struct ChecklistCircleTests {
+
+    private var body: UIFont { StructuredTextStyle.bodyFont() }
+
+    // MARK: Geometry
+
+    /// Big enough to aim at, small enough to stay a marker. The gutter is 28pt and the words start
+    /// there, so the circle is sized from the type rather than from a number picked in isolation.
+    @Test func theCircleIsAMarkerNotAButton() {
+        let d = StructuredTextStyle.checkboxDiameter(for: body)
+        #expect(d >= 16 && d <= 22, "diameter \(d) is outside the 16–22pt band")
+    }
+
+    /// It is drawn from the line's font, so it grows with Dynamic Type like the bullet and the number
+    /// beside it rather than tracking a second, fixed idea of its size.
+    @Test func theCircleTracksDynamicType() {
+        let large = UIFont.preferredFont(
+            forTextStyle: .body,
+            compatibleWith: UITraitCollection(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)
+        )
+        #expect(StructuredTextStyle.checkboxDiameter(for: large) > StructuredTextStyle.checkboxDiameter(for: body))
+    }
+
+    /// A circle's frame is square, and it stops short of the words: the gap between the ring and the
+    /// first letter is what keeps a checklist reading as text with marks beside it, not marks with
+    /// captions.
+    @Test func theCircleLeavesRoomBeforeTheWords() {
+        let frame = StructuredTextStyle.checkboxFrame(x: 0, baselineY: 100, font: body)
+        #expect(frame.width == frame.height)
+        #expect(frame.maxX <= StructuredTextStyle.listIndent - 6,
+                "the circle ends at \(frame.maxX), leaving under 6pt before the text at \(StructuredTextStyle.listIndent)")
+        #expect(frame.minX >= 1)
+    }
+
+    // MARK: Colour
+
+    /// The tick is drawn *on* the accent fill, so it is measured against the fill, not the canvas.
+    @Test(arguments: [UIUserInterfaceStyle.light, UIUserInterfaceStyle.dark])
+    func theTickClearsTheContrastFloorAgainstItsFill(style: UIUserInterfaceStyle) throws {
+        let lm = try #require(StructuredTextView.make().layoutManager as? StructuredLayoutManager)
+        let ratio = contrast(lm.tickColor, lm.accentColor, in: style)
+        #expect(ratio >= 4.5, "the tick sits at \(ratio):1 on its fill, under the 4.5:1 floor (§6)")
+    }
+
+    /// A ticked item's words step back — but to the secondary token, never to a custom alpha. "Muted"
+    /// has to stay legible: a ticked item is still the note, and the reader may want to untick it.
+    @Test(arguments: [UIUserInterfaceStyle.light, UIUserInterfaceStyle.dark])
+    func aTickedItemsWordsAreMutedNotFaded(style: UIUserInterfaceStyle) {
+        let checked = contrast(UIColor(Color.ds.textSecondary), UIColor(Color.ds.canvas), in: style)
+        let unchecked = contrast(UIColor(Color.ds.textPrimary), UIColor(Color.ds.canvas), in: style)
+        #expect(checked >= 4.5, "a ticked item reads at \(checked):1, under the 4.5:1 floor (§6)")
+        #expect(checked < unchecked, "a ticked item is as loud as an unticked one")
+    }
+
+    /// And that is the colour the words actually get, through the one definition of a line's
+    /// attributes, so the styler and the typing attributes cannot disagree about a ticked line.
+    @Test func onlyATickedItemsWordsTakeTheMutedColour() {
+        let storage = NSTextStorage(string: "- [ ] One\n- [x] Two\n- Three")
+        StructuredTextStyler.apply(to: storage, textColor: .black, checkedTextColor: .red)
+        let lines = MarkupDocument(storage.string).lines
+        func colour(ofLine i: Int) -> UIColor? {
+            storage.attribute(.foregroundColor, at: lines[i].contentStart, effectiveRange: nil) as? UIColor
+        }
+        #expect(colour(ofLine: 0) == .black)
+        #expect(colour(ofLine: 1) == .red)
+        #expect(colour(ofLine: 2) == .black)
+
+        let typing = StructuredTextStyle.attributes(for: .checklist(checked: true), isFirstLine: false,
+                                                    textColor: .black, checkedTextColor: .red)
+        #expect(typing[.foregroundColor] as? UIColor == .red)
+    }
+
+    /// Read off the real editor, not off a token: the wiring is the claim.
+    @Test func theEditorMutesATickedItemToTextSecondary() {
+        let source = "- [x] Two"
+        let parent = BodyTextView(text: .constant(source),
+                                  selectedRange: .constant(NSRange(location: 0, length: 0)),
+                                  isFocused: .constant(false),
+                                  isEditable: true,
+                                  keyboardAppearance: .light)
+        let coordinator = BodyTextView.Coordinator(parent)
+        let tv = StructuredTextView.make()
+        tv.delegate = coordinator
+        tv.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        tv.text = source
+        coordinator.restyle(tv)
+        let start = MarkupDocument(source).lines[0].contentStart
+        let drawn = tv.textStorage.attribute(.foregroundColor, at: start, effectiveRange: nil) as? UIColor
+        #expect(drawn == UIColor(Color.ds.textSecondary))
+        #expect(drawn != UIColor(Color.ds.textTertiary), "tertiary is the code-fence colour, and too faint for words")
+    }
+
+    // MARK: Pixels
+
+    /// A box paints its corners; a circle leaves them empty. That one pixel is the whole difference.
+    @Test(arguments: [UIUserInterfaceStyle.light, UIUserInterfaceStyle.dark])
+    func anUntickedItemIsARingNotABox(style: UIUserInterfaceStyle) throws {
+        let (raster, frame) = try rasterise("- [ ] One", style: style)
+        #expect(raster.alpha(at: CGPoint(x: frame.minX + 1, y: frame.minY + 1)) < 0.05,
+                "the corner of an unticked marker is painted — that is a box")
+        #expect(raster.alpha(at: CGPoint(x: frame.minX + 0.5, y: frame.midY)) > 0.9,
+                "nothing is drawn where the ring should be")
+        #expect(raster.alpha(at: CGPoint(x: frame.midX, y: frame.midY)) < 0.05,
+                "an unticked circle has a transparent centre")
+    }
+
+    /// Ticked: a solid accent circle, still with empty corners, carrying a tick in the on-accent colour.
+    @Test(arguments: [UIUserInterfaceStyle.light, UIUserInterfaceStyle.dark])
+    func aTickedItemIsAFilledCircleWithATick(style: UIUserInterfaceStyle) throws {
+        let (raster, frame) = try rasterise("- [x] One", style: style)
+        let lm = try #require(StructuredTextView.make().layoutManager as? StructuredLayoutManager)
+        let accent = lm.accentColor.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+        let tick = lm.tickColor.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+
+        #expect(raster.alpha(at: CGPoint(x: frame.minX + 1, y: frame.minY + 1)) < 0.05,
+                "the corner of a ticked marker is painted — that is a box")
+        // Well inside the circle and well clear of the tick, which sits in the middle half.
+        let edge = CGPoint(x: frame.minX + 1.5, y: frame.midY)
+        #expect(raster.matches(accent, at: edge), "the fill at \(edge) is not the accent")
+        #expect(raster.contains(tick, in: frame), "no on-accent tick was drawn inside the circle")
+    }
+
+    // MARK: Helpers
+
+    /// Draws the first line the way the editor does — through the layout manager, with the design
+    /// system's colours resolved for `style` — and returns the marker's frame in the same space.
+    private func rasterise(_ source: String, style: UIUserInterfaceStyle) throws -> (Raster, CGRect) {
+        let tv = laidOutView(source)
+        let lm = try #require(tv.layoutManager as? StructuredLayoutManager)
+        let line = MarkupDocument(source).lines[0]
+        let glyph = lm.glyphIndexForCharacter(at: line.sourceRange.location)
+        let fragmentRect = lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        let baselineY = fragmentRect.minY + lm.location(forGlyphAt: glyph).y
+        let frame = StructuredTextStyle.checkboxFrame(x: 0, baselineY: baselineY, font: body)
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2
+        format.opaque = false
+        let size = CGSize(width: 120, height: max(60, fragmentRect.maxY + 10))
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            UITraitCollection(userInterfaceStyle: style).performAsCurrent {
+                let range = lm.glyphRange(for: tv.textContainer)
+                lm.drawBackground(forGlyphRange: range, at: .zero)
+                lm.drawGlyphs(forGlyphRange: range, at: .zero)
+            }
+        }
+        return (try Raster(try #require(image.cgImage), scale: 2), frame)
+    }
+
+    /// Straight RGBA bytes in sRGB, so a pixel can be compared with a resolved token.
+    private struct Raster {
+        let width: Int, height: Int, scale: CGFloat
+        let bytes: [UInt8]
+
+        init(_ cg: CGImage, scale: CGFloat) throws {
+            width = cg.width; height = cg.height; self.scale = scale
+            var data = [UInt8](repeating: 0, count: width * height * 4)
+            let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+            let ctx = try #require(CGContext(
+                data: &data, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+            bytes = data
+        }
+
+        /// Premultiplied RGBA, 0…1, at a point in *points* (the renderer's flipped space).
+        private func rgba(at p: CGPoint) -> (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
+            let x = min(max(Int(p.x * scale), 0), width - 1)
+            let y = min(max(Int(p.y * scale), 0), height - 1)
+            let i = (y * width + x) * 4
+            return (CGFloat(bytes[i]) / 255, CGFloat(bytes[i + 1]) / 255,
+                    CGFloat(bytes[i + 2]) / 255, CGFloat(bytes[i + 3]) / 255)
+        }
+
+        func alpha(at p: CGPoint) -> CGFloat { rgba(at: p).a }
+
+        func matches(_ colour: UIColor, at p: CGPoint) -> Bool {
+            let px = rgba(at: p)
+            guard px.a > 0.95 else { return false }
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            colour.getRed(&r, green: &g, blue: &b, alpha: &a)
+            return abs(px.r - r) < 0.04 && abs(px.g - g) < 0.04 && abs(px.b - b) < 0.04
+        }
+
+        func contains(_ colour: UIColor, in rect: CGRect) -> Bool {
+            stride(from: rect.minY, to: rect.maxY, by: 0.5).contains { y in
+                stride(from: rect.minX, to: rect.maxX, by: 0.5).contains { x in
+                    matches(colour, at: CGPoint(x: x, y: y))
+                }
+            }
+        }
+    }
+}

@@ -215,9 +215,10 @@ Three traps worth knowing:
 - **Argument order matters.** NSUserDefaults parses `-key value` pairs, so bare `DebugLaunch` flags
   interleaved with them can swallow a value — `-hasCompletedWelcome YES` silently fails and you get
   the Welcome screen. Put the pairs first and `-searchQuery <term>` last.
-- **The software keyboard will not raise** on a headless simulator, so the editor captures show the
-  floating toolbar without a keyboard. That is the better frame anyway: a keyboard would cover the
-  structured content these screenshots exist to show.
+- **The software keyboard will not raise while the simulator's hardware keyboard is connected**
+  (corrected 2026-09-01 — it is that setting, not headlessness). The per-device key is
+  `DevicePreferences.<UDID>.ConnectHardwareKeyboard` in `com.apple.iphonesimulator`; relaunching
+  Simulator.app can bring it back. The UI suite wants it *on* for ⌘Z; a keyboard-up raw wants it *off*.
 - **The editor caption shows the note's own creation time**, so a demo note created at the moment of
   capture puts a second, different clock in the frame — a 9:41 status bar above an
   "AUGUST 21, 2026 · 22:31" caption, which reads as a product bug rather than a capture one. Every
@@ -225,6 +226,68 @@ Three traps worth knowing:
   agrees in both hour cycles too: a 24-hour simulator renders "09:41", a 12-hour one "9:41 AM" — and
   a fixed `dateFormat` of `h:mm a` does **not** pin the cycle, iOS overrides it from the device's
   24-Hour Time toggle. Recapture after this change; earlier raws still carry the old stamp.
+
+### The canonical raw library (2026-09-01) — `raw/library/`
+
+The set the V2.1 website and the next App Store frames are both cut from. **Raw only**: no frame, no
+crop, no headline; the App Store visual system is designed afterwards, from chosen crops. Produced by
+`capture-library.sh` (`ONLY="03-quickvoice-listening 09-calendar" bash …` retakes a subset).
+
+**One dataset.** Every note in every shot comes from a single catalogue, `DebugLaunch.library` —
+Weekend Plan, a titleless voice note, Japan Trip, Launch Checklist, Monthly Units Query, a titleless
+*Ideas for Sunday*, Book Notes, Trip Budget, Packing List, plus two one-line everyday notes that exist
+only to give the calendar its dots. The same words appear on Home, under the calendar, and in the open
+note. It is dated three ways: `-seedLibraryHome` (2 today + 9 across the week → `Show all 9`),
+`-seedLibraryCalendar` (•, ••, •••, • on 26/27/29/30 and three notes on the 31st), and
+`-seedLibraryNote <key>` for a single note at 09:41 (`voice` is the titleless one).
+
+**One clock.** The session was captured after midnight on September 1 for an August 31 brief.
+`AppClock.now` (Core/Persistence) is the one read of the clock the reader can see — Home's date line,
+the period buckets, the calendar's month and today — and `-pinnedNow 2026-08-31T09:41:00` pins it in
+Debug builds, so the status-bar override, the seeds and the UI agree. Storage timestamps do not go
+through it; a note's `createdAt` is a fact, not a way of looking at it.
+
+| # | File | Screen | Flags (after the shared pairs and `-appTheme …`) |
+|---|---|---|---|
+| 01 | `01-home-light` | Home: AUGUST 31, 2026 · Today (2) · Previous 7 Days (5) · `Show all 9` · search | seed `-seedLibraryHome`, then nothing |
+| 02 | `02-home-dark` | The same store, dark | `-appTheme dark` |
+| 03 | `03-quickvoice-listening` | Quick Voice, **00:21**, Listening, Pause / Done | `-openQuickVoice -voiceDemoLevels` (sleep 20) |
+| 04 | `04-quickvoice-paused` | Quick Voice, **00:23**, Paused, Resume / Done | `-voicePauseAfter 23 -openQuickVoice -voiceAutoPause -voiceDemoLevels` |
+| 05 | `05-voice-note-titleless` | Empty `Title`, three spoken paragraphs, Share and mic visible | seed `-seedLibraryNote voice`, then `-openSeededNote` |
+| 06 | `06-japan-trip-light` | Heading, paragraph, **circular checklist**, numbered route, bullets — whole note on one screen | seed `-seedLibraryNote "Japan Trip"`, then `-openSeededNote` |
+| 07 | `07-japan-trip-keyboard-up` | Same note, caret at the start, writing toolbar and keyboard | `-openSeededNote -caretAtStart` |
+| 08 | `08-launch-checklist` | Five circles (two checked) between two sentences | seed `-seedLibraryNote "Launch Checklist"`, then `-openSeededNote` |
+| 09 | `09-calendar` | August 2026, 31 selected, dots on 26 / 27 / 29 / 30, three notes under *Today* | seed `-seedLibraryCalendar`, then `-openCalendar` |
+| 10 | `10-trip-budget` | Sentence, four-row right-aligned table, `Still to price` bullets | seed `-seedLibraryNote "Trip Budget"`, then `-openSeededNote` |
+| 11 | `11-monthly-units-query` | `SQL` · `Copy Code` card with a sentence above and below | seed `-seedLibraryNote "Monthly Units Query"`, then `-openSeededNote` |
+| 12 | `12-japan-trip-dark` | Pixel-for-pixel the Light/Dark pair with 06 | same store, `-appTheme dark -openSeededNote` |
+| 13 | — | **Real Share sheet — device only**, over Weekend Plan or Japan Trip | not capturable here (see above) |
+| 14 | `14-voice-recovery` | *A connection is needed to transcribe this recording. · Your recording is still on this iPhone. · Delete Recording · Retry* over an ordinary note | seed `-seedLibraryNote "Weekend Plan"`, then `-openSeededNote -autoStartVoice -voiceFakeFailure` |
+| 15 | `15-weekend-plan` | A clean everyday note, two short paragraphs | same store, `-openSeededNote` |
+| 16 | `16-voice-consent` | **Website only.** The *Voice transcription* consent sheet over Weekend Plan — Cancel / Continue | same store, launched **without** `-voiceTranscriptionConsent YES` (`SHOT_BASE="$BASE_NOCONSENT"`), `-openSeededNote -autoStartVoice` |
+
+The website encodes this library straight to WebP (`website/README.md`, "Regenerating the
+screenshots"); the site's whole shot set is this folder and nothing else since 2026-09-01.
+
+Decisions taken while capturing, all reversible:
+
+- **The Japan Trip note has no lead sentence.** A first line ("Tokyo → Kyoto → Osaka…") was tried so
+  the Home row would excerpt it; it pushed *Camera / Portable charger* under the mic button in 06 and
+  12. The whole note on one screen won; Home's row now excerpts *Before we book  A few things…*.
+- **Three notes on the 31st, not four.** `CalendarDayDensity` needs four notes for three dots, and the
+  brief asked for `29 •••`; Launch Checklist moved to the 29th to earn them.
+- **`-caretAtStart` now really is at the start.** The selection binding only flows *out* of the text
+  view, so the old flag set a value nothing read and the caret landed at the end (yesterday's `55`
+  shows this). `BodyTextView` now places it after `becomeFirstResponder()`, `#if DEBUG` only.
+- **The Listening timer is wall-clock from launch.** A cold `simctl launch` under load put 00:37 on
+  the first take of 03 with the same 20 s sleep that later gave 00:21. Read the digits back; retake
+  rather than shorten the sleep.
+
+One thing the first pass surfaced and the second fixed: the Home row's text excerpt drew a
+checklist item as `☐` / `☑`, a **square**, while the editor has drawn a **circle** since 2026-08-31 —
+so 01/02/09 showed the old checklist design above the new one. `BlockKind.previewMarker` now gives
+previews `○` / `✓` (the pasteboard keeps the box, which is the interop contract), and 01, 02 and 09
+were recaptured the same day.
 
 ### Recompose
 

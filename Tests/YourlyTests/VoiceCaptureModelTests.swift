@@ -10,12 +10,19 @@ private final class FakeRecorder: AudioRecording {
     private(set) var canceled = false
     private(set) var cleaned: [URL] = []
     var level: Float = 0.5
-    var onInterruption: (() -> Void)?
+    var onCaptureEnded: ((RecordingStop) -> Void)?
+    /// What the finalized container measures. `nil` stands in for a file with no usable duration —
+    /// the one thing `.finishing` now refuses to send.
+    var assetSeconds: Double? = 1
+    var isCapturing = true
 
     init(permission: Bool = true) { self.permission = permission }
 
     /// Simulates a call/Siri taking the microphone mid-recording.
-    func interrupt() { onInterruption?() }
+    func interrupt() { onCaptureEnded?(.interrupted) }
+
+    /// Simulates the recorder dying on its own — an encoder failure, or a finish nobody asked for.
+    func failUnexpectedly() { isCapturing = false; onCaptureEnded?(.unexpected) }
 
     func requestPermission() async -> Bool { permission }
     func start() throws -> URL { startURL }
@@ -25,7 +32,10 @@ private final class FakeRecorder: AudioRecording {
     private(set) var resumes = 0
     func pause() { pauses += 1 }
     func resume() { resumes += 1 }
-    func stop() -> URL? { stopReturnsNil ? nil : startURL }
+    func finish() async -> FinishedRecording? {
+        isCapturing = false
+        return stopReturnsNil ? nil : FinishedRecording(url: startURL, assetSeconds: assetSeconds, bytes: 1)
+    }
     func cancel() { canceled = true }
     func cleanup(_ url: URL) { cleaned.append(url) }
 }
@@ -63,6 +73,7 @@ struct VoiceCaptureModelTests {
         await model.begin()
         #expect(model.phase == .recording)
         model.done()
+        await settled(model)
         // wait for the async transcription task to complete
         try? await Task.sleep(for: .milliseconds(50))
         #expect(emitted == FakeTranscriptionService.sampleText)
@@ -77,6 +88,7 @@ struct VoiceCaptureModelTests {
                          service: FakeTranscriptionService(result: .failure(.offline), delay: .milliseconds(1))) { emitted = $0 }
         await model.begin()
         model.done()
+        await settled(model)
         try? await Task.sleep(for: .milliseconds(50))
         #expect(model.phase == .failed(.offline))
         #expect(emitted == nil)                                 // never emits text on failure
@@ -91,6 +103,7 @@ struct VoiceCaptureModelTests {
                          service: FakeTranscriptionService(result: .failure(.serviceUnavailable), delay: .milliseconds(1))) { emitted = $0 }
         await model.begin()
         model.done()
+        await settled(model)
         try? await Task.sleep(for: .milliseconds(30))
         #expect(model.phase == .failed(.serviceUnavailable))
         _ = emitted   // still nil
@@ -106,6 +119,7 @@ struct VoiceCaptureModelTests {
         let model = make(recorder: recorder, service: FakeTranscriptionService(delay: .milliseconds(1)))
         await model.begin()
         model.done()
+        await settled(model)
         #expect(model.phase == .failed(.noSpeech))
     }
 
@@ -124,6 +138,7 @@ struct VoiceCaptureModelTests {
                          service: FakeTranscriptionService(result: .failure(.offline), delay: .milliseconds(1)))
         await model.begin()
         model.done()
+        await settled(model)
         try? await Task.sleep(for: .milliseconds(30))
         model.discard()
         #expect(model.phase == .idle)
@@ -171,6 +186,7 @@ struct VoiceCaptureModelTests {
                          maxRecordingDuration: .milliseconds(30))
         await model.begin()
         model.done()
+        await settled(model)
         #expect(model.phase == .transcribing)
 
         try? await Task.sleep(for: .milliseconds(120))
@@ -314,6 +330,7 @@ struct VoiceInterruptionTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         try? await Task.sleep(for: .milliseconds(50))
         recorder.interrupt()
         try? await Task.sleep(for: .milliseconds(50))
@@ -398,6 +415,7 @@ struct TranscriptionConsentTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         try? await Task.sleep(for: .milliseconds(50))
 
         #expect(model.phase == .needsConsent)
@@ -414,6 +432,7 @@ struct TranscriptionConsentTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         model.grantConsent()
         try? await Task.sleep(for: .milliseconds(50))
 
@@ -433,6 +452,7 @@ struct TranscriptionConsentTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         #expect(model.phase == .needsConsent)
         model.discard()
         try? await Task.sleep(for: .milliseconds(50))
@@ -451,6 +471,7 @@ struct TranscriptionConsentTests {
 
         await model.begin()
         model.done()
+        await settled(model)
 
         #expect(model.phase == .transcribing, "a consented install goes straight to transcribing")
         try? await Task.sleep(for: .milliseconds(50))
@@ -480,6 +501,7 @@ struct TranscriptionConsentTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         #expect(model.phase == .transcribing)
     }
 
@@ -499,6 +521,7 @@ struct TranscriptionConsentTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         #expect(model.phase == .needsConsent)
         model.cancel()
         try? await Task.sleep(for: .milliseconds(50))
@@ -519,5 +542,23 @@ struct TranscriptionConsentTests {
         UserDefaultsTranscriptionConsent(defaults: defaults).grant()
         // A fresh instance stands in for the next launch.
         #expect(UserDefaultsTranscriptionConsent(defaults: defaults).hasConsented)
+    }
+}
+
+/// Let a capture leave `.finishing`.
+///
+/// Closing the recorder and measuring the container it wrote is asynchronous
+/// (`AudioRecording.finish()`), so **Done** now puts a capture into `.finishing` for a moment
+/// rather than straight into what comes after it. That wait is the point — it is where the
+/// invariant lives that nothing is uploaded before the file is finalized and measured — so these
+/// tests wait for it rather than assuming it away.
+///
+/// Yields rather than sleeping. A sleep here would also step over `.transcribing`, which several of
+/// these tests are specifically about being in.
+@MainActor
+private func settled(_ model: VoiceCaptureModel) async {
+    for _ in 0..<200 {
+        if model.phase != .finishing { return }
+        await Task.yield()
     }
 }

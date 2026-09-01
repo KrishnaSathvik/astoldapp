@@ -114,11 +114,24 @@ struct AudioRouteChangeTests {
         #expect(AudioRouteChange.decision(for: .other, hasInput: true) == .keepRecording)
     }
 
-    /// No input at all is the unambiguous case: there is nothing left to record with, whatever the
-    /// notification said its reason was.
-    @Test func noRemainingInputAlwaysFinishesSafely() {
-        #expect(AudioRouteChange.decision(for: .other, hasInput: false) == .finishSafely)
-        #expect(AudioRouteChange.decision(for: .inputDeviceAdded, hasInput: false) == .finishSafely)
+    /// **Rewritten 2026-08-30, and the old assertion was the bug.** This read
+    /// `noRemainingInputAlwaysFinishesSafely` and required an empty input list to end the capture
+    /// outright — "the unambiguous case", on the reasoning that there is nothing left to record with.
+    ///
+    /// It is not unambiguous. The notification is delivered *while the route is changing*, so
+    /// `currentRoute.inputs` is momentarily empty during transitions the recording survives intact,
+    /// and a capture ended on that instant is a thought truncated mid-sentence and then reported to
+    /// the user as a completed recording. The observation is still made and still acted on — it is
+    /// escalated to a settled check instead of straight to an ending.
+    @Test func noRemainingInputIsCheckedRatherThanBelieved() {
+        #expect(AudioRouteChange.decision(for: .other, hasInput: false) == .confirmInputLoss)
+        #expect(AudioRouteChange.decision(for: .inputDeviceAdded, hasInput: false) == .confirmInputLoss)
+    }
+
+    /// The system saying a device went away is not a transient sample — it is a statement, and it
+    /// still ends the capture immediately, with or without a route left behind it.
+    @Test func anExplicitlyLostInputStillFinishesSafelyWithNoRouteLeft() {
+        #expect(AudioRouteChange.decision(for: .inputDeviceLost, hasInput: false) == .finishSafely)
     }
 
     /// Route semantics, never product names: "AirPods disconnected" reaches this type as an input
@@ -144,7 +157,11 @@ private final class RetentionRecorder: AudioRecording {
     var startURL = URL(fileURLWithPath: "/tmp/rec-retention-test.m4a")
     var stopReturnsNil = false
     var level: Float = 0.3
-    var onInterruption: (() -> Void)?
+    var onCaptureEnded: ((RecordingStop) -> Void)?
+    /// What the finalized container measures. `nil` stands in for a file with no usable duration —
+    /// the one thing `.finishing` now refuses to send.
+    var assetSeconds: Double? = 1
+    var isCapturing = true
 
     private(set) var starts = 0
     private(set) var canceled = false
@@ -156,13 +173,19 @@ private final class RetentionRecorder: AudioRecording {
     func start() throws -> URL { starts += 1; return startURL }
     func pause() { pauses += 1 }
     func resume() { resumes += 1 }
-    func stop() -> URL? { stopReturnsNil ? nil : startURL }
+    func finish() async -> FinishedRecording? {
+        isCapturing = false
+        return stopReturnsNil ? nil : FinishedRecording(url: startURL, assetSeconds: assetSeconds, bytes: 1)
+    }
     func cancel() { canceled = true; cleaned.append(startURL) }
     func cleanup(_ url: URL) { cleaned.append(url) }
 
     /// A call, Siri, or a route the recorder cannot continue on — all of which arrive the same way:
     /// the capture has stopped, and the audio recorded so far is on disk.
-    func interrupt() { onInterruption?() }
+    func interrupt() { onCaptureEnded?(.interrupted) }
+
+    /// The recorder stopping on its own, which is not the same ending as a call taking it.
+    func failUnexpectedly() { isCapturing = false; onCaptureEnded?(.unexpected) }
 }
 
 /// A transcription service whose answer can change between attempts, which is the whole point of a
@@ -275,6 +298,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, ScriptedTranscriptionService(failing: .offline))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(model.phase == .failed(.offline))
@@ -287,6 +311,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, ScriptedTranscriptionService([ScriptedTranscriptionService.success()]))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(recorder.cleaned == [recorder.startURL])
@@ -300,6 +325,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, ScriptedTranscriptionService(failing: .noSpeech))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(model.phase == .failed(.noSpeech))
@@ -312,6 +338,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, ScriptedTranscriptionService(failing: .monthlyLimitReached(resetsAt: nil)))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(recorder.cleaned.contains(recorder.startURL))
@@ -323,6 +350,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, ScriptedTranscriptionService(failing: .recordingTooLong(maxSeconds: 300)))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(recorder.cleaned.contains(recorder.startURL))
@@ -347,6 +375,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, service, consent: NeverGrantedConsent())
         await model.begin()
         model.done()
+        await settled(model)
         #expect(model.phase == .needsConsent)
 
         model.discard()
@@ -368,6 +397,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, ScriptedTranscriptionService(failing: .offline))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
         #expect(model.retainedRecording != nil)
 
@@ -383,6 +413,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, ScriptedTranscriptionService(failing: .timedOut))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
         model.retry()
         await settle()
@@ -402,6 +433,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, ScriptedTranscriptionService(failing: .offline))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
         #expect(model.retainedRecording != nil)
 
@@ -418,6 +450,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, ScriptedTranscriptionService(failing: .noSpeech))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         model.finishOnLeave()
@@ -433,6 +466,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, service)
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         model.retry()
@@ -450,6 +484,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, ScriptedTranscriptionService(failing: .offline))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         model.retry()
@@ -473,6 +508,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, service) { emitted = $0 }
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         model.retry()
@@ -494,6 +530,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, service)
         await model.begin()
         model.done()
+        await settled(model)
         try? await Task.sleep(for: .milliseconds(200))
 
         #expect(service.callCount == 1, "the recording was re-uploaded without the user asking")
@@ -507,6 +544,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, service, clock: clock)
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         clock.advance(TimeInterval(VoiceLimits.retryLifetimeSeconds))
@@ -529,6 +567,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, service, clock: clock)
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
         let first = model.retainedRecording?.retainedAt
 
@@ -548,6 +587,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, service, clock: clock)
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         clock.advance(TimeInterval(VoiceLimits.retryLifetimeSeconds) - 60)
@@ -568,6 +608,7 @@ struct VoiceRetentionTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         #expect(model.phase == .needsConsent)
         model.grantConsent()
         await settle()
@@ -593,6 +634,7 @@ struct VoiceRetentionTests {
         let model = make(recorder, service, allowance: allowance)
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(allowance.marked.isEmpty, "a transient failure was recorded as the monthly ceiling")
@@ -659,6 +701,7 @@ struct VoiceLifecycleDurabilityTests {
         let model = make(recorder, ScriptedTranscriptionService([ScriptedTranscriptionService.success()]))
         await model.begin()
         model.done()
+        await settled(model)
         #expect(model.phase == .transcribing)
 
         model.finishOnBackground()
@@ -673,6 +716,7 @@ struct VoiceLifecycleDurabilityTests {
         let model = make(recorder, ScriptedTranscriptionService(failing: .offline))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         model.finishOnBackground()
@@ -689,6 +733,7 @@ struct VoiceLifecycleDurabilityTests {
         let model = make(recorder, ScriptedTranscriptionService(failing: .timedOut))
         await model.begin()
         model.done()
+        await settled(model)
         model.finishOnBackground()
         await settle()
 
@@ -827,6 +872,7 @@ struct VoiceRetryInNoteTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(note.body == "what was already written")
@@ -846,6 +892,7 @@ struct VoiceRetryInNoteTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
         model.retry()
         await settle()
@@ -869,6 +916,7 @@ struct VoiceRetryInNoteTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
         model.retry()
         await settle()
@@ -898,6 +946,7 @@ struct VoiceNoSpeechTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
         #expect(model.phase == .failed(.noSpeech))
         #expect(model.retainedRecording == nil)
@@ -907,7 +956,26 @@ struct VoiceNoSpeechTests {
         #expect(recorder.starts == 2, "Try Again did not open the microphone again")
 
         model.done()
+        await settled(model)
         await settle()
         #expect(emitted == ScriptedTranscriptionService.text)
+    }
+}
+
+/// Let a capture leave `.finishing`.
+///
+/// Closing the recorder and measuring the container it wrote is asynchronous
+/// (`AudioRecording.finish()`), so **Done** now puts a capture into `.finishing` for a moment
+/// rather than straight into what comes after it. That wait is the point — it is where the
+/// invariant lives that nothing is uploaded before the file is finalized and measured — so these
+/// tests wait for it rather than assuming it away.
+///
+/// Yields rather than sleeping. A sleep here would also step over `.transcribing`, which several of
+/// these tests are specifically about being in.
+@MainActor
+private func settled(_ model: VoiceCaptureModel) async {
+    for _ in 0..<200 {
+        if model.phase != .finishing { return }
+        await Task.yield()
     }
 }

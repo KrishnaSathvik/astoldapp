@@ -48,20 +48,46 @@ actor AppAttestClient {
     func headers() async throws -> [String: String] {
         guard keys.isSupported else { return [:] }
         do {
-            let keyID = try await registeredKeyID()
-            let challenge = try await fetchChallenge()
-            let assertion = try await keys.generateAssertion(
-                keyID, clientDataHash: Self.clientDataHash(for: challenge))
-            return [
-                "x-attest-key-id": keyID,
-                "x-attest-assertion": assertion.base64EncodedString(),
-                "x-attest-challenge": challenge,
-            ]
+            return try await signedHeaders(keyID: try await registeredKeyID())
         } catch let error as TranscriptionError {
             throw error
+        } catch Failure.staleLocalKey {
+            // The stored key id no longer has a key behind it — the Secure Enclave key did not
+            // survive whatever the install did, which is a local fact the relay cannot tell us.
+            //
+            // Registering a fresh one *here* is the difference between the user seeing nothing and
+            // the user seeing "Couldn't transcribe that recording" over a recording that was
+            // perfectly fine. It is attestation setup completing itself before the upload, not a
+            // retry of a transcription: no audio has been sent at this point, and none is resent.
+            invalidateRegistration()
+            do {
+                return try await signedHeaders(keyID: try await registeredKeyID())
+            } catch let error as TranscriptionError {
+                throw error
+            } catch {
+                return [:]
+            }
         } catch {
             return [:]
         }
+    }
+
+    /// A challenge, signed by `keyID` — the three headers the relay checks.
+    private func signedHeaders(keyID: String) async throws -> [String: String] {
+        let challenge = try await fetchChallenge()
+        let assertion: Data
+        do {
+            assertion = try await keys.generateAssertion(
+                keyID, clientDataHash: Self.clientDataHash(for: challenge))
+        } catch {
+            // Told apart from every other failure because it is the only one with a repair.
+            throw Failure.staleLocalKey
+        }
+        return [
+            "x-attest-key-id": keyID,
+            "x-attest-assertion": assertion.base64EncodedString(),
+            "x-attest-challenge": challenge,
+        ]
     }
 
     /// Forgets the registered key so the next request attests a fresh one. Called when the relay
@@ -119,7 +145,11 @@ actor AppAttestClient {
 
     // MARK: - Transport
 
-    private enum Failure: Error { case rejected }
+    private enum Failure: Error {
+        case rejected
+        /// A stored key id whose Secure Enclave key is gone. Repairable, and only here.
+        case staleLocalKey
+    }
 
     private func send(_ request: URLRequest) async throws -> Data {
         let data: Data

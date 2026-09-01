@@ -28,6 +28,31 @@ enum VoiceErrorCopy {
     /// the user is deleting audio, and the word should say so.
     static let deleteRecordingLabel = "Delete Recording"
 
+    /// What a capture says when the recorder stopped and nobody asked it to.
+    ///
+    /// The sentence exists because the alternative is silence: the app used to finalize whatever the
+    /// encoder had managed to write, transcribe it, and hand back a note — indistinguishable from a
+    /// recording the user ended themselves, and shorter than the thought they had just spoken. That
+    /// is the silent partial capture `docs/10-voice-v2.md` §14 forbids by requiring the app to *say
+    /// what happened*.
+    ///
+    /// Says *stopped*, not "failed": from where the user is standing the microphone closed while
+    /// they were still talking, and which layer of AVFoundation gave up is not information they can
+    /// use. It deliberately does not apologise or explain — the next line tells them their words are
+    /// still here, and that is the fact that matters.
+    static let unexpectedStopMessage = "Recording stopped unexpectedly."
+
+    /// The second half of it: what is on this iPhone is real, and it is only part of what was said.
+    ///
+    /// Split from `retainedNotice` even though both are about audio that survived, because they are
+    /// answering different questions. That one reassures after a failure to *send*. This one has to
+    /// set an expectation before the user reads a transcript — that what comes back stops where the
+    /// recording stopped, not where they did.
+    static let unexpectedStopNotice = "What you said before it stopped is still here."
+
+    /// Sending what survived. Not "Retry": nothing was tried, so there is nothing to try again.
+    static let transcribeCapturedLabel = "Transcribe"
+
     /// What the recovery surface says when a recording has outlived the screen it failed on — after
     /// Back, or after the app was closed and reopened (`docs/10-voice-v2.md` §13).
     ///

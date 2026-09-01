@@ -99,7 +99,7 @@ struct NoteVisibilityTests {
         context.insert(draft)
         try context.save()
         let store = SwiftDataNoteStore(context: context)
-        #expect(try store.noteDays(in: draft.createdAt).isEmpty)
+        #expect(try store.noteDayCounts(in: draft.createdAt).isEmpty)
         #expect(try store.notes(on: draft.createdAt).isEmpty)
     }
 

@@ -19,7 +19,11 @@ import SwiftData
 private final class RecoveryRecorder: AudioRecording {
     var startURL = URL(fileURLWithPath: "/tmp/rec-recovery-test.m4a")
     var level: Float = 0.2
-    var onInterruption: (() -> Void)?
+    var onCaptureEnded: ((RecordingStop) -> Void)?
+    /// What the finalized container measures. `nil` stands in for a file with no usable duration —
+    /// the one thing `.finishing` now refuses to send.
+    var assetSeconds: Double? = 1
+    var isCapturing = true
     private(set) var canceled = false
     private(set) var cleaned: [URL] = []
 
@@ -27,7 +31,10 @@ private final class RecoveryRecorder: AudioRecording {
     func start() throws -> URL { startURL }
     func pause() {}
     func resume() {}
-    func stop() -> URL? { startURL }
+    func finish() async -> FinishedRecording? {
+        isCapturing = false
+        return FinishedRecording(url: startURL, assetSeconds: assetSeconds, bytes: 1)
+    }
     func cancel() { canceled = true; cleaned.append(startURL) }
     func cleanup(_ url: URL) { cleaned.append(url) }
 }
@@ -208,6 +215,7 @@ struct RetentionPersistenceTests {
         let model = make(recorder, RecoveryService(failing: .offline), store)
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         let remembered = try #require(store.remembered)
@@ -222,6 +230,7 @@ struct RetentionPersistenceTests {
         let model = make(recorder, RecoveryService(failing: .noSpeech), store)
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(store.remembered == nil)
@@ -237,6 +246,7 @@ struct RetentionPersistenceTests {
         ]), store)
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
         #expect(store.remembered != nil)
 
@@ -252,6 +262,7 @@ struct RetentionPersistenceTests {
         let model = make(RecoveryRecorder(), RecoveryService(failing: .offline), store)
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         model.deleteRecording()
@@ -269,6 +280,7 @@ struct RetentionPersistenceTests {
         let model = make(recorder, RecoveryService(failing: .offline), store, origin: .note)
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         model.finishOnLeave()          // EditorView.onDisappear
@@ -287,6 +299,7 @@ struct RetentionPersistenceTests {
         let model = make(RecoveryRecorder(), RecoveryService(failing: .offline), store, origin: .note)
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(store.remembered?.origin == .note)
@@ -524,6 +537,7 @@ struct LeavingMidTranscriptionTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         #expect(model.phase == .transcribing)
 
         model.finishOnLeave()          // EditorView.onDisappear, mid-upload
@@ -550,6 +564,7 @@ struct LeavingMidTranscriptionTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         model.finishOnLeave()
         await settle()                 // the abandoned upload finishes here
 
@@ -571,6 +586,7 @@ struct LeavingMidTranscriptionTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         model.finishOnLeave()
         await settle()
 
@@ -593,6 +609,7 @@ struct LeavingMidTranscriptionTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         model.finishOnLeave()
         await settle()
 
@@ -629,6 +646,7 @@ struct LeavingMidTranscriptionTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         model.finishOnLeave()
         await settle()
         #expect(service.calls == 1)
@@ -672,6 +690,7 @@ struct LeavingMidTranscriptionTests {
 
         await model.begin()
         model.done()
+        await settled(model)
         let before = model.retainedRecording?.retainedAt
         model.finishOnLeave()
         let claimed = model.retainedRecording?.retainedAt
@@ -695,5 +714,23 @@ struct LeavingMidTranscriptionTests {
 
         #expect(model.phase == .idle)
         #expect(store.remembered == nil)
+    }
+}
+
+/// Let a capture leave `.finishing`.
+///
+/// Closing the recorder and measuring the container it wrote is asynchronous
+/// (`AudioRecording.finish()`), so **Done** now puts a capture into `.finishing` for a moment
+/// rather than straight into what comes after it. That wait is the point — it is where the
+/// invariant lives that nothing is uploaded before the file is finalized and measured — so these
+/// tests wait for it rather than assuming it away.
+///
+/// Yields rather than sleeping. A sleep here would also step over `.transcribing`, which several of
+/// these tests are specifically about being in.
+@MainActor
+private func settled(_ model: VoiceCaptureModel) async {
+    for _ in 0..<200 {
+        if model.phase != .finishing { return }
+        await Task.yield()
     }
 }

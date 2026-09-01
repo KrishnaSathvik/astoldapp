@@ -18,6 +18,21 @@ extension BlockKind {
         }
     }
 
+    /// The marker a **preview** draws — a Home row, a search result — which is the page's own
+    /// vocabulary rather than the pasteboard's (2026-09-01).
+    ///
+    /// The editor has drawn a checklist item as a circle since 2026-08-31, and a row that still said
+    /// `☐` was a picture of the old design sitting above the new one. `visibleMarker` keeps the box for
+    /// text that *leaves* the app: `☐`/`☑` are what other apps recognise on the way back in
+    /// (`RichPasteDocument.checkbox`) and what the interop contract promises (docs/02-features.md,
+    /// "As Told → another app"). Storage is untouched either way — the source is still `- [ ]`.
+    var previewMarker: String {
+        switch self {
+        case .checklist(let checked): return checked ? "✓ " : "○ "
+        case .paragraph, .heading, .subheading, .bullet, .numbered: return visibleMarker
+        }
+    }
+
     /// What VoiceOver is told sits in front of a line.
     ///
     /// A glyph is not an announcement. `☐` and `☑` are the entire difference between an item still to
@@ -274,10 +289,26 @@ enum StructuredTextExport {
     // nothing at all to someone who cannot see it (docs/03-design-system.md — state is never carried
     // by a mark alone).
 
-    /// The note as a reading surface shows it: visible markers, a table as its cells, and a link as
-    /// the words it shows. A Home row is the page as it reads, and the page reads `Open reservation`.
+    /// The note as a reading surface shows it: the page's markers, a table as its cells, and a link as
+    /// the words it shows. A Home row is the page as it reads, and the page reads `Open reservation`
+    /// — and `○ Reserve hotels`, the circle the editor draws, not the box the pasteboard sends
+    /// (`BlockKind.previewMarker`).
     static func previewText(_ source: String) -> String {
-        rendered(source, marker: \.visibleMarker, cellSeparator: " · ") { _, label in label }
+        rendered(source, marker: \.previewMarker, cellSeparator: " · ") { _, label in label }
+    }
+
+    /// The note as a reading surface shows it, split into the lines it actually draws — blank ones
+    /// dropped, each trimmed.
+    ///
+    /// A Home row is one line tall, and a note is not. Joining these gives a checklist as
+    /// `☑ Website  ☑ Voice V2  ☐ Screenshots` on a single line instead of a first item and three
+    /// invisible ones. Built on `previewText`, so a row can never learn a second spelling of a note:
+    /// markers, fences and pipes are already gone by the time this sees the text.
+    static func previewLines(_ source: String) -> [String] {
+        previewText(source)
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
     /// The note as VoiceOver should hear it: each list item named, a table as its cells, and a link

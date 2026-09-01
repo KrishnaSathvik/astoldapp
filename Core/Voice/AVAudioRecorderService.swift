@@ -9,12 +9,32 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
     /// Prefix for every temporary recording, so an abandoned file is identifiable at launch.
     static let tempPrefix = "rec-"
 
+    /// How long `finish()` will wait for the encoder to confirm it has closed the file.
+    ///
+    /// A **liveness** bound, not a settling delay, and the difference matters. Correctness here does
+    /// not rest on this number: what makes the file safe to send is that it was *measured*
+    /// afterwards, and an unmeasurable container is refused whether it arrived late or on time. This
+    /// exists only so that a delegate callback that never comes — a class of AVFoundation failure
+    /// nobody can rule out from here — leaves the user on a failure screen instead of on
+    /// "Transcribing…" forever.
+    static let finalizationDeadline: Duration = .seconds(3)
+
     private var recorder: AVAudioRecorder?
     private var currentURL: URL?
     private var interruptionObserver: NSObjectProtocol?
     private var routeObserver: NSObjectProtocol?
 
-    var onInterruption: (() -> Void)?
+    /// Resumed when the encoder confirms the file is closed. `finish()` waits on it.
+    private var finalization: CheckedContinuation<Void, Never>?
+    /// Whether the stop now in progress is one this class asked for. A delegate finish that arrives
+    /// while this is false is the recorder stopping on its own, which is the whole point of Fix 1.
+    private var isFinishing = false
+    /// So an encode error followed by a finish callback reports one ending rather than two.
+    private var hasReportedUnexpectedStop = false
+
+    var onCaptureEnded: ((RecordingStop) -> Void)?
+
+    var isCapturing: Bool { recorder?.isRecording ?? false }
 
     func requestPermission() async -> Bool {
         switch AVAudioApplication.shared.recordPermission {
@@ -47,6 +67,10 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
 
         let recorder = try AVAudioRecorder(url: url, settings: settings)
         recorder.isMeteringEnabled = true
+        // The recorder now has somewhere to report to. Without this the app could not tell a
+        // finished recording from a failed one, and an encoder that died mid-thought went on being
+        // drawn as "Listening" with a live timer over it.
+        recorder.delegate = self
         guard recorder.record() else { throw TranscriptionError.serviceUnavailable }
 
         // Protect the temp file at rest.
@@ -56,6 +80,8 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
 
         self.recorder = recorder
         self.currentURL = url
+        isFinishing = false
+        hasReportedUnexpectedStop = false
         observeInterruptions()
         observeRouteChanges()
         return url
@@ -73,21 +99,45 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
         _ = recorder?.record()
     }
 
-    func stop() -> URL? {
+    /// Close the recorder, wait for the encoder to say so, and measure what it left behind.
+    ///
+    /// The order is the invariant: **stop → confirmed → deactivate → measure → (caller) upload**.
+    /// It used to be stop-and-return, with the audio session torn down in the same breath as the
+    /// encoder was told to finish, and the file read by the uploader microseconds later. Nothing in
+    /// that sequence ever established that the container was complete.
+    func finish() async -> FinishedRecording? {
         endSessionObservation()
-        recorder?.stop()
-        let url = currentURL
-        recorder = nil
+        guard let recorder, let url = currentURL else { return nil }
+
+        // A recorder that has already stopped — an encode error, or the system taking it — has
+        // already closed its file. There is nothing to wait for, and waiting would be waiting for a
+        // callback that has been and gone.
+        if recorder.isRecording {
+            isFinishing = true
+            await withCheckedContinuation { continuation in
+                finalization = continuation
+                recorder.stop()
+                startFinalizationDeadline()
+            }
+        }
+
+        self.recorder = nil
+        isFinishing = false
+        // Only now: deactivating the session while the encoder is still flushing is the ordering
+        // most likely to truncate the container it is about to be asked for.
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        return url
+        return await Self.measure(url)
     }
 
     func cancel() {
         endSessionObservation()
+        isFinishing = true
         recorder?.stop()
+        resolveFinalization()
         if let url = currentURL { cleanup(url) }
         recorder = nil
         currentURL = nil
+        isFinishing = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
@@ -103,6 +153,45 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
         let power = recorder.averagePower(forChannel: 0)
         let clamped = max(-60, min(0, power))
         return (clamped + 60) / 60
+    }
+
+    // MARK: - Finalization
+
+    /// Measure the finished container the same way the relay will.
+    ///
+    /// `assetSeconds == nil` means the file carries no usable duration — the moov box never landed,
+    /// or nothing was ever encoded into it. That is not a recording, and the caller is expected to
+    /// treat it as one that captured nothing rather than spend an upload learning the same thing.
+    private static func measure(_ url: URL) async -> FinishedRecording {
+        let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? Int
+        let seconds = try? await AVURLAsset(url: url).load(.duration).seconds
+        guard let seconds, seconds.isFinite, seconds > 0 else {
+            return FinishedRecording(url: url, assetSeconds: nil, bytes: bytes)
+        }
+        return FinishedRecording(url: url, assetSeconds: seconds, bytes: bytes)
+    }
+
+    /// Bound the wait described on `finalizationDeadline`. Resolving early is safe: the measurement
+    /// that follows is what decides whether the file may be sent.
+    private func startFinalizationDeadline() {
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.finalizationDeadline)
+            self?.resolveFinalization()
+        }
+    }
+
+    /// Resume the finalization wait exactly once.
+    private func resolveFinalization() {
+        guard let finalization else { return }
+        self.finalization = nil
+        finalization.resume()
+    }
+
+    /// The recorder stopped and nobody asked it to. Report it once, as its own kind of ending.
+    private func reportUnexpectedStop() {
+        guard !isFinishing, !hasReportedUnexpectedStop, recorder != nil else { return }
+        hasReportedUnexpectedStop = true
+        onCaptureEnded?(.unexpected)
     }
 
     // MARK: - Interruptions
@@ -124,7 +213,7 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
                   AVAudioSession.InterruptionType(rawValue: raw) == .began else { return }
             MainActor.assumeIsolated {
                 guard let self, self.recorder != nil else { return }
-                self.onInterruption?()
+                self.onCaptureEnded?(.interrupted)
             }
         }
     }
@@ -142,10 +231,16 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
     /// (`docs/10-voice-v2.md` §14).
     ///
     /// The policy is `AudioRouteChange`'s, not this method's: all this one does is read the
-    /// notification and ask. Losing the input the recording was using finishes the capture through the
-    /// same path a phone call takes — the audio recorded so far is already on disk, and it goes on to
+    /// notification, ask, and — where the answer is "check again once this has settled" — go and
+    /// check. Losing the input the recording was using finishes the capture through the same path a
+    /// phone call takes: the audio recorded so far is already on disk, and it goes on to
     /// transcription rather than being thrown away. Everything else is left alone, so one continuous
     /// container stays one continuous container.
+    ///
+    /// **The route is in transition while this notification is being delivered.** A snapshot of
+    /// `currentRoute.inputs` taken here reports an empty list for an instant during changes the
+    /// recording survives perfectly well, and treating that instant as proof the microphone is gone
+    /// ends captures that had no reason to end. So an empty read is a question, not an answer.
     private func observeRouteChanges() {
         endRouteObservation()
         routeObserver = NotificationCenter.default.addObserver(
@@ -159,11 +254,34 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
             let hasInput = !AVAudioSession.sharedInstance().currentRoute.inputs.isEmpty
             MainActor.assumeIsolated {
                 guard let self, self.recorder != nil else { return }
-                guard AudioRouteChange.decision(for: reason, hasInput: hasInput) == .finishSafely
-                else { return }
-                self.onInterruption?()
+                switch AudioRouteChange.decision(for: reason, hasInput: hasInput) {
+                case .keepRecording:
+                    return
+                case .finishSafely:
+                    self.onCaptureEnded?(.interrupted)
+                case .confirmInputLoss:
+                    self.confirmInputLoss()
+                }
             }
         }
+    }
+
+    /// Ask the session, not the transition, whether there is still a microphone.
+    ///
+    /// Two settled facts rather than one transient one, and either is enough to keep recording:
+    ///
+    /// - `isInputAvailable` is a property of the **session**, not a snapshot of a route mid-change.
+    ///   It answers the question the empty route list only appeared to answer.
+    /// - `recorder.isRecording` is the recording itself still being open. A recorder that AVFoundation
+    ///   has actually torn down reports `false` here — and if it does, the delegate has already said
+    ///   so through `reportUnexpectedStop()`, so this path does not need to guess about it either.
+    ///
+    /// Deliberately no delay and no retry loop. If the input is genuinely gone, both of these are
+    /// already false; if it is not, waiting would only postpone the same answer.
+    private func confirmInputLoss() {
+        let session = AVAudioSession.sharedInstance()
+        guard !session.isInputAvailable, !(recorder?.isRecording ?? false) else { return }
+        onCaptureEnded?(.interrupted)
     }
 
     private func endRouteObservation() {
@@ -206,6 +324,36 @@ final class AVAudioRecorderService: NSObject, AudioRecording {
         for file in files where file.lastPathComponent.hasPrefix(tempPrefix) && file.pathExtension == "m4a" {
             guard !spared.contains(file.standardizedFileURL) else { continue }
             try? fm.removeItem(at: file)
+        }
+    }
+}
+
+// MARK: - AVAudioRecorderDelegate
+
+/// The recorder's own account of what happened to it.
+///
+/// Nothing observed these before, which is what allowed the two states this file now cannot be in:
+/// a capture whose file was never confirmed closed before it was uploaded, and a capture whose
+/// encoder had failed while the app went on drawing a live timer over it.
+extension AVAudioRecorderService: AVAudioRecorderDelegate {
+
+    nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder,
+                                                     successfully flag: Bool) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            // The finish this class asked for: release `finish()` to go and measure the file.
+            self.resolveFinalization()
+            // A finish nobody asked for is the recorder ending the capture on its own.
+            if !flag || !self.isFinishing { self.reportUnexpectedStop() }
+        }
+    }
+
+    nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder,
+                                                      error: Error?) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.resolveFinalization()
+            self.reportUnexpectedStop()
         }
     }
 }

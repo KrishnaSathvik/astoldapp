@@ -98,7 +98,11 @@ struct WritingEducationTests {
 private final class TipSequencingRecorder: AudioRecording {
     var startURL = URL(fileURLWithPath: "/tmp/tip-seq.m4a")
     var level: Float = 0
-    var onInterruption: (() -> Void)?
+    var onCaptureEnded: ((RecordingStop) -> Void)?
+    /// What the finalized container measures. `nil` stands in for a file with no usable duration —
+    /// the one thing `.finishing` now refuses to send.
+    var assetSeconds: Double? = 1
+    var isCapturing = true
     func requestPermission() async -> Bool { true }
     func start() throws -> URL { startURL }
     /// Pause/resume are not what these tests are about; they record the calls so a capture that
@@ -107,7 +111,10 @@ private final class TipSequencingRecorder: AudioRecording {
     private(set) var resumes = 0
     func pause() { pauses += 1 }
     func resume() { resumes += 1 }
-    func stop() -> URL? { startURL }
+    func finish() async -> FinishedRecording? {
+        isCapturing = false
+        return FinishedRecording(url: startURL, assetSeconds: assetSeconds, bytes: 1)
+    }
     func cancel() {}
     func cleanup(_ url: URL) {}
 }
@@ -139,6 +146,7 @@ struct VoiceTipSequencingTests {
         }
         await model.begin()
         model.done()
+        await settled(model)
         while model.phase == .transcribing { await Task.yield() }
 
         #expect(model.phase == .failed(.serviceUnavailable))
@@ -157,6 +165,7 @@ struct VoiceTipSequencingTests {
         }
         await model.begin()
         model.done()
+        await settled(model)
 
         #expect(model.phase == .needsConsent)
         #expect(!education.showsVoiceStructureTip)
@@ -173,11 +182,30 @@ struct VoiceTipSequencingTests {
         }
         await model.begin()
         model.done()
+        await settled(model)
         #expect(model.phase == .needsConsent)
 
         model.cancel()
         #expect(model.phase == .idle)
         #expect(!education.showsVoiceStructureTip)
         #expect(!store.seen)
+    }
+}
+
+/// Let a capture leave `.finishing`.
+///
+/// Closing the recorder and measuring the container it wrote is asynchronous
+/// (`AudioRecording.finish()`), so **Done** now puts a capture into `.finishing` for a moment
+/// rather than straight into what comes after it. That wait is the point — it is where the
+/// invariant lives that nothing is uploaded before the file is finalized and measured — so these
+/// tests wait for it rather than assuming it away.
+///
+/// Yields rather than sleeping. A sleep here would also step over `.transcribing`, which several of
+/// these tests are specifically about being in.
+@MainActor
+private func settled(_ model: VoiceCaptureModel) async {
+    for _ in 0..<200 {
+        if model.phase != .finishing { return }
+        await Task.yield()
     }
 }

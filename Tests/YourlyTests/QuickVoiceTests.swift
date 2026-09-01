@@ -13,7 +13,11 @@ private final class FakeRecorder: AudioRecording {
     private(set) var canceled = false
     private(set) var cleaned: [URL] = []
     var level: Float = 0.4
-    var onInterruption: (() -> Void)?
+    var onCaptureEnded: ((RecordingStop) -> Void)?
+    /// What the finalized container measures. `nil` stands in for a file with no usable duration —
+    /// the one thing `.finishing` now refuses to send.
+    var assetSeconds: Double? = 1
+    var isCapturing = true
 
     init(permission: Bool = true) { self.permission = permission }
 
@@ -25,7 +29,10 @@ private final class FakeRecorder: AudioRecording {
     private(set) var resumes = 0
     func pause() { pauses += 1 }
     func resume() { resumes += 1 }
-    func stop() -> URL? { stopReturnsNil ? nil : startURL }
+    func finish() async -> FinishedRecording? {
+        isCapturing = false
+        return stopReturnsNil ? nil : FinishedRecording(url: startURL, assetSeconds: assetSeconds, bytes: 1)
+    }
     func cancel() { canceled = true }
     func cleanup(_ url: URL) { cleaned.append(url) }
 }
@@ -102,6 +109,7 @@ struct QuickVoiceTests {
                                 service: FakeTranscriptionService(delay: .milliseconds(1)))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(try noteCount(context) == 1)
@@ -114,6 +122,7 @@ struct QuickVoiceTests {
                                 service: FakeTranscriptionService(delay: .milliseconds(1)))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         let note = try #require(try context.fetch(FetchDescriptor<Note>()).first)
@@ -148,6 +157,7 @@ struct QuickVoiceTests {
         )
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(model.phase == .failed(.noSpeech))
@@ -164,6 +174,7 @@ struct QuickVoiceTests {
                                 service: FakeTranscriptionService(delay: .milliseconds(1)))
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(model.phase == .failed(.noSpeech))
@@ -179,6 +190,7 @@ struct QuickVoiceTests {
         )
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         #expect(model.phase == .failed(.offline))
@@ -207,6 +219,7 @@ struct QuickVoiceTests {
                                 consent: NeverGrantedConsent())
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
 
         // Stopped at the disclosure with the audio still on disk, unsent.
@@ -230,6 +243,7 @@ struct QuickVoiceTests {
                                 consent: NeverGrantedConsent())
         await model.begin()
         model.done()
+        await settled(model)
         await settle()
         #expect(model.phase == .needsConsent)
 
@@ -271,5 +285,23 @@ struct QuickVoiceTests {
     /// keyboard. The two creation paths now deliberately differ, and nothing else asserts that.
     @Test func aTypedNewNoteIsAnEmptyDraftSoTheEditorStillFocusesIt() {
         #expect(Note().isEmptyDraft)
+    }
+}
+
+/// Let a capture leave `.finishing`.
+///
+/// Closing the recorder and measuring the container it wrote is asynchronous
+/// (`AudioRecording.finish()`), so **Done** now puts a capture into `.finishing` for a moment
+/// rather than straight into what comes after it. That wait is the point — it is where the
+/// invariant lives that nothing is uploaded before the file is finalized and measured — so these
+/// tests wait for it rather than assuming it away.
+///
+/// Yields rather than sleeping. A sleep here would also step over `.transcribing`, which several of
+/// these tests are specifically about being in.
+@MainActor
+private func settled(_ model: VoiceCaptureModel) async {
+    for _ in 0..<200 {
+        if model.phase != .finishing { return }
+        await Task.yield()
     }
 }
