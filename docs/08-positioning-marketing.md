@@ -176,7 +176,18 @@ journal,memo,writing,dictation,speech,text,thoughts,ideas,checklist,todo,private
 
 Exclude competitor brands, misleading capabilities, and irrelevant high-volume terms.
 
-### Promotional text (~150 chars, no unshipped claims)
+### Promotional text (cap 170 chars, no unshipped claims)
+
+Editable in App Store Connect at any time without a new build, and shown above the description — so
+it carries what is *new in the current version* while the description stays evergreen. Same bar as
+everything else here: no language list, no allowance, nothing that is not in the shipping build.
+
+**1.2.0 (set 2026-09-01, 151 chars):**
+
+> Write it. Or just say it. Now with a calendar that shows where you wrote, a clearer Home, and
+> checklists drawn as circles — private, in your own words.
+
+**1.0 / 1.1 (superseded):**
 
 > A quiet place to write, speak, plan, draft, and remember. Capture anything in your own words, organize
 > it naturally, and keep it private with Face ID.
