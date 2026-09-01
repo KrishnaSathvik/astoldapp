@@ -7,44 +7,55 @@ alpha, no colour profile.
 > **1284 × 2778** and 1242 × 2688 sizes are the older **6.5"** set. These are built at 1320 × 2868 —
 > iPhone 17 Pro Max native, so the UI is captured 1:1 with no resampling.
 
-**Rebuilt 2026-08-29 for V2.** The previous eight told the V1 story with raws taken 2026-08-21 —
-before Quick Voice, pause/resume, retained recordings, links, code blocks and Share shipped — and
-frame 5 headlined *"Telugu. Hindi. English."*, which is the benchmark set, not the product boundary
-(`RULES.md` §7, "Language claims"). Ten frames now, which is Apple's maximum:
+**Rebuilt 2026-09-01 for 1.2.0 (build 3)**, from the canonical raw library (`raw/library/`, see
+below) and as **one system** rather than ten compositions: the same icon + wordmark lockup at the
+top, the same centred New York headline held to two lines by one scale rule, the same SF support
+line under a short accent rule, the same device width (860 px, fully visible, nothing cut off) at
+the same top edge. What varies is the ground — light / dark in a rhythm — and, once, the number of
+phones. The 2026-08-29 set varied the composition per frame (crops, a lens, a bento); a carousel is
+read as a sequence, and a sequence with one grammar reads as one product.
 
-| # | File | Screen | Headline | Support |
+| # | File | Screen (raw) | Headline | Support |
 |---|---|---|---|---|
-| 1 | `01-words` | Home, `+` and mic in the header | Anything you want to put into words. | Write it. Say it. Keep it. |
-| 2 | `02-voice` | Quick Voice, cropped to the timer (dark) | Write it. Or just say it. | Tap the mic and talk. There is no note to create first. |
-| 3 | `03-languages` | Telugu ↔ English note | Speak the way you actually speak. | Switch languages mid-sentence. Your words stay in the language you used. |
-| 4 | `04-pause` | In-note recorder, paused | Pause. Think. Keep going. | A recording waits while you find the next sentence. |
-| 5 | `05-structure` | Toolbar detail crop | Structure without the complexity. | Headings, lists and checklists. No block picker. |
-| 6 | `06-code` | SQL card (dark) | Code that still looks like code. | Syntax colour, monospaced, and Copy Code. |
-| 7 | `07-paste` | Pasted note + table lens | Paste it. Keep the structure. | Headings, lists and tables arrive intact. |
-| 8 | `08-durable` | Retained recording, Retry / Delete | Your words shouldn't disappear. | A dropped connection never costs you the recording. |
-| 9 | `09-find` | Bento: Home + Calendar + Search | Find it again. | Search what you remember. Or start with the day. |
-| 10 | `10-privacy` | App lock / Face ID | Private by default. | No account. Your notes stay on your iPhone. |
-| — | `alt-daynight` | Same note, light + dark | Yours, day or night. | *composed, not shipped* |
+| 1 | `01-words` | `01-home-light` | Anything you want to put into words. | Today and this week, in one quiet Home. |
+| 2 | `02-voice` | `03-quickvoice-listening` (dark) | Or just say it. | Tap the mic on Home and start talking. No note to create first. |
+| 3 | `03-note` | `05-voice-note-titleless` | Your words become a note. | What you said, as an ordinary note you can keep editing. |
+| 4 | `04-pause` | `04-quickvoice-paused` (dark) | Pause. Think. Keep going. | One recording that waits while you find the next sentence. |
+| 5 | `05-structure` | `06-japan-trip-light` | Structure when you need it. | Headings, numbered lists and checklists — drawn as circles. |
+| 6 | `06-find` | `09-calendar` | Find what you wrote, by day. | Dots mark the busy days. Tap one to see what you wrote. |
+| 7 | `07-paste` | `10-trip-budget` | Paste it. Keep the structure. | A table stays a table, with your words around it. |
+| 8 | `08-code` | `11-monthly-units-query` (dark) | Code that still looks like code. | Syntax colour and the language named, with Copy Code one tap away. |
+| 9 | `09-daynight` | `06` + `12-japan-trip-dark` (split) | Yours, day or night. | The same note in Light and in Dark. |
+| 10 | `10-privacy` | `16-voice-consent` | Your recording. Your choice. | Audio leaves your iPhone only when you say so — and nothing else goes with it. |
 
-The first three carry the most weight: they can appear directly in search results, and most people
-never swipe past them. **Frame 1 now leads with Home rather than the editor** — a reversal of the
-V1 decision, and deliberate: Home is where `+` and the microphone sit side by side, which is the
-whole of the V2 story in one frame.
+Every support line says what the picture shows, so the caption and the screen never argue. The
+first three carry the most weight — they can appear directly in search results — and they tell the
+whole story on their own: Home, the recording, the note it becomes.
 
-### Two frames that need a decision before submission
+Decisions in this set:
 
-- **There is no Share frame, and one cannot be captured from a simulator.** `-openShare` presents the
-  real sheet, but a simulator has no Messages, Mail or AirDrop, so it offers Reminders and Save to
-  Files — a frame implying those are the destinations is worse than no frame. Capture it on a device;
-  the carousel is already at ten, so it displaces one. `alt-daynight` is composed and unshipped for
-  exactly that swap.
-- **Frame 8 shows a failure state.** *"Couldn't transcribe that recording."* in a store screenshot is
-  a real risk: out of context it can be read as the app not working, and it is the one frame that
-  could be quoted against the product. It earns its place — durability is a genuine differentiator
-  and no competitor shows it — but it is placed **eighth**, well past the frames that sell, and the
-  headline does the framing. Drop it rather than move it forward.
+- **A logo is in every frame** — reversing the 2026-08-29 choice. It is the lockup (icon + wordmark),
+  not the icon tile alone, so it reads as the name at the top of a page rather than a second icon.
+- **The device is always whole.** No bleed off the bottom: Home's search field, the mic button and
+  the consent sheet all sit near the bottom edge of their screens, and a bleed would have cut the
+  very thing three frames are about.
+- **The closer is consent, not recovery.** The retained-recording sheet is the stronger
+  differentiator but it is a failure state, and the tenth frame is the one a browser lingers on; the
+  consent sheet makes the privacy claim concretely and positively. Recovery stays on the website.
+- **No Share frame, still.** A simulator's sheet offers Reminders and Save to Files. Device only;
+  when captured it replaces frame 9 or 10.
+- **Generated plates are welcome, generated screens are not.** `plates/<name>.png` overrides a
+  frame's ground; the screen is always the raw. An image model regenerates every pixel it touches,
+  which is exactly what App Review 2.3.3 forbids inside the device.
 
-## Composition
+`python3 docs/appstore/compose.py` rebuilds all ten into `6.9/` from `raw/library/` and removes
+anything stale there.
+
+## Composition (the 2026-08-29 set — kept for the reasoning)
+
+> The section below and **Measured** describe the previous set's per-frame compositions. The
+> 2026-09-01 set uses one composition throughout (see the table above); its type fixes — the
+> `opsz` pin, the rule cleared past the descender, the hard line break — carried over unchanged.
 
 Deliberately varied, one shared type and colour system:
 
