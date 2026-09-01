@@ -1,3 +1,12 @@
+/* The one device on the page, centred under the hero copy — the recording
+   screen, which has no language control on it. Mirrors /voice. */
+.heroShot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: clamp(36px, 4.5vw, 56px);
+}
+
 /* Three principles in the display face, across the page. This is what the five
    language chips became: a row describing behaviour cannot be read as a list of
    which languages are allowed, which is exactly what the chips were read as. */

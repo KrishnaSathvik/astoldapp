@@ -2,14 +2,16 @@ import Image from 'next/image';
 import styles from './PhoneShot.module.css';
 
 /**
- * Every capture comes out of the simulator at this size — iPhone 17 Pro, 3×,
- * unscaled. The library used to be downscaled to 720px before it reached the
- * site, which is below the 1068 device-pixels an `lg` device asks for on a 3×
- * display; the captures are now kept at their native resolution and Next's
- * image pipeline does any reduction.
+ * Every capture comes out of the simulator at this size — iPhone 17 Pro Max, 3×,
+ * unscaled (`docs/appstore/raw/library/`, since 2026-09-01; it was the 1206×2622
+ * iPhone 17 Pro before that). The library used to be downscaled to 720px before
+ * it reached the site, which is below the 1068 device-pixels an `lg` device asks
+ * for on a 3× display; the captures are kept at their native resolution and
+ * Next's image pipeline does any reduction. The whole library must agree on one
+ * device: two capture sizes on one page put two UI scales side by side.
  */
-const SHOT_WIDTH = 1206;
-const SHOT_HEIGHT = 2622;
+const SHOT_WIDTH = 1320;
+const SHOT_HEIGHT = 2868;
 
 type Props = {
   src: string;

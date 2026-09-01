@@ -145,53 +145,57 @@ Screenshots come out of the simulator via the DEBUG-only launch arguments in
 `App/DebugSupport.swift`. Build and install the Debug app, pin the status bar, then drive each
 surface:
 
-```sh
-SIM=<simulator-udid>
-xcodebuild -project Yourly.xcodeproj -scheme Yourly -configuration Debug \
-  -destination "platform=iOS Simulator,id=$SIM" -derivedDataPath build/dd-shots build
-xcrun simctl install $SIM build/dd-shots/Build/Products/Debug-iphonesimulator/Yourly.app
-xcrun simctl status_bar $SIM override --time "9:41" --batteryState charged \
-  --batteryLevel 100 --cellularBars 4 --wifiBars 3
+**Since 2026-09-01 every file here is an encode of the canonical raw library** —
+`docs/appstore/raw/library/`, produced by `docs/appstore/capture-library.sh` and documented in
+`docs/appstore/README.md` ("The canonical raw library"). Do not drive the simulator by hand for a
+site shot: the script pins the clock (`-pinnedNow`), seeds one dataset three ways, and keeps seed
+and open as separate launches. Recapture there, then re-encode here:
 
-T="-appTheme light -hasCompletedWelcome YES"
-xcrun simctl launch $SIM com.astold.app $T -resetStore -seedSampleNotes   # home
-xcrun simctl launch $SIM com.astold.app $T -searchQuery Seward            # search
-xcrun simctl launch $SIM com.astold.app $T -openCalendar                  # calendar
-xcrun simctl launch $SIM com.astold.app $T -openSeededNote                # editor
-xcrun simctl launch $SIM com.astold.app $T -forceLocked                   # lock
-xcrun simctl launch $SIM com.astold.app $T -resetStore -seedVoiceDemo     # then -openSeededNote
-xcrun simctl io $SIM screenshot --type=png <name>.png
+```sh
+bash docs/appstore/capture-library.sh            # or ONLY="03-quickvoice-listening" bash …
+cd website
+cwebp -q 88 -m 6 -sharp_yuv ../docs/appstore/raw/library/01-home-light.png \
+  -o public/assets/shots/home-light.webp        # one line per row of the table below
+node scripts/og.mjs http://localhost:3000        # og.png is composed around home-light
 ```
 
-Seeding runs in a `.task` on the root view, so seed and open are **separate launches** —
-passing `-resetStore -seed… -openSeededNote` together races and can capture the previous note.
-
-Keep the capture at its native **1206×2622** (iPhone 17 Pro, 3×) and encode it straight to WebP —
-`cwebp -q 88 -m 6 -sharp_yuv`. Do **not** downscale first: the library used to be reduced to 720 px
-before it reached the site, which is below the 1068 device-pixels an `lg` device asks for on a 3×
-display, and Next's image pipeline then had nothing to work with. `PhoneShot` declares 1206×2622 as
-the intrinsic size, so the whole library has to agree.
+Keep the capture at its native **1320×2868** (iPhone 17 Pro Max, 3×) and encode it straight to
+WebP. Do **not** downscale first: the library used to be reduced to 720 px before it reached the
+site, which is below the 1068 device-pixels an `lg` device asks for on a 3× display, and Next's
+image pipeline then had nothing to work with. `PhoneShot` declares 1320×2868 as the intrinsic size,
+so the whole library has to agree — and it has to agree on one *device*, too: the library was
+1206×2622 (iPhone 17 Pro) until 2026-09-01, and a Pro capture beside a Pro Max capture puts two UI
+scales on one page.
 
 Every file has exactly one job:
 
-| File | Launch arguments | Where it appears |
+| File | Raw | Where it appears |
 |---|---|---|
-| `home-light` | `-resetStore -seedShowcaseNotes` | `/` hero, `/` Write-or-speak, `/voice`, `og.png` |
-| `home-dark` | same store, `-appTheme dark` | (held) |
-| `quickvoice-light` | `-openQuickVoice -voiceDemoLevels`, waited to ~00:17 | `/` Write-or-speak, `/voice` hero |
-| `quickvoice-paused-light` | `-voicePauseAfter 18 -openQuickVoice -voiceAutoPause -voiceDemoLevels` | `/` Voice, `/voice` Pause and resume |
-| `recording-light` | `-openSeededNote -autoStartVoice -voiceAutoPause` | (held) |
-| `retry-light` | `-openSeededNote -autoStartVoice -voiceFakeFailure` | `/voice` If something goes wrong |
-| `consent-light` | `-openSeededNote -autoStartVoice`, consent **not** granted | `/voice` |
-| `structure-light` | `-resetStore -seedSeattleDemo` then `-openSeededNote` | `/` Light/Dark |
-| `structure-dark` | same, `-appTheme dark` | `/` Light/Dark |
-| `toolbar-light` | same, `-openSeededNote -caretAtEnd` | `/` Writing |
-| `table-light` | `-resetStore -seedBudgetDemo` then `-openSeededNote` | `/` Paste |
-| `code-light` | `-resetStore -seedQueryDemo` then `-openSeededNote` | `/` Code |
-| `note-light` | `-resetStore -seedSundayDemo` then `-openSeededNote` | `/` Write-or-speak |
-| `search-light` | `-searchQuery Seward` | (held) |
-| `calendar-light` | `-openCalendar` | (held) |
-| `lock-light` | `-forceLocked` | (held) |
+| `home-light` | `01-home-light` | `/` hero, `og.png` |
+| `home-dark` | `02-home-dark` | (held) |
+| `quickvoice-light` | `03-quickvoice-listening`, **00:21** | `/` Write-or-speak (Speak), `/voice` One tap from Home, `/languages` hero |
+| `quickvoice-paused-light` | `04-quickvoice-paused`, **00:23** | `/` Pause. Think. Keep going., `/voice` Pause and resume |
+| `voice-note-light` | `05-voice-note-titleless` | `/` Write-or-speak (Keep), `/voice` Your words become a note |
+| `structure-light` | `06-japan-trip-light` | `/` Structure, `/` Light/Dark |
+| `toolbar-light` | `07-japan-trip-keyboard-up` | (held) |
+| `checklist-light` | `08-launch-checklist` | `/` Write-or-speak (Write) |
+| `calendar-light` | `09-calendar` | `/` Find it again |
+| `table-light` | `10-trip-budget` | `/` Paste |
+| `code-light` | `11-monthly-units-query` | `/` Code |
+| `structure-dark` | `12-japan-trip-dark` | `/` Light/Dark |
+| `retry-light` | `14-voice-recovery` | `/` If something goes wrong, `/voice` If something goes wrong |
+| `note-light` | `15-weekend-plan` | (held) |
+| `consent-light` | `16-voice-consent` | `/voice` Your recording. Your choice. |
+
+**After re-encoding, `rm -rf .next/cache/images` and restart the dev server before you look.**
+Next's image optimizer caches by URL and serves a stale entry (revalidating in the background) when a
+file changes under the same name — on 2026-09-01 every replaced shot still rendered as its August 29
+predecessor until the cache was cleared, while the two files with *new* names were correct. A
+production build is unaffected; a local check is not.
+
+`recording-light`, `search-light` and `lock-light` were deleted on 2026-09-01: nothing referenced
+them, none had a raw in the new library, and a held file at the old device size would have been
+the one picture on the site at a different scale.
 
 **`hindi-light` and `voice-light` were deleted from `public/` on 2026-08-29, and no capture
 replaces them.** Neither was ever captioned by language and neither `alt` named one — and they were
@@ -201,38 +205,42 @@ illustrating the multilingual section, the page taught every visitor that As Tol
 Telugu + Hindi app (`RULES.md` §7, "Language claims"). The multilingual argument is carried by the
 recording screen now: there is no language control on it, and the absence is the proof.
 
-`note-light` (`42-writing-sunday`, an ordinary English note) took the sequence's closing slot, which
-is the better picture for what that step claims — *what you end up with is just a note*. The raw
-captures are kept at `docs/appstore/raw/26-hindi.png` and `raw/32-voice-multilingual.png` for
-testing; nothing on the site may reference them.
+`voice-note-light` (`05-voice-note-titleless`, the spoken Weekend note) holds the sequence's
+closing slot, which is the picture for what that step claims — *what you end up with is just a
+note* — and it is the note on Home's second row, so the sequence ends on the screen the page opened
+with. The old raw captures are kept at `docs/appstore/raw/26-hindi.png` and
+`raw/32-voice-multilingual.png` for testing; nothing on the site may reference them.
 
-**Nine captures carry the homepage, in ten places**, every one at `lg` or larger. `home-light` is
-the only file drawn twice — as the hero, then as the first step of the write-or-speak sequence.
-The page showed fourteen devices before 2026-08-29 and eleven after it, several at 268px and nearly
-all annotated, which is how a marketing page starts reading as documentation. The library keeps
-every held file — a held capture is current, correct, and one section change away from being
-wanted.
+**Eleven captures carry the homepage, in twelve places** (2026-09-01). `structure-light` is the
+only file drawn twice — the Japan Trip note as the Structure section and as the light half of the
+Light/Dark pair, because the pair must be the *same* note at the *same* scroll position or it is two
+pictures, not a comparison. Home is drawn once, as the hero: it opened the page *and* the
+write-or-speak sequence *and* `/voice` for a day, and the first thing a reader noticed was the same
+phone three times. The sequence's Write frame is the typed Launch Checklist, the one note that
+appears nowhere else; `/voice` opens with no device at all and shows the recording in its first
+section instead. The retained-recording sheet is drawn at `md`, the only device below `lg`: it is a
+trust signal, not a hero. The page showed fourteen devices before 2026-08-29 and eleven after it, several
+at 268px and nearly all annotated, which is how a marketing page starts reading as documentation.
+The library keeps every held file — a held capture is current, correct, and one section change away
+from being wanted.
 
 Four of these need care:
 
 - **`quickvoice-light` / `quickvoice-paused-light`** — Quick Voice lives behind a tap on Home, so
   `-openQuickVoice` exists to present it on launch and `-voiceAutoPause` calls the same `pause()`
   the button calls. Neither finishes on a timer, so the state is held as long as the capture needs.
-  Both were replaced on 2026-08-29 by the raw-library pair (`31-quickvoice-listening` /
-  `40-quickvoice-paused`): the timer is the recorder's own elapsed time, so **the wait is the number
-  on the clock**, and 00:01 over a flat meter read as staged. They are now one recording seen twice
-  — 00:17 listening, 00:18 paused — and `-voiceDemoLevels` moves the waveform, because a simulator
-  in a quiet room has no input and the real meter draws flat.
-- **`recording-light`** — `-autoStartVoice` alone finishes the recording after 1.5s, which no
-  screenshot can outrun; `-voiceAutoPause` holds the in-note panel open instead. This capture is
-  therefore the **Paused** panel over a real note, and the alt text says so.
-- **`consent-light`** — the opposite: it only appears while `voiceTranscriptionConsent` is unset, so
-  capture it before granting, or after `xcrun simctl erase`.
-- **`toolbar-light`** — the only capture that needs the **software** keyboard, and a Mac with a
-  hardware keyboard attached does not raise one. Set
-  `defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO`, open Simulator.app so
-  the setting takes, capture, then **set it back to YES** — a UI test asserts on `app.keyboards`
-  and breaks while it is off.
+  The timer is the recorder's own elapsed time, so **the wait is the number on the clock**, and
+  00:01 over a flat meter read as staged. They are one recording seen twice — 00:21 listening,
+  00:23 paused — and `-voiceDemoLevels` moves the waveform, because a simulator in a quiet room has
+  no input and the real meter draws flat. The listening number is wall-clock from launch: a slow
+  `simctl launch` under load once put 00:37 on it with the same sleep. Read the digits back.
+- **`consent-light`** — only appears while `voiceTranscriptionConsent` is unset. It is the one shot
+  `capture-library.sh` launches without the consent flag (`SHOT_BASE="$BASE_NOCONSENT"`).
+- **`toolbar-light`** — the only capture that needs the **software** keyboard, and a simulator with
+  its hardware keyboard connected does not raise one. The setting is per device:
+  `DevicePreferences.<UDID>.ConnectHardwareKeyboard` in `com.apple.iphonesimulator`, and
+  relaunching Simulator.app can bring it back. Turn it off, relaunch Simulator, capture, then **turn
+  it back on** — a UI test uses ⌘Z and breaks while it is off.
 - **`structure-light` / `structure-dark`** — the Light/Dark pair must be the same note, so seed once
   and take them back to back, changing only `-appTheme`.
 

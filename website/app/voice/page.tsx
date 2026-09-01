@@ -21,35 +21,36 @@ import styles from './page.module.css';
 export const metadata = pageMetadata({
   title: 'Voice Notes for iPhone',
   description:
-    'Start a voice note in one tap, pause and resume naturally, and turn speech into ordinary notes. Designed for multilingual speech and code-switching.',
+    'Start a voice note in one tap, pause and resume naturally, and get an ordinary note back. Designed for multilingual speech and code-switching, with recordings that survive a dropped connection.',
   path: '/voice',
 });
 
 /**
- * The deep dive on voice — six sections, and deliberately not a second copy of
+ * The deep dive on voice — seven sections, and deliberately not a second copy of
  * the homepage. It used to re-tell the whole product tour, including the same
  * multilingual specimens and the same two language-labelled devices; both pages
  * lost by it.
  *
- *   1  One tap from Home — and where the transcript lands
+ *   1  One tap from Home
  *   2  Pause. Think. Keep going.
- *   3  No language picker.
- *   4  Say the structure when you want it — and nothing else changes
- *   5  Your words shouldn't disappear.
- *   6  Your recording. Your choice.
+ *   3  Your words become a note.          (new 2026-09-01)
+ *   4  No language picker.
+ *   5  Say the structure when you want it — and nothing else changes
+ *   6  Your words shouldn't disappear.
+ *   7  Your recording. Your choice.
  *
- * Eight until 2026-08-29. "Your voice lands where you mean it" was a band and a
- * device of its own for one fact — the transcript arrives at the cursor — which
- * is a sentence inside §1, not a section. The verbatim contract moved out of the
- * multilingual section and into §4, where it belongs: a *said → written*
- * comparison sitting under a heading about languages made the section read as a
- * language demo, and what it actually demonstrates is that nothing gets
- * rewritten.
+ * §3 is the frame the page was missing: the hero shows the recording, §2 shows
+ * it paused, and nothing showed what the whole thing is *for* — an ordinary,
+ * titleless note in the timeline. The homepage's *tap → speak → keep* sequence
+ * ends on that screen; this page now does too, before it goes on to the rules.
  *
- * §3 carries no screenshot at all, on purpose. The claim is that there is
+ * §4 carries no screenshot at all, on purpose. The claim is that there is
  * nothing to choose before you speak, and every device on this page already
  * proves it by having no language control on it (`RULES.md` §7, "Language
- * claims").
+ * claims"). The tested groups are named in one place only, the Support answer.
+ *
+ * Every device is the same iPhone, the same dataset, the same morning as the
+ * homepage (`docs/appstore/raw/library/`).
  */
 export default function VoicePage() {
   return (
@@ -60,21 +61,18 @@ export default function VoicePage() {
         title="Or just say it."
         lede="When typing would slow the thought down, tap the microphone and talk. No blank note to create first, no language picker, and no separate voice inbox."
       >
+        {/* The mechanic, in three words. No device up here since 2026-09-01: the
+            hero carried the recording screen, which then appeared again two
+            sections down and on the homepage — the page opened on a picture the
+            visitor had just left. The first device is now the first section. */}
         <div className={`reveal ${styles.heroShot}`}>
-          <PhoneShot
-            size="xl"
-            priority
-            src="/assets/shots/quickvoice-light.webp"
-            alt="As Told recording: Cancel at the top, an elapsed time of 00:17, the word Listening, a live level meter, and Pause beside a round stop button."
-          />
-          {/* The mechanic, in three words, directly under the thing doing it.
-              This is the whole page in one line; everything below elaborates. */}
           <Steps center items={['Tap', 'Speak', 'Keep it']} />
         </div>
       </PageHero>
 
-      {/* 1 — Quick Voice: the entry point with no typing in it at all, and
-          where what you said ends up. */}
+      {/* 1 — Quick Voice: the entry point with no typing in it at all. The
+          device is the recording itself, not Home — Home is the homepage's hero
+          and the copy already says where the button is. */}
       <Section tone="warm">
         <ProductSplit
           eyebrow="From the home screen"
@@ -83,21 +81,20 @@ export default function VoicePage() {
           media={
             <PhoneShot
               size="lg"
-              src="/assets/shots/home-light.webp"
-              alt="The As Told home screen, with a calendar, a new-note button and a microphone grouped in the header above the timeline of notes."
+              priority
+              src="/assets/shots/quickvoice-light.webp"
+              alt="As Told recording: Cancel at the top, an elapsed time of 00:21, the word Listening, a live level meter, and Pause beside a round stop button."
             />
           }
         >
           <p className={styles.para}>
             Start from Home and voice creates a new note. Start inside a note you&rsquo;re already
             writing and the transcript arrives at the cursor — or at the end, if you were only
-            reading. Either way what comes back is ordinary, editable text: there is no separate
-            voice-note library and no transcript screen to visit.
+            reading.
           </p>
           <p className={styles.para}>
             Cancel, a declined microphone, silence, or a failure all leave your timeline exactly as
-            it was. Nothing marks the note as spoken afterwards, either — no microphone badge on
-            the row, no Voice filter, no voice-notes folder. It is a note.
+            it was.
           </p>
         </ProductSplit>
       </Section>
@@ -113,7 +110,7 @@ export default function VoicePage() {
             <PhoneShot
               size="lg"
               src="/assets/shots/quickvoice-paused-light.webp"
-              alt="The same As Told recording held at 00:18 and marked Paused, with Cancel above and Resume beside a round stop button."
+              alt="The same As Told recording held at 00:23 and marked Paused, with Cancel above and Resume beside a round stop button."
             />
           }
         >
@@ -129,12 +126,35 @@ export default function VoicePage() {
         </ProductSplit>
       </Section>
 
-      {/* 3 — Multilingual. Three principles, no specimens and no device: naming
+      {/* 3 — What it is all for. The finished note, as it lands: titleless,
+          three paragraphs, nothing marking it as spoken. */}
+      <Section>
+        <ProductSplit
+          eyebrow="What comes back"
+          title="Your words become a note."
+          lede="Tap Done and the recording is an ordinary note — an empty title you can fill in or leave, paragraphs you can edit, Share in the corner like any other note. It sits in your timeline beside everything you typed."
+          media={
+            <PhoneShot
+              size="lg"
+              src="/assets/shots/voice-note-light.webp"
+              alt="A note in As Told created by voice: the title field still reads Title, and below it three spoken paragraphs — Saturday kept simple, a stop at the market for dinner, Sunday left open — with the keyboard down."
+            />
+          }
+        >
+          <p className={styles.para}>
+            There is no separate voice-note library and no transcript screen to visit. Nothing
+            marks the note as spoken afterwards, either — no microphone badge on the row, no Voice
+            filter, no voice-notes folder. It is a note.
+          </p>
+        </ProductSplit>
+      </Section>
+
+      {/* 4 — Multilingual. Three principles, no specimens and no device: naming
           languages here is what made the site read as a three-language product,
           and putting a note in a particular script under this heading does the
           same job with a picture (`RULES.md` §7, "Language claims"). The tested
           groups are named in one place only, the Support answer. */}
-      <Section>
+      <Section tone="warm">
         <SectionIntro
           eyebrow="Multilingual"
           title="No language picker."
@@ -152,11 +172,11 @@ export default function VoicePage() {
         </p>
       </Section>
 
-      {/* 4 — What voice changes, and what it doesn't. Three spoken commands,
+      {/* 5 — What voice changes, and what it doesn't. Three spoken commands,
           not the whole command matrix — that belongs in Support — and then the
           verbatim contract, which is the same subject: structure when you ask
           for it, and your words untouched either way. */}
-      <Section tone="warm">
+      <Section>
         <SectionIntro
           eyebrow="Spoken structure"
           title="Say the structure when you want it."
@@ -164,14 +184,14 @@ export default function VoicePage() {
         />
         <div className="reveal">
           <ExampleGrid>
-            <VoiceExample said="Heading. Alaska trip.">
-              <ResultHeading>Alaska trip</ResultHeading>
+            <VoiceExample said="Heading. Japan trip.">
+              <ResultHeading>Japan trip</ResultHeading>
             </VoiceExample>
-            <VoiceExample said="Bullet list. Anchorage. Next item. Seward.">
-              <ResultBullets items={['Anchorage', 'Seward']} />
+            <VoiceExample said="Bullet list. Rain jacket. Next item. Camera.">
+              <ResultBullets items={['Rain jacket', 'Camera']} />
             </VoiceExample>
-            <VoiceExample said="Checklist. Call Ravi. Next item. Buy groceries.">
-              <ResultChecklist items={['Call Ravi', 'Buy groceries']} />
+            <VoiceExample said="Checklist. Reserve hotels. Next item. Book rail passes.">
+              <ResultChecklist items={['Reserve hotels', 'Book rail passes']} />
             </VoiceExample>
             <VoiceExample said="My checklist is getting too long.">
               <ResultText>My checklist is getting too long.</ResultText>
@@ -202,8 +222,8 @@ export default function VoicePage() {
         </div>
       </Section>
 
-      {/* 5 — Durability. */}
-      <Section>
+      {/* 6 — Durability. */}
+      <Section tone="warm">
         <ProductSplit
           reverse
           eyebrow="If something goes wrong"
@@ -213,7 +233,7 @@ export default function VoicePage() {
             <PhoneShot
               size="lg"
               src="/assets/shots/retry-light.webp"
-              alt="As Told after a failed transcription: over a note called Weekend in Seattle, a card reads that a connection is needed to transcribe this recording and that your recording is still on this iPhone, above Delete Recording and Retry."
+              alt="As Told after a failed transcription: over a note called Weekend Plan, a sheet reads that a connection is needed to transcribe this recording and that your recording is still on this iPhone, above Delete Recording and Retry."
             />
           }
         >
@@ -229,8 +249,8 @@ export default function VoicePage() {
         </ProductSplit>
       </Section>
 
-      {/* 6 — Consent. */}
-      <Section tone="warm">
+      {/* 7 — Consent: what stays on the phone, and the one thing that leaves. */}
+      <Section>
         <ProductSplit
           eyebrow="What happens to the recording"
           title="Your recording. Your choice."

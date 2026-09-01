@@ -8,7 +8,7 @@ import { pageMetadata } from '@/lib/site';
 export const metadata = pageMetadata({
   title: 'Support',
   description:
-    'Help with As Told: the writing toolbar, pasting from other apps, code blocks and tables, speaking a note, multilingual voice, sharing, where notes are stored, Face ID, and Light / Dark.',
+    'Help with As Told: the writing toolbar, pasting from other apps, code blocks and tables, speaking a note, multilingual voice, sharing, finding older notes and the calendar, where notes are stored, Face ID, and Light / Dark.',
   path: '/support',
 });
 
@@ -57,14 +57,15 @@ const WRITING: readonly FaqItem[] = [
       <>
         <p>
           Tap the list button, or type the marker at the start of a line — <code>-</code> for a
-          bullet, <code>1.</code> for a numbered item, <code>- [ ]</code> for a checkbox. Return
-          carries the list onto the next line, and Return on an empty item ends the list and puts
-          you back in ordinary prose.
+          bullet, <code>1.</code> for a numbered item, <code>- [ ]</code> for a checklist item.
+          Return carries the list onto the next line, and Return on an empty item ends the list and
+          puts you back in ordinary prose.
         </p>
         <p>
           Numbering continues by itself as you press Return, and applying Numbered list to several
-          lines at once numbers them in order. Tap a checkbox to tick it; ticked items stay where
-          you put them rather than being sorted to the bottom.
+          lines at once numbers them in order. A checklist item has a circle beside it — tap the
+          circle to tick it, and ticked items stay where you put them rather than being sorted to
+          the bottom.
         </p>
       </>
     ),
@@ -416,6 +417,41 @@ const PRIVACY: readonly FaqItem[] = [
   },
 ];
 
+/* Home stopped being the whole archive on 2026-08-31 — it shows the recent
+   periods and the rest is one tap away — and that is exactly the kind of change
+   that reads as "my notes are gone" to someone who did not read release notes. */
+const FINDING: readonly FaqItem[] = [
+  {
+    q: 'Why does Home only show recent notes?',
+    a: (
+      <>
+        <p>
+          Home is the recent library: <strong>Today</strong>, then the{' '}
+          <strong>Previous 7 Days</strong>. Each group shows its first few notes, with{' '}
+          <strong>Show all</strong> underneath when there are more. Nothing is deleted or hidden
+          for good — anything older is one tap away under <strong>Browse older notes</strong> at
+          the bottom of Home, which opens the complete timeline.
+        </p>
+        <p>
+          That link appears only when something is actually older than a week. If you don&rsquo;t
+          see it, Home is already showing everything you have.
+        </p>
+      </>
+    ),
+  },
+  {
+    q: 'How does the calendar work?',
+    a: (
+      <p>
+        Tap the calendar in Home&rsquo;s header. A dot under a day means you wrote something that
+        day, and a busier day shows up to three. Tap a day and its notes are listed right under the
+        month; it opens on today. Use it when you remember <em>when</em> you wrote something, and
+        search when you remember a word from it.
+      </p>
+    ),
+  },
+];
+
 const RECOVERY: readonly FaqItem[] = [
   {
     q: 'I deleted a note by accident. Can I get it back?',
@@ -448,6 +484,7 @@ export default function SupportPage() {
           <FAQ title="Pasting from other apps" items={PASTE} />
           <FAQ title="Voice" items={VOICE} />
           <FAQ title="Sharing a note" items={SHARING} />
+          <FAQ title="Finding a note again" items={FINDING} />
           <FAQ title="Privacy & storage" items={PRIVACY} />
           <FAQ title="If something goes wrong" items={RECOVERY} />
         </div>

@@ -5,13 +5,6 @@
   margin-top: clamp(22px, 2.4vw, 30px);
 }
 
-/* A supporting paragraph inside a section's copy column. */
-.body {
-  margin-top: 1.25rem;
-  color: var(--ink-soft);
-  font-size: var(--body-sm);
-}
-
 /* The one line that closes a section, under whatever proved it. It inherits its
    alignment: inside a centred `SectionIntro` it centres, and on its own under a
    left-aligned section it stays on the section's left edge rather than drifting
@@ -143,64 +136,11 @@
   }
 }
 
-/* Durability, closing the voice section: a paragraph and the card, side by
-   side, under the hairline. It was a band of its own until 2026-08-29, which
-   made recovery read as a third voice feature instead of the end of the same
-   sentence. */
-.reliability {
-  display: grid;
-  gap: clamp(24px, 3vw, 44px);
-  align-items: start;
-  margin-top: clamp(40px, 4.4vw, 64px);
-  padding-top: clamp(32px, 3.6vw, 48px);
-  border-top: 1px solid var(--line);
-}
+/* The retained-recording state was a drawn two-line card here from 2026-08-29 to
+   2026-09-01 (`.reliability` / `.recovery`). It is a real capture again now, in
+   a `ProductSplit` at `md`, so nothing homepage-specific is left to style. */
 
-@media (min-width: 860px) {
-  .reliability {
-    grid-template-columns: 1fr auto;
-    align-items: center;
-  }
-}
-
-.reliability .body {
-  margin-top: 0;
-  max-width: var(--measure);
-}
-
-/* The retained-recording state, as the two words and two controls it actually
-   is. It is a card rather than a screenshot on purpose: a marketing page that
-   leads with a full capture of its own failure screen is telling you what to
-   expect from the feature. */
-.recovery {
-  margin-top: 0;
-  padding: clamp(16px, 1.8vw, 20px) clamp(18px, 2vw, 22px);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  box-shadow: var(--shadow-sm);
-  max-width: 26rem;
-}
-
-.recoveryLine {
-  color: var(--ink);
-  font-size: var(--body-sm);
-  font-weight: 560;
-}
-
-.recoveryActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1.4rem;
-  margin-top: 0.75rem;
-  padding-top: 0.7rem;
-  border-top: 1px solid var(--line);
-  color: var(--accent);
-  font-size: var(--body-xs);
-  font-weight: 560;
-}
-
-/* --- 6 · Share + privacy -------------------------------------------------- */
+/* --- 9 · Share + privacy -------------------------------------------------- */
 
 /* What leaves the phone, and what doesn't — one section, two columns, no
    device. Share was a full band with a centred paragraph and privacy was
