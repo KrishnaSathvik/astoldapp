@@ -50,12 +50,12 @@ gone); attestation failures reported as what they are, in copy and in the relay 
 `AppClock` pin and canonical seed library used for the screenshot capture. Marketing assets for this
 build: `docs/appstore/raw/library/`.
 
-If **1.1.0 (build 2) was never sent to review**, fold its entry below into this text before
-submitting — a What's New describes everything since the version the reader has.
+1.1.0 (build 2) was reviewed and approved before this bump, so the text above describes only what
+is new since it — nothing from the entry below is repeated.
 
 ---
 
-## 1.1.0 (build 2)
+## 1.1.0 (build 2) — approved
 
 **What's New — submitted text** (1 032 characters, cap 4 000):
 
